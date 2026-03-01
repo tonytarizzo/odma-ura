@@ -27,6 +27,11 @@ Run:
 
 from __future__ import annotations
 import argparse
+import json
+import os
+import textwrap
+from datetime import datetime
+from pathlib import Path
 import numpy as np
 
 
@@ -133,16 +138,17 @@ def graph_based_decoder(
     y: np.ndarray,
     P_mats: dict[int, np.ndarray],
     block_dicts: dict[int, np.ndarray],
-    noise_var: float,
     *,
     max_iter: int = 50,
     damping: float = 0.3,
     tol: float = 1e-4,
     lambda_init: float | None = None,
+    noise_var_init: float | None = None,
     poisson_tail_tol: float = 1e-4,
     support_tail_tol: float = 1e-4,
 ) -> tuple[dict[int, np.ndarray], dict]:
-    """Iterative Gaussian resource update (LMMSE) + exact blockwise discrete Poisson posterior.
+    """Iterative Gaussian resource update (LMMSE) + exact blockwise discrete Poisson posterior,
+    with EM updates for noise variance σ² and Poisson rate λ.
 
     Graph structure:
       - Resource nodes r: scalar observations y[r] = sum_{(b,j): S_b[j]=r} x_{b,j} + z[r]
@@ -150,9 +156,13 @@ def graph_based_decoder(
 
     Message schedule:  block->resource (Gaussian) → resource LMMSE → extrinsic resource->block
                        → block discrete posterior → extrinsic block->resource  (repeat)
+                       → EM updates for (λ, σ²)
 
     All edge messages are Gaussian, parameterised by (mu, var) or equivalently (eta=mu/v, tau=1/v).
     Extrinsic messages are formed by Gaussian division (precision subtraction).
+
+    Neither noise_var nor λ need to be known in advance; both are estimated from the data.
+    Provide noise_var_init / lambda_init only to seed the first iteration with a better guess.
     """
     from itertools import combinations, product
 
@@ -206,9 +216,10 @@ def graph_based_decoder(
         Prior: a_i ~ Poisson(lam) i.i.d., observation: r_b = C_b^T a_b + w, w ~ N(0, diag(v_b))
 
         Returns:
-            a_mean:  (L_b,)  posterior E[a_b | r_b]
+            a_mean:  (L_b,)  posterior E[a_b | r_b]  — MMSE, used during iterations
             x_mean:  (d,)    posterior E[x_b | r_b] = C_b^T a_mean
             x_var:   (d,)    posterior marginal variances Var(x_{b,j} | r_b)
+            a_map:   (L_b,)  argmax_s p(a_b = s | r_b) — MAP integer state, for final decision
         """
         pmf = poisson_pmf_vec(lam)
         c_max = len(pmf) - 1
@@ -232,7 +243,7 @@ def graph_based_decoder(
                     states.append(a)
                     log_prior.append(lp_zeros + sum(log_pmf[c] for c in cnts))
 
-        A = np.array(states, dtype=np.float64)         # (S, L_b)
+        A = np.array(states, dtype=np.float64)        # (S, L_b)
         X = A @ C_b                                    # (S, d):  x_b = C_b^T a_b per state
 
         # log-likelihood: -||r_b - x_b||^2_{V^{-1}}  (Gaussian, diagonal V)
@@ -251,7 +262,9 @@ def graph_based_decoder(
             np.real(w @ (np.abs(X) ** 2)) - np.abs(x_mean) ** 2,
             var_floor,
         )
-        return a_mean, x_mean, x_var
+        # MAP: highest posterior probability integer state (free — log_post already computed)
+        a_map = A[int(np.argmax(log_post))]            # (L_b,) integer-valued
+        return a_mean, x_mean, x_var, a_map
 
     # ----------------------------------------- build resource → edge adjacency
     # block_supports[b][j] = global resource index for local position j
@@ -273,18 +286,17 @@ def graph_based_decoder(
     block_in_var  = {b: np.ones(C_b.shape[1], dtype=np.float64) for b, C_b in block_dicts.items()}
 
     coeffs_hat = {b: np.zeros(C_b.shape[0], dtype=np.float64) for b, C_b in block_dicts.items()}
+    coeffs_map  = {b: np.zeros(C_b.shape[0], dtype=np.float64) for b, C_b in block_dicts.items()}
 
-    # Initial lambda estimate from received energy (matched to model)
     M = float(sum(C_b.shape[0] for C_b in block_dicts.values()))
-    if lambda_init is not None:
-        lambda_est = float(lambda_init)
-    else:
-        # E[||y||^2] ≈ lambda * sum_b ||C_b^T 1||^2 * ||P_b||_F^2 + n*sigma^2
-        # Simpler: E[||y||^2] ≈ lambda * M + n*noise_var  (rough, unit-norm codewords)
-        lambda_est = max((float(np.real(np.vdot(y, y))) - n * noise_var) / M, 1e-6)
+    # λ init: prior-free — one expected active device spread across all messages
+    lambda_est = float(lambda_init) if lambda_init is not None else 1.0 / M
+    # σ² init: received energy / n is a conservative upper bound (pure-noise assumption)
+    noise_var = float(noise_var_init) if noise_var_init is not None else float(np.real(np.vdot(y, y))) / n
 
     converged = False
     it_used = 0
+    history: list[dict] = []  # per-iteration diagnostics for analysis
 
     for it in range(1, max_iter + 1):
         it_used = it
@@ -331,14 +343,17 @@ def graph_based_decoder(
         # =====================================================================
         delta = 0.0
         total_mean_count = 0.0
+        total_x_var_post = 0.0          # sum of posterior Var_q(x_{b,j}) — needed for σ² EM update
 
         for b, C_b in block_dicts.items():
             r_b = block_in_mu[b]                                # (d,) pseudo-observation means
             v_b = np.maximum(block_in_var[b], var_floor)        # (d,) pseudo-observation variances
 
-            a_mean, x_mean, x_var = decode_block(C_b, r_b, v_b, lambda_est)
+            a_mean, x_mean, x_var, a_map = decode_block(C_b, r_b, v_b, lambda_est)
             coeffs_hat[b] = a_mean
+            coeffs_map[b] = a_map
             total_mean_count += float(np.sum(a_mean))
+            total_x_var_post += float(np.sum(x_var))
 
             # Extrinsic block->resource: divide posterior marginal by incoming message
             # tau_b->r = 1/x_var - 1/v_b;  eta_b->r = x_mean/x_var - r_b/v_b
@@ -364,20 +379,37 @@ def graph_based_decoder(
             block_out_mu[b]  = mu_new
             block_out_var[b] = var_new
 
-        # Update Poisson rate: lambda = E[total active] / num_messages
+        # EM update for λ: E[K_total] / M  (already correct, derive: d/dλ E_q[log p(a|λ)] = 0)
         lambda_est = max(total_mean_count / M, 1e-12)
 
+        # EM update for σ²:  σ²_new = (1/n) * E_q[||y - sum_b P_b x_b||²]
+        #   = (1/n) * ( ||y - ŷ||² + sum_b sum_j Var_q(x_{b,j}) )
+        # where ŷ = sum_b P_b C_b^T â_b is the posterior-mean signal reconstruction,
+        # and the variance sum corrects for using the posterior mean instead of the true signal.
+        # x_var_b was accumulated from decode_block above; block_out_var is the extrinsic
+        # message (which omits incoming noise), so we must use the direct posterior variances.
+        y_hat = np.zeros(n, dtype=dtype)
+        for b, C_b in block_dicts.items():
+            y_hat[block_supports[b]] += C_b.T @ coeffs_hat[b]
+        resid_energy = float(np.real(np.vdot(y - y_hat, y - y_hat)))
+        noise_var = max((resid_energy + total_x_var_post) / n, var_floor)
+
+        history.append({"delta": delta, "lambda": lambda_est, "noise_var": noise_var,
+                         "k_est": total_mean_count})
         if delta < tol:
             converged = True
             break
 
-    return coeffs_hat, {
+    return coeffs_hat, coeffs_map, {
         "converged": converged,
+        "history": history,
         "iterations": it_used,
         "tol": tol,
         "damping": damping,
         "lambda_est": lambda_est,
+        "noise_var_est": noise_var,
         "lambda_init": lambda_init,
+        "noise_var_init": noise_var_init,
         "poisson_tail_tol": poisson_tail_tol,
         "support_tail_tol": support_tail_tol,
     }
@@ -392,15 +424,12 @@ def assemble_global_counts(block_coeffs: dict[int, np.ndarray], block_to_msg_lis
     return counts
 
 
-def evaluate_counts(counts_true: np.ndarray, counts_hat: np.ndarray, threshold: float = 0.5) -> dict:
+def evaluate_counts(counts_true: np.ndarray, counts_soft: np.ndarray, counts_hard: np.ndarray) -> dict:
     """Compare true vs estimated global message count vectors.
 
-    Returns soft metrics (l1, mse) and hard detection metrics after rounding.
+    counts_soft: continuous MMSE estimates (for l1/mse soft metrics)
+    counts_hard: integer MAP estimates (for support detection and count accuracy)
     """
-    diff = counts_true - counts_hat
-    counts_hard = np.round(counts_hat).astype(int)
-    counts_hard = np.maximum(counts_hard, 0)
-
     supp_true = counts_true > 0
     supp_hard = counts_hard > 0
     tp = int(np.sum(supp_true & supp_hard))
@@ -408,14 +437,14 @@ def evaluate_counts(counts_true: np.ndarray, counts_hat: np.ndarray, threshold: 
     fn = int(np.sum(supp_true & ~supp_hard))
 
     return dict(
-        l1=float(np.sum(np.abs(diff))),
-        mse=float(np.mean(diff ** 2)),
+        l1_soft=float(np.sum(np.abs(counts_true - counts_soft))),
+        mse_soft=float(np.mean((counts_true - counts_soft) ** 2)),
         support_true=int(np.sum(supp_true)),
-        support_hard=int(np.sum(supp_hard)),
+        support_map=int(np.sum(supp_hard)),
         tp=tp, fp=fp, fn=fn,
         precision=tp / max(tp + fp, 1),
         recall=tp / max(tp + fn, 1),
-        count_errors=int(np.sum(counts_hard[supp_true] != counts_true[supp_true])),
+        count_errors=int(np.sum(counts_hard[supp_true] != counts_true[supp_true].astype(int))),
     )
 
 
@@ -484,6 +513,237 @@ def print_diagnostics(codebook, P_mats, msg_to_block, block_to_msg_list, active_
     print("=" * 60 + "\n")
 
 
+def make_slug(args) -> str:
+    """Short human-readable run identifier from key params."""
+    cx = "cx" if args.complex_valued else "re"
+    return (
+        f"v1_{cx}_n{args.n}_d{args.d}_B{args.num_blocks}"
+        f"_M{args.num_codewords}_K{args.num_devices_active}"
+        f"_snr{args.esn0_db:.0f}dB_s{args.seed}"
+    )
+
+
+def save_results(out_dir: Path, args, meta: dict, metrics: dict,
+                 message_counts: np.ndarray, counts_soft: np.ndarray,
+                 counts_map: np.ndarray, P_mats: dict, y_clean: np.ndarray,
+                 y_noisy: np.ndarray, noise_var_true: float) -> None:
+    """Save markdown summary + all analysis plots to out_dir."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.gridspec as gridspec
+
+    history = meta.get("history", [])
+    iters = list(range(1, len(history) + 1))
+    n_resources = y_clean.shape[0]
+    num_blocks = len(P_mats)
+
+    # ---------------------------------------------------------------- colour palette
+    C = {"blue": "#4C78C8", "orange": "#E07B2A", "green": "#3BAA5C",
+         "red": "#C84C4C", "grey": "#888888", "purple": "#8B5CF6"}
+
+    # ============================================================ Fig 1: convergence
+    fig, axes = plt.subplots(1, 3, figsize=(13, 3.8))
+    fig.suptitle("Convergence — per-iteration EM diagnostics", fontsize=11, y=1.01)
+
+    ax = axes[0]
+    ax.semilogy(iters, [h["delta"] for h in history], color=C["blue"], lw=2, marker="o", ms=4)
+    ax.axhline(meta["tol"], color=C["red"], lw=1, ls="--", label=f"tol={meta['tol']:.0e}")
+    ax.set_xlabel("Iteration"); ax.set_ylabel("Max message Δ (log)")
+    ax.set_title("Message convergence"); ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+
+    ax = axes[1]
+    ax.plot(iters, [h["lambda"] for h in history], color=C["orange"], lw=2, marker="o", ms=4,
+            label="λ_est")
+    ax.axhline(args.num_devices_active / args.num_codewords, color=C["grey"],
+               lw=1.5, ls="--", label="λ_true = K/M")
+    ax.set_xlabel("Iteration"); ax.set_ylabel("λ")
+    ax.set_title("Poisson rate λ"); ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+
+    ax = axes[2]
+    ax.plot(iters, [h["noise_var"] for h in history], color=C["purple"], lw=2, marker="o", ms=4,
+            label="σ²_est")
+    ax.axhline(noise_var_true, color=C["grey"], lw=1.5, ls="--", label=f"σ²_true={noise_var_true:.4f}")
+    ax.set_xlabel("Iteration"); ax.set_ylabel("σ²")
+    ax.set_title("Noise variance σ²"); ax.legend(fontsize=8); ax.grid(True, alpha=0.3)
+
+    fig.tight_layout()
+    fig.savefig(out_dir / "convergence.png", dpi=130, bbox_inches="tight")
+    plt.close(fig)
+
+    # ============================================================ Fig 2: count estimates
+    active_idx = np.nonzero(message_counts)[0]
+    n_active = len(active_idx)
+    x = np.arange(n_active)
+    w = 0.28
+
+    fig, ax = plt.subplots(figsize=(max(8, n_active * 0.7 + 2), 4))
+    ax.bar(x - w, message_counts[active_idx], w, label="True", color=C["blue"], alpha=0.85)
+    ax.bar(x,     counts_soft[active_idx],    w, label="MMSE soft", color=C["orange"], alpha=0.85)
+    ax.bar(x + w, counts_map[active_idx],     w, label="MAP hard", color=C["green"], alpha=0.85)
+    ax.set_xticks(x); ax.set_xticklabels([str(i) for i in active_idx], fontsize=8)
+    ax.set_xlabel("Message index"); ax.set_ylabel("Count")
+    ax.set_title("True vs estimated counts (active messages only)")
+    ax.legend(fontsize=9); ax.grid(True, alpha=0.3, axis="y")
+    ax.yaxis.get_major_locator().set_params(integer=True)
+    fig.tight_layout()
+    fig.savefig(out_dir / "count_estimates.png", dpi=130, bbox_inches="tight")
+    plt.close(fig)
+
+    # ============================================================ Fig 3: ODMA pattern heatmap
+    resource_usage = np.zeros(n_resources, dtype=int)
+    pattern_mat = np.zeros((num_blocks, n_resources), dtype=np.float32)
+    for b, P in P_mats.items():
+        mask = np.any(P, axis=1)
+        pattern_mat[b] = mask.astype(float)
+        resource_usage += mask.astype(int)
+
+    fig, axes = plt.subplots(2, 1, figsize=(13, 5), layout="constrained",
+                             gridspec_kw={"height_ratios": [num_blocks, 1], "hspace": 0.08})
+    im = axes[0].imshow(pattern_mat, aspect="auto", interpolation="nearest",
+                        cmap="Blues", vmin=0, vmax=1)
+    axes[0].set_ylabel("Block"); axes[0].set_xlabel("")
+    axes[0].set_title("ODMA pattern matrix  (blue = resource used by block)")
+    axes[0].set_yticks(range(num_blocks))
+
+    axes[1].bar(range(n_resources), resource_usage, color=C["blue"], alpha=0.7, width=1.0)
+    axes[1].set_xlim(-0.5, n_resources - 0.5)
+    axes[1].set_ylabel("# blocks"); axes[1].set_xlabel("Resource index")
+    axes[1].grid(True, alpha=0.3, axis="y")
+    fig.savefig(out_dir / "odma_patterns.png", dpi=130, bbox_inches="tight")
+    plt.close(fig)
+
+    # ============================================================ Fig 4: received signal
+    fig, axes = plt.subplots(2, 1, figsize=(13, 5), sharex=True, layout="constrained",
+                             gridspec_kw={"hspace": 0.1})
+    r_idx = np.arange(n_resources)
+    axes[0].plot(r_idx, np.real(y_clean), color=C["blue"], lw=1, label="y_clean (Re)")
+    axes[0].plot(r_idx, np.real(y_noisy), color=C["orange"], lw=0.7, alpha=0.7, label="y_noisy (Re)")
+    axes[0].set_ylabel("Amplitude"); axes[0].set_title("Received signal (real part)")
+    axes[0].legend(fontsize=8); axes[0].grid(True, alpha=0.3)
+
+    noise_trace = np.real(y_noisy) - np.real(y_clean)
+    axes[1].plot(r_idx, noise_trace, color=C["grey"], lw=0.8, alpha=0.9, label="noise (Re)")
+    axes[1].axhline(0, color="black", lw=0.5)
+    axes[1].set_xlabel("Resource index"); axes[1].set_ylabel("Noise")
+    axes[1].set_title(f"Noise realisation  (σ²_true={noise_var_true:.4f},  "
+                      f"σ²_est={meta['noise_var_est']:.4f})")
+    axes[1].legend(fontsize=8); axes[1].grid(True, alpha=0.3)
+    fig.savefig(out_dir / "received_signal.png", dpi=130, bbox_inches="tight")
+    plt.close(fig)
+
+    # ============================================================ Fig 5: per-block summary
+    block_ids = sorted(P_mats.keys())
+    true_counts_per_block  = [float(np.sum(message_counts[
+        [m for m in range(args.num_codewords) if m % args.num_blocks == b]
+    ])) for b in block_ids]
+    soft_counts_per_block  = [float(np.sum(counts_soft[
+        [m for m in range(args.num_codewords) if m % args.num_blocks == b]
+    ])) for b in block_ids]
+    map_counts_per_block   = [float(np.sum(counts_map[
+        [m for m in range(args.num_codewords) if m % args.num_blocks == b]
+    ])) for b in block_ids]
+
+    x = np.arange(num_blocks); w = 0.28
+    fig, ax = plt.subplots(figsize=(max(7, num_blocks * 0.8 + 2), 4))
+    ax.bar(x - w, true_counts_per_block, w, label="True",       color=C["blue"],   alpha=0.85)
+    ax.bar(x,     soft_counts_per_block, w, label="MMSE soft",  color=C["orange"], alpha=0.85)
+    ax.bar(x + w, map_counts_per_block,  w, label="MAP hard",   color=C["green"],  alpha=0.85)
+    ax.set_xticks(x); ax.set_xticklabels([f"B{b}" for b in block_ids], fontsize=9)
+    ax.set_xlabel("Block"); ax.set_ylabel("Total count")
+    ax.set_title("Per-block total active count (true vs estimated)")
+    ax.legend(fontsize=9); ax.grid(True, alpha=0.3, axis="y")
+    fig.tight_layout()
+    fig.savefig(out_dir / "per_block_counts.png", dpi=130, bbox_inches="tight")
+    plt.close(fig)
+
+    # ============================================================ Markdown summary
+    tp, fp, fn = metrics["tp"], metrics["fp"], metrics["fn"]
+    prec, rec = metrics["precision"], metrics["recall"]
+    f1 = 2 * prec * rec / max(prec + rec, 1e-9)
+    active_map_dict = {int(m): int(counts_map[m]) for m in np.nonzero(counts_map)[0]}
+    active_true_dict = {int(m): int(message_counts[m]) for m in np.nonzero(message_counts)[0]}
+
+    md = textwrap.dedent(f"""
+    # ODMA + URA V1 — Run Results
+    **Slug:** `{out_dir.name}`
+    **Timestamp:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+    ## Setup
+    | Parameter | Value |
+    |-----------|-------|
+    | Resource grid n | {args.n} |
+    | Codeword length d | {args.d} |
+    | Num blocks B | {args.num_blocks} |
+    | Num codewords M | {args.num_codewords} |
+    | Active devices K | {args.num_devices_active} |
+    | Es/N0 | {args.esn0_db:.1f} dB |
+    | Complex-valued | {args.complex_valued} |
+    | Seed | {args.seed} |
+    | Max iterations | {args.max_iter} |
+    | Damping | {meta['damping']} |
+
+    ## Decoder Convergence
+    | | Value |
+    |--|--|
+    | Converged | {meta['converged']} |
+    | Iterations used | {meta['iterations']} / {args.max_iter} |
+    | λ_true = K/M | {args.num_devices_active / args.num_codewords:.4f} |
+    | λ_est (final) | {meta['lambda_est']:.4f} |
+    | σ²_true | {noise_var_true:.6f} |
+    | σ²_est (final) | {meta['noise_var_est']:.6f} |
+    | σ²_est / σ²_true | {meta['noise_var_est'] / noise_var_true:.3f} |
+
+    ## Detection Metrics (MAP decisions)
+    | Metric | Value |
+    |--------|-------|
+    | Support true | {metrics['support_true']} |
+    | Support estimated | {metrics['support_map']} |
+    | TP | {tp} |
+    | FP | {fp} |
+    | FN | {fn} |
+    | Precision | {prec:.4f} |
+    | Recall | {rec:.4f} |
+    | F1 | {f1:.4f} |
+    | Count errors (on TP) | {metrics['count_errors']} |
+
+    ## Soft Metrics (MMSE)
+    | Metric | Value |
+    |--------|-------|
+    | L1 error | {metrics['l1_soft']:.4e} |
+    | MSE | {metrics['mse_soft']:.4e} |
+
+    ## Ground Truth Counts
+    ```
+    {active_true_dict}
+    ```
+
+    ## MAP Estimated Counts
+    ```
+    {active_map_dict}
+    ```
+
+    ## Plots
+    - `convergence.png` — per-iteration delta, λ, σ²
+    - `count_estimates.png` — true vs MMSE vs MAP per active message
+    - `odma_patterns.png` — block×resource pattern matrix + resource usage histogram
+    - `received_signal.png` — clean vs noisy signal and noise trace
+    - `per_block_counts.png` — per-block total count (true vs estimated)
+    """).strip()
+
+    (out_dir / "results.md").write_text(md)
+
+    # Also dump raw numbers as JSON for programmatic use
+    raw = {
+        "args": vars(args),
+        "meta": {k: v for k, v in meta.items() if k != "history"},
+        "metrics": metrics,
+        "noise_var_true": noise_var_true,
+        "history": history,
+    }
+    (out_dir / "raw.json").write_text(json.dumps(raw, indent=2))
+
+
 def main():
     parser = argparse.ArgumentParser(description="ODMA + URA scaffold — V1 (no fading, single stream)")
     parser.add_argument("--seed", type=int, default=42)
@@ -496,9 +756,11 @@ def main():
     parser.add_argument("--complex-valued", action="store_true")
     parser.add_argument("--max-iter", type=int, default=50)
     parser.add_argument("--damping", type=float, default=0.3)
-    parser.add_argument("--lambda-init", type=float, default=None, help="initial Poisson mean per message (if omitted: energy-based estimate)")
+    parser.add_argument("--lambda-init", type=float, default=None, help="initial Poisson mean per message (if omitted: 1/M — one device across all messages)")
+    parser.add_argument("--noise-var-init", type=float, default=None, help="initial noise variance (if omitted: ||y||²/n — pure-noise upper bound)")
     parser.add_argument("--poisson-tail-tol", type=float, default=1e-4, help="truncation tolerance for Poisson count tail mass")
     parser.add_argument("--support-tail-tol", type=float, default=1e-4, help="truncation tolerance for active-support tail mass")
+    parser.add_argument("--results-dir", type=str, default="results", help="root directory for saved results")
     args = parser.parse_args()
 
     rng = np.random.default_rng(args.seed)
@@ -517,17 +779,30 @@ def main():
     # y = sum_b P_b C_b^T a_b + z
     y_noisy, y_clean = synthesize_received_signal(P_mats, block_dicts, block_coeffs, noise_var, rng, complex_valued=args.complex_valued)
 
-    coeffs_hat, meta = graph_based_decoder(
-        y_noisy, P_mats, block_dicts, noise_var,
+    coeffs_hat, coeffs_map, meta = graph_based_decoder(
+        y_noisy, P_mats, block_dicts,
         max_iter=args.max_iter, damping=args.damping,
-        lambda_init=args.lambda_init, poisson_tail_tol=args.poisson_tail_tol, support_tail_tol=args.support_tail_tol,
+        lambda_init=args.lambda_init, noise_var_init=args.noise_var_init,
+        poisson_tail_tol=args.poisson_tail_tol, support_tail_tol=args.support_tail_tol,
     )
-    counts_hat = assemble_global_counts(coeffs_hat, block_to_msg_list, args.num_codewords)
-    metrics = evaluate_counts(message_counts, counts_hat)
+    counts_soft = assemble_global_counts(coeffs_hat, block_to_msg_list, args.num_codewords)
+    counts_map  = assemble_global_counts(coeffs_map,  block_to_msg_list, args.num_codewords)
+    metrics = evaluate_counts(message_counts, counts_soft, counts_map)
 
+    # ----------------------------------------------------------------- terminal output
     print_diagnostics(codebook, P_mats, msg_to_block, block_to_msg_list, active_msgs, message_counts, block_coeffs, y_clean, y_noisy, noise_var, args.esn0_db)
-    print(f"Decoder meta: {meta}")
+    print(f"Decoder meta: { {k: v for k, v in meta.items() if k != 'history'} }")
     print(f"Decoder eval: {metrics}")
+    active_map = {int(m): int(counts_map[m]) for m in np.nonzero(counts_map)[0]}
+    print(f"Counts MAP (active): {active_map}")
+
+    # ----------------------------------------------------------------- save results
+    slug = make_slug(args)
+    out_dir = Path(args.results_dir) / slug
+    out_dir.mkdir(parents=True, exist_ok=True)
+    save_results(out_dir, args, meta, metrics, message_counts, counts_soft, counts_map,
+                 P_mats, y_clean, y_noisy, noise_var)
+    print(f"\nResults saved → {out_dir}/")
 
     ground_truth = dict(
         codebook=codebook,
