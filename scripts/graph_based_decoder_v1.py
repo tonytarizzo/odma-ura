@@ -9,7 +9,7 @@ Signal model:
   - Global codebook of unit-norm codewords, shape (num_codewords, d).
   - Each global message index m deterministically selects codebook[m]
     and ODMA pattern msg_to_block[m].
-  - P_b ∈ {0,1}^{n×d}, P_b^T P_b = I_d.
+  - P_b ∈ {0,1}^{n×d}, P_b^T P_b = I_d. where d << n
   - No antennas, no fading, no channels.
   - Multiple devices choosing the same message add as integer counts
     in the coefficient vector a_b.  The physical signal is fully
@@ -396,6 +396,11 @@ def graph_based_decoder(
 
         history.append({"delta": delta, "lambda": lambda_est, "noise_var": noise_var,
                          "k_est": total_mean_count})
+        print(
+            f"[iter {it:03d}] delta={delta:.3e} k_est={total_mean_count:.2f} "
+            f"lambda={lambda_est:.3e} sigma2={noise_var:.3e}",
+            flush=True,
+        )
         if delta < tol:
             converged = True
             break
@@ -751,7 +756,7 @@ def main():
     parser.add_argument("--d", type=int, default=16, help="codeword length / block size")
     parser.add_argument("--num-blocks", type=int, default=8)
     parser.add_argument("--num-codewords", type=int, default=64)
-    parser.add_argument("--num-devices-active", type=int, default=10)
+    parser.add_argument("--num-devices-active", type=int, default=50)
     parser.add_argument("--esn0-db", type=float, default=10.0, help="Es/N0 in dB")
     parser.add_argument("--complex-valued", action="store_true")
     parser.add_argument("--max-iter", type=int, default=50)

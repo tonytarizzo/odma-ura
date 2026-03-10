@@ -426,6 +426,11 @@ def graph_based_decoder(
 
         history.append({"delta": delta, "lambda": lambda_est, "noise_var": noise_var,
                          "k_est": total_mean_count})
+        print(
+            f"[iter {it:03d}] delta={delta:.3e} k_est={total_mean_count:.2f} "
+            f"lambda={lambda_est:.3e} sigma2={noise_var:.3e}",
+            flush=True,
+        )
         if delta < tol:
             converged = True
             break

@@ -16,6 +16,7 @@ venv/
 
 # VSCode
 .vscode/
+.cursor/
 
 # Jupyter
 .ipynb_checkpoints/
@@ -24,3 +25,4 @@ venv/
 *.log
 docs/
 results/
+results_compare/
