@@ -1,0 +1,14 @@
+[project]
+name = "odma-ura"
+version = "0.1.0"
+description = "Research testbed for ODMA-aware unsourced random access decoders."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "matplotlib>=3.8",
+    "numpy>=1.25",
+    "scipy>=1.11",
+]
+
+[tool.uv]
+package = false

@@ -23,6 +23,8 @@ venv/
 
 # Logs
 *.log
+.cache/
 docs/
 results/
 results_compare/
+results_sweep/

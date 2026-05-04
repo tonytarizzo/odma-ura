@@ -1,6 +1,9 @@
 
-- doubel check SNR defintiion and compare with MD-AirComp and any communciation URA, GMAC paper definition
-- compare with other GMAC papers to see what inputs they use, and their SNR choices/definition for more comparisons
+
+- figure out cause of instability
+- figure out how to gaurantee convergence even if less optimal
+- figure out how to decrease complexity to approach OMP glob method
+
 
 - have a setup that systematically runs the approaches for combos of inputs e.g
 10 devices, 8 patterns, SNRs 10 and 0, antenna count etc
@@ -9,10 +12,6 @@
 40 devices, 8 patterns, SNRs 10 and 0, antenna count etc
 50 devices, 8 patterns, SNRs 10 and 0, antenna count etc
 etc
-
-- figure out cause of instability
-- figure out how to gaurantee convergence even if less optimal
-- figure out how to decrease complexity to approach OMP glob method
 
 
 

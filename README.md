@@ -1,48 +1,62 @@
 # ODMA-URA
 
-Research repository for decoders that jointly exploit **ODMA** (On-Off Division Multiple Access) and **URA** (Unsourced Random Access) structure. The goal is to recover **message counts** (which messages were sent and how often) from a superposition of codewords over ODMA resource blocks, rather than per-user identities.
+Research testbed for decoding **unsourced random access (URA)** signals with **on-off division multiple access (ODMA)** structure.
 
-## Concepts
+The current model uses a shared codebook of unit-norm message codewords. Each message is assigned to an ODMA block, each block embeds a length-`d` codeword into a sparse subset of `n` resources, and the receiver observes a noisy multi-antenna superposition. The decoding target is the global message-count vector: which messages were sent, and how many times, without recovering device identities.
 
-- **ODMA**: Each message uses a sparse subset of \(n\) resources (block of \(d\) indices). Pattern matrices \(P_b \in \{0,1\}^{n \times d}\) embed block signals into the resource grid.
-- **URA**: Shared codebook of unit-norm codewords; devices pick a message index and transmit the corresponding codeword. Collisions are multiple devices sending the same message.
-- **Decoder target**: Global **message-count vector** \(\in \mathbb{Z}_+^{\text{num\_codewords}}\), aligned with the sparse coefficient structure of the received signal.
+The main research question is whether a decoder that uses both structures jointly can outperform generic sparse-recovery baselines such as OMP/SIC or standard per-block variants.
 
-## Scripts (decoder testbeds)
+## Repository Layout
 
-Four progressively harder signal models in `scripts/`:
+- `src/scenario.py` builds one reproducible ODMA+URA trial.
+- `src/decoders/` contains comparable decoder implementations registered in `src/decoders/registry.py`.
+- `src/sweep.py`, `src/cache.py`, and `src/plotting.py` run cached experiments and generate plots.
+- `tests/single_test.py` runs a single scenario and writes plots/summary files.
+- `tests/sweep_test.py` runs or replots parameter sweeps.
 
-| Script | Model | Notes |
-|--------|--------|--------|
-| **v1** | Single stream, no fading | \(y = \sum_b P_b C_b^T a_b + z\); baseline for message-count decoder. |
-| **v2** | Multi-antenna, no fading | \(Y = (\sum_b P_b C_b^T a_b)\,\mathbf{1}^T + Z\); \(M\) antennas, same spatial signature. |
-| **v3** | Multi-antenna, first-antenna inversion | Devices pre-equalize so \(g_u[0]=1\); remaining antennas see ratio channels. |
-| **v4** | Full MU-MIMO, Rayleigh fading | \(Y = \sum_u (P_{b_u} c_{m_u}) h_u^T + Z\); no CSI at devices. |
-
-Each script builds codebook, ODMA blocks, message–block mapping, and synthetic received signal; the decoder itself is a **placeholder** (graph-based / AMP-style message passing is intended to be implemented).
-
-## Run
-
-From the repo root:
-
-```bash
-# V1 — single stream, no fading
-python scripts/graph_based_decoder_v1.py --seed 42 --n 128 --d 16 --num-blocks 8 \
-  --num-codewords 64 --num-devices-active 10 --esn0-db 10
-
-# V2 — multi-antenna, no fading
-python scripts/graph_based_decoder_v2.py --seed 42 --n 128 --d 16 --num-blocks 8 \
-  --num-codewords 64 --num-devices-active 10 --num-antennas 4 --esn0-db 10
-
-# V3 / V4 — same pattern, add --num-antennas and (for V3) --min-first-ant-power
-python scripts/graph_based_decoder_v3.py ...
-python scripts/graph_based_decoder_v4.py ...
-```
-
-Common args: `--n` (resources), `--d` (codeword/block size), `--num-blocks`, `--num-codewords`, `--num-devices-active`, `--esn0-db`. Use `--help` on each script for full options.
+Generated outputs are written under `results/`, which is ignored by git.
 
 ## Setup
 
+This repo is configured for `uv`:
+
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
+
+If `uv` is not installed:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+## Run
+
+Single scenario:
+
+```bash
+uv run python -m tests.single_test --decoders Graph-BP ADMM NNOMP \
+  --num-devices-active 20 --esn0-db 0 --seed 42
+```
+
+Sweep:
+
+```bash
+uv run python -m tests.sweep_test --sweeps K SNR \
+  --decoders Graph-BP ADMM NNOMP --num-seeds 3
+```
+
+Common parameters include `--n`, `--d`, `--num-blocks`, `--num-codewords`, `--num-devices-active`, `--num-antennas`, and `--esn0-db`.
+
+## Quick Check
+
+```bash
+uv run python -m compileall src tests
+uv run python -m tests.single_test --decoders NNOMP SIC BlockMAP \
+  --n 32 --d 8 --num-blocks 4 --num-codewords 16 \
+  --num-devices-active 4 --num-antennas 2 --esn0-db 5
+```
+
+## Decoders
+
+The registry currently includes structure-aware candidates (`Graph-BP`, `ADMM`, `BlockMAP`) and comparison baselines (`NNOMP`, `SIC`, `AMP-BG`, and oracle LMMSE variants). Add new decoders by implementing `run(scenario, **params) -> (counts, meta)` under `src/decoders/` and registering it in `src/decoders/registry.py`.
