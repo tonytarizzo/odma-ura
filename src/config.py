@@ -17,7 +17,7 @@ BASE_SCENARIO: dict = {
     "d": 16,
     "num_blocks": 8,
     "num_codewords": 64,
-    "num_devices_active": 10,
+    "num_devices_active": 50,
     "num_antennas": 4,
     "esn0_db": 10.0,
 }
@@ -26,18 +26,19 @@ BASE_SCENARIO: dict = {
 SWEEP_CONFIGS: dict[str, dict] = {
     "K": {
         "param": "num_devices_active",
-        "values": [5, 10, 20, 30, 40, 50, 60],
+        "values": [10, 25, 50, 100, 200, 400, 600, 800, 1000, 1250, 1500, 2000],
         "label": "Active devices K",
     },
     "SNR": {
         "param": "esn0_db",
-        "values": [-10.0, -5.0, 0.0, 5.0, 10.0, 15.0, 20.0],
+        "values": [-20.0, -15.0, -10.0, -5.0, 0.0, 5.0, 10.0, 15.0, 20.0],
         "label": "Es/N0 (dB)",
     },
     "antennas": {
         "param": "num_antennas",
-        "values": [1, 2, 4, 8],
+        "values": [2, 4, 6, 8, 10],
         "label": "Receive antennas M_ant",
+        "base_overrides": {"esn0_db": 0.0},
     },
     "blocks": {
         "param": "num_blocks",

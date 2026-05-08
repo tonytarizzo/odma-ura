@@ -5,6 +5,19 @@ from __future__ import annotations
 import numpy as np
 
 
+def normalized_l1_accuracy(counts_true: np.ndarray, counts_est: np.ndarray) -> float:
+    """1 - normalized L1 count error, clipped to [0, 1].
+
+    For this project counts are non-negative, so the normalizer is the true
+    total number of transmitted messages.
+    """
+    total = float(np.sum(counts_true))
+    error = float(np.sum(np.abs(counts_true - counts_est)))
+    if total <= 0.0:
+        return 1.0 if error == 0.0 else 0.0
+    return float(max(0.0, min(1.0, 1.0 - error / total)))
+
+
 def evaluate_counts(counts_true: np.ndarray, counts_hard: np.ndarray) -> dict:
     """Compare true vs estimated global message-count vectors.
 
@@ -13,8 +26,8 @@ def evaluate_counts(counts_true: np.ndarray, counts_hard: np.ndarray) -> dict:
 
     Definitions:
       f1      — support detection F1 (counts_hard > 0 as the active set).
-      l1_err  — ||a_hat - a_true||_1 / ||a_true||_1.
-      l1_acc  — clamp(1 - l1_err, 0, 1).  Easy-to-read 0..1 accuracy.
+      l1_err  — sum(|a_true - a_hat|) / sum(a_true).
+      l1_acc  — clamp(1 - l1_err, 0, 1).
       nmse    — ||a_hat - a_true||_2^2 / ||a_true||_2^2.
     """
     supp_true = counts_true > 0
@@ -26,11 +39,12 @@ def evaluate_counts(counts_true: np.ndarray, counts_hard: np.ndarray) -> dict:
     rec  = tp / max(tp + fn, 1)
     f1   = 2 * prec * rec / max(prec + rec, 1e-9)
 
-    norm1 = float(np.sum(np.abs(counts_true)))
+    total_true = float(np.sum(counts_true))
     norm2sq = float(np.sum(counts_true ** 2))
     diff = counts_hard - counts_true
-    l1_err = float(np.sum(np.abs(diff))) / max(norm1, 1e-12)
-    l1_acc = float(max(0.0, min(1.0, 1.0 - l1_err)))
+    l1_error_abs = float(np.sum(np.abs(diff)))
+    l1_err = l1_error_abs / max(total_true, 1e-12)
+    l1_acc = normalized_l1_accuracy(counts_true, counts_hard)
     nmse = float(np.sum(diff ** 2)) / max(norm2sq, 1e-12)
 
     total_count_err = float(abs(counts_hard.sum() - counts_true.sum()))

@@ -1,54 +1,54 @@
-"""Non-oracle parameter estimators (noise variance, Poisson rate)."""
+"""Non-oracle parameter estimators for the V2 common-signature model.
+
+Assumes M_ant >= 2 throughout (single-antenna runs are not supported).
+
+Provides:
+  - estimate_noise_var(Y): orthogonal-antenna-subspace sigma^2 estimate.
+  - initial_k_prior(num_codewords): broad initial (mu_K, sigma_K) batch prior.
+  - initial_lambda(num_codewords): broad initial Poisson rate.
+"""
 
 from __future__ import annotations
 
 import numpy as np
 
 
-def estimate_noise_var_orthogonal(Y: np.ndarray) -> float:
-    """sigma^2 from antenna subspace orthogonal to h = 1_M (M_ant > 1)."""
+def estimate_noise_var(Y: np.ndarray) -> float:
+    """sigma^2 from the antenna subspace orthogonal to h = 1_M.
+
+    With Q_perp = I - h h^T / gamma and gamma = ||h||^2 = M_ant,
+        E[||Q_perp Y_t||^2] = sigma^2 (M_ant - 1).
+    Independent of a, K, codebook, and ODMA pattern overlaps.
+    """
     n, M_ant = Y.shape
-    if M_ant <= 1:
-        raise ValueError("Orthogonal noise estimate requires M_ant > 1.")
+    if M_ant < 2:
+        raise ValueError("Orthogonal-subspace noise estimate requires M_ant >= 2.")
     h = np.ones(M_ant, dtype=Y.dtype)
     gamma = float(np.real(np.vdot(h, h)))
     Y_perp = Y - np.outer(Y @ h.conj() / gamma, h)
-    return float(np.real(np.vdot(Y_perp, Y_perp)) / (n * (M_ant - 1)))
+    return float(np.real(np.vdot(Y_perp.ravel(), Y_perp.ravel())) / (n * (M_ant - 1)))
 
 
-def estimate_noise_var_unused_resources(Y: np.ndarray,
-                                        P_mats: dict[int, np.ndarray]) -> float:
-    """sigma^2 from resources untouched by any block (M_ant=1 fallback)."""
-    n, _ = Y.shape
-    m_t = np.zeros(n, dtype=np.int64)
-    for b, P_b in P_mats.items():
-        m_t[np.argmax(P_b, axis=0)] += 1
-    unused = m_t == 0
-    n_unused = int(unused.sum())
-    if n_unused < 5:
-        raise ValueError(
-            f"M_ant=1 noise estimate needs >=5 unused resources, found {n_unused}.")
-    Y_u = Y[unused]
-    return float(np.real(np.vdot(Y_u, Y_u)) / (n_unused * Y.shape[1]))
+def initial_k_prior(num_codewords: int, *, mu_frac: float = 0.25,
+                    sigma_frac: float = 0.5, sigma_min: float = 5.0) -> tuple[float, float]:
+    """Broad starting (mu_K, sigma_K) for decoders that update K internally.
+
+    This is only an initialization/prior scale, not a measurement of K. Decoders
+    that support EM-style K updates should let their within-iteration posterior
+    quantities move away from this value.
+    """
+    M = max(int(num_codewords), 1)
+    mu_K = float(mu_frac * M)
+    sigma_K = float(max(sigma_min, sigma_frac * M))
+    return mu_K, sigma_K
 
 
-def estimate_noise_var(Y: np.ndarray, P_mats: dict[int, np.ndarray]) -> float:
-    """Dispatch to orthogonal-subspace (M_ant>1) or unused-resource (M_ant=1) estimator."""
-    if Y.shape[1] > 1:
-        return estimate_noise_var_orthogonal(Y)
-    return estimate_noise_var_unused_resources(Y, P_mats)
+def initial_lambda(num_codewords: int) -> float:
+    """Initial Poisson rate per slot before any iterative update.
 
-
-def estimate_lambda_energy(Y: np.ndarray, sigma2: float, num_codewords: int
-                           ) -> tuple[float, float]:
-    """Initial Poisson rate via signal-energy moment matching.  Returns (lam_hat, K_hat)."""
-    n, M_ant = Y.shape
-    h = np.ones(M_ant, dtype=Y.dtype)
-    gamma = float(np.real(np.vdot(h, h)))
-    y_mf = Y @ h.conj() / gamma
-    E_obs = float(np.real(np.vdot(y_mf, y_mf)))
-    E_sig = max(0.0, E_obs - n * sigma2 / gamma)
-    M = float(num_codewords)
-    K_hat = 0.5 * (-M + np.sqrt(M * M + 4.0 * M * E_sig))
-    lam_hat = float(np.clip(K_hat / M, 1e-4, 0.95))
-    return lam_hat, float(K_hat)
+    Uses the same broad mu_K = num_codewords/4 baseline as `initial_k_prior`
+    and converts it to a per-message rate.
+    """
+    M = max(int(num_codewords), 1)
+    mu_K, _ = initial_k_prior(M)
+    return float(np.clip(mu_K / M, 0.05, 0.5))

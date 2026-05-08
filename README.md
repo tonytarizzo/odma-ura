@@ -35,7 +35,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 Single scenario:
 
 ```bash
-uv run python -m tests.single_test --decoders Graph-BP ADMM NNOMP \
+uv run python -m tests.single_test --decoders Graph-BP ADMM-Poisson ADMM-Multinom Residual-MAP NNOMP \
   --num-devices-active 20 --esn0-db 0 --seed 42
 ```
 
@@ -43,7 +43,7 @@ Sweep:
 
 ```bash
 uv run python -m tests.sweep_test --sweeps K SNR \
-  --decoders Graph-BP ADMM NNOMP --num-seeds 3
+  --decoders ADMM-Poisson ADMM-Multinom Residual-MAP NNOMP --num-seeds 3
 ```
 
 Common parameters include `--n`, `--d`, `--num-blocks`, `--num-codewords`, `--num-devices-active`, `--num-antennas`, and `--esn0-db`.
@@ -59,4 +59,4 @@ uv run python -m tests.single_test --decoders NNOMP SIC BlockMAP \
 
 ## Decoders
 
-The registry currently includes structure-aware candidates (`Graph-BP`, `ADMM`, `BlockMAP`) and comparison baselines (`NNOMP`, `SIC`, `AMP-BG`, and oracle LMMSE variants). Add new decoders by implementing `run(scenario, **params) -> (counts, meta)` under `src/decoders/` and registering it in `src/decoders/registry.py`.
+The registry currently includes structure-aware candidates (`Graph-BP`, `ADMM-Poisson`, `ADMM-Multinom`, `Residual-MAP`, `BlockMAP`), global sparse-recovery baselines (`NNOMP`, `SIC`), AMP/VAMP variants, and oracle LMMSE diagnostics. Add new decoders by implementing `run(scenario, **params) -> (counts, meta)` under `src/decoders/` and registering it in `src/decoders/registry.py`.

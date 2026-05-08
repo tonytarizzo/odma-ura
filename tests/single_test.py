@@ -27,6 +27,7 @@ from src.cache import append_result, make_row  # noqa: E402
 from src.config import BASE_SCENARIO, CACHE_PATH, SINGLE_DIR  # noqa: E402
 from src.decoders.registry import all_names, get  # noqa: E402
 from src.metrics import evaluate_counts  # noqa: E402
+from src.objectives import objective_diagnostics  # noqa: E402
 from src.plotting import (  # noqa: E402
     plot_convergence,
     plot_count_estimates,
@@ -97,6 +98,10 @@ def print_table(rows: list[tuple[str, dict, float, dict]]) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
+    if int(args.num_antennas) < 2:
+        raise SystemExit(
+            f"--num-antennas={args.num_antennas} is not supported. "
+            f"The V2 common-signature model assumes M_ant >= 2.")
     cfg = {
         "n": args.n, "d": args.d, "num_blocks": args.num_blocks,
         "num_codewords": args.num_codewords,
@@ -127,17 +132,27 @@ def main(argv: list[str] | None = None) -> None:
             counts = np.asarray(counts)
             wall = time.time() - t0
             metrics = evaluate_counts(scenario.message_counts, counts)
+            metrics.update(objective_diagnostics(scenario, counts))
             metrics["wall_s"] = wall
             if isinstance(meta, dict):
-                for k in ("converged", "timed_out", "iterations"):
+                for k in ("converged", "timed_out", "decoder_failure", "iterations"):
                     if k in meta:
                         metrics[k] = meta[k]
             table.append((name, metrics, wall, meta if isinstance(meta, dict) else {}))
             counts_per_decoder[name] = counts
 
-            slim = {k: meta[k] for k in ("converged", "timed_out", "iterations",
+            slim = {k: meta[k] for k in ("converged", "timed_out",
+                                         "decoder_failure", "failure_reason",
+                                         "iterations",
                                          "wall_s", "lam", "noise_var_est",
-                                         "K_hat", "selected_k", "rho")
+                                         "K_hat", "K_prior", "K_target", "K_star",
+                                         "selected_k", "rho",
+                                         "rho_init", "rho_policy", "rho_updates",
+                                         "r_pri", "r_dual", "anderson_steps",
+                                         "cache_size", "cache_caps",
+                                         "max_feasible_K", "rho_activity",
+                                         "support_hat", "sigma_x_sq", "sigma_eff_sq",
+                                         "sigma_K", "objective")
                     if isinstance(meta, dict) and k in meta}
             row = make_row(cfg, name, params, args.seed, metrics, decoder_meta=slim)
             append_result(CACHE_PATH, row)

@@ -59,7 +59,16 @@ class Scenario:
 def build_scenario(*, n: int, d: int, num_blocks: int, num_codewords: int,
                    num_devices_active: int, num_antennas: int, esn0_db: float,
                    seed: int) -> Scenario:
-    """Construct a Scenario from scalar parameters and a seed."""
+    """Construct a Scenario from scalar parameters and a seed.
+
+    The V2 common-signature model assumes M_ant >= 2 (the orthogonal antenna
+    subspace is needed for non-oracle noise estimation), so single-antenna
+    setups are rejected at scenario build time.
+    """
+    if int(num_antennas) < 2:
+        raise ValueError(
+            f"num_antennas must be >= 2 for the V2 common-signature model "
+            f"(got {num_antennas}); single-antenna runs are not supported.")
     rng = np.random.default_rng(seed)
 
     codebook = make_codebook(num_codewords, d, rng)

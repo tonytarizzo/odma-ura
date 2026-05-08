@@ -1,20 +1,8 @@
 
+- implement whole armada of new decoder approaches
+- test all thoroughly
+- draw conclusions on next steps
 
-- figure out cause of instability
-- figure out how to gaurantee convergence even if less optimal
-- figure out how to decrease complexity to approach OMP glob method
+- separately, look into quantifying bounds/theory in terms of quantities such as average block overlap per resource, active symbol load, or more graph-native measures such as local treewidth, maximum resource degree, overlap spectrum, or chordality of the block-intersection graph. These are exactly the quantities that should control whether block-state BP, junction-tree elimination, or coordinate descent remain tractable. This gap is especially attractive because it connects coding design, graph structure, and decoder complexity in one place.
 
-
-- have a setup that systematically runs the approaches for combos of inputs e.g
-10 devices, 8 patterns, SNRs 10 and 0, antenna count etc
-20 devices, 8 patterns, SNRs 10 and 0, antenna count etc
-30 devices, 8 patterns, SNRs 10 and 0, antenna count etc
-40 devices, 8 patterns, SNRs 10 and 0, antenna count etc
-50 devices, 8 patterns, SNRs 10 and 0, antenna count etc
-etc
-
-
-
-
-- implement an alternative of v1 that doesnt throw away cross variance terms in step 1, this is to evaluate how much of an effect those have, even if it increases computation a lot (curiosity)
-- figure out how best to now add designs for pilot coding that allows current v2 decoder to be used effectively with pilot codes - can either do conventional pilots, or send pilots using odma method and have an initial decode before the main message decode (future stage)
+- separately, has grokking been seen in learned decoders, and if not, can we first see if grokking type behaviour can be reached, and if yes, could this then be used to reverse engiener what structures/process the learning found exploited the setup, which might then inform us on how to modify the classical unlearnt decoders directly?

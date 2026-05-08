@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .decoders.registry import LINESTYLE, PALETTE
+from .decoders.registry import LINESTYLE, MARKER, PALETTE
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -98,17 +98,25 @@ def plot_sweep_lines(rows: list[dict], swept_param: str, values: list,
             stds[i] = float(np.std(vs)) if len(vs) > 1 else 0.0
         return means, stds
 
+    def ordered_series(metric: str) -> list[tuple[str, np.ndarray, np.ndarray, float]]:
+        series = []
+        for dec in decoders:
+            mean, std = gather(dec, metric)
+            score = float(np.nanmean(mean)) if np.any(np.isfinite(mean)) else -np.inf
+            series.append((dec, mean, std, score))
+        return sorted(series, key=lambda item: item[3], reverse=True)
+
     for metric in metrics:
         fig, ax = plt.subplots(figsize=(9, 5.5))
         any_data = False
-        for dec in decoders:
-            mean, std = gather(dec, metric)
+        for dec, mean, std, _ in ordered_series(metric):
             if np.all(np.isnan(mean)):
                 continue
             any_data = True
             color = PALETTE.get(dec, "#333333")
             ls = LINESTYLE.get(dec, "-")
-            ax.plot(xv, mean, marker="o", lw=2, ms=5, label=dec, color=color, ls=ls)
+            marker = MARKER.get(dec, "o")
+            ax.plot(xv, mean, marker=marker, lw=2, ms=5, label=dec, color=color, ls=ls)
             if np.any(std > 0):
                 ax.fill_between(xv, mean - std, mean + std, alpha=0.12, color=color)
         ax.set_xlabel(sweep_label or swept_param, fontsize=11)
@@ -129,14 +137,14 @@ def plot_sweep_lines(rows: list[dict], swept_param: str, values: list,
         axes = [axes]
     for ax, metric in zip(axes, metrics):
         any_data = False
-        for dec in decoders:
-            mean, std = gather(dec, metric)
+        for dec, mean, std, _ in ordered_series(metric):
             if np.all(np.isnan(mean)):
                 continue
             any_data = True
             color = PALETTE.get(dec, "#333333")
             ls = LINESTYLE.get(dec, "-")
-            ax.plot(xv, mean, marker="o", lw=2, ms=4, label=dec, color=color, ls=ls)
+            marker = MARKER.get(dec, "o")
+            ax.plot(xv, mean, marker=marker, lw=2, ms=4, label=dec, color=color, ls=ls)
             if np.any(std > 0):
                 ax.fill_between(xv, mean - std, mean + std, alpha=0.12, color=color)
         ax.set_xlabel(sweep_label or swept_param, fontsize=10)

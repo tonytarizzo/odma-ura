@@ -8,16 +8,15 @@ Two entry points:
   run_grid(scenario_cfgs, decoders, seeds, **kwargs)
       -> list[row]   (one per (cfg, decoder, seed))
 
-Failures are caught: a failed run returns NaN metrics with an "error" string
-in `decoder_meta` and is still appended to the cache so we don't retry it
-forever (use `--force` to retry).
+Failures are caught: a failed run is scored as the all-zero estimate, records
+the error in `decoder_meta`, and is still appended to the cache so we do not
+retry it forever (use `--force` to retry).
 """
 
 from __future__ import annotations
 
 import gc
 import time
-import traceback
 from typing import Iterable
 
 import numpy as np
@@ -26,22 +25,22 @@ from .cache import append_result, load_cache, lookup, make_row
 from .config import CACHE_PATH
 from .decoders.registry import get
 from .metrics import evaluate_counts
+from .objectives import objective_diagnostics
 from .scenario import SCENARIO_KEYS, build_scenario
-
-
-def _fail_metrics() -> dict:
-    return dict(tp=0, fp=0, fn=0, f1=0.0, l1_err=float("nan"),
-                l1_acc=0.0, nmse=float("nan"),
-                total_count_err=float("nan"), exact_count=0.0,
-                support_true=0)
 
 
 def _slim_meta(meta: dict) -> dict:
     """Keep only small scalar fields from decoder meta for cache rows."""
     if not meta:
         return {}
-    keep = {"converged", "timed_out", "iterations", "wall_s",
-            "lam", "noise_var_est", "K_hat", "selected_k", "rho"}
+    keep = {"converged", "timed_out", "decoder_failure", "failure_reason",
+            "iterations", "wall_s",
+            "lam", "noise_var_est", "K_hat", "K_prior", "K_target",
+            "K_star", "selected_k", "rho",
+            "rho_init", "rho_policy", "rho_updates", "r_pri", "r_dual",
+            "anderson_steps", "cache_size", "cache_caps", "max_feasible_K",
+            "rho_activity", "support_hat", "sigma_x_sq", "sigma_eff_sq",
+            "sigma_K", "objective"}
     return {k: meta[k] for k in keep if k in meta}
 
 
@@ -68,11 +67,14 @@ def run_one(scenario_cfg: dict, decoder: str, seed: int, *,
     try:
         counts, meta = spec["fn"](scenario, **decoder_params)
         metrics = evaluate_counts(scenario.message_counts, np.asarray(counts))
+        metrics.update(objective_diagnostics(scenario, np.asarray(counts)))
         metrics["wall_s"] = time.time() - t0
         if isinstance(meta, dict):
             for k in ("converged", "timed_out"):
                 if k in meta:
                     metrics[k] = bool(meta[k])
+            if "decoder_failure" in meta:
+                metrics["decoder_failure"] = bool(meta["decoder_failure"])
             if "iterations" in meta:
                 metrics["iterations"] = int(meta["iterations"])
             nv = meta.get("noise_var_est")
@@ -81,10 +83,16 @@ def run_one(scenario_cfg: dict, decoder: str, seed: int, *,
         decoder_meta = _slim_meta(meta if isinstance(meta, dict) else {})
         status = "ran"
     except Exception as exc:
-        traceback.print_exc()
-        metrics = _fail_metrics()
+        zero_counts = np.zeros_like(scenario.message_counts, dtype=np.float64)
+        metrics = evaluate_counts(scenario.message_counts, zero_counts)
+        metrics.update(objective_diagnostics(scenario, zero_counts))
         metrics["wall_s"] = time.time() - t0
-        decoder_meta = {"error": str(exc)[:200]}
+        metrics["decoder_failure"] = True
+        decoder_meta = {
+            "decoder_failure": True,
+            "failure_reason": f"exception: {str(exc)[:180]}",
+            "error": str(exc)[:200],
+        }
         status = "failed"
 
     row = make_row(scenario_cfg, decoder, decoder_params, seed, metrics,

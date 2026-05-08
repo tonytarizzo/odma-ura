@@ -79,11 +79,24 @@ def decoder_overrides(args) -> dict[str, dict]:
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     base = base_cfg_from_args(args)
+    if int(base.get("num_antennas", 0)) < 2:
+        raise SystemExit(
+            f"--num-antennas={base.get('num_antennas')} is not supported. "
+            f"The V2 common-signature model assumes M_ant >= 2.")
+    if "antennas" in args.sweeps:
+        bad = [v for v in SWEEP_CONFIGS["antennas"]["values"] if int(v) < 2]
+        if bad:
+            raise SystemExit(
+                f"antennas sweep contains M_ant < 2 values {bad}; remove them in config.py.")
     seeds = list(range(args.seed_start, args.seed_start + args.num_seeds))
 
     print(f"Base scenario: {base}")
     print(f"Decoders     : {args.decoders}")
     print(f"Sweeps       : {args.sweeps}")
+    sweep_overrides = {name: SWEEP_CONFIGS[name]["base_overrides"]
+                       for name in args.sweeps if "base_overrides" in SWEEP_CONFIGS[name]}
+    if sweep_overrides:
+        print(f"Sweep bases  : {sweep_overrides}")
     print(f"Seeds        : {seeds}")
     print(f"Cache        : {CACHE_PATH}")
     print(f"Plots        : {PLOTS_DIR}")
@@ -96,8 +109,10 @@ def main(argv: list[str] | None = None) -> None:
         for sweep_name in args.sweeps:
             sc = SWEEP_CONFIGS[sweep_name]
             param, values = sc["param"], sc["values"]
-            print(f"=== Sweep: {sweep_name}  ({param} in {values}) ===")
-            scenario_cfgs = [{**base, param: v} for v in values]
+            sweep_base = {**base, **sc.get("base_overrides", {})}
+            override = f"  base_overrides={sc['base_overrides']}" if "base_overrides" in sc else ""
+            print(f"=== Sweep: {sweep_name}  ({param} in {values}){override} ===")
+            scenario_cfgs = [{**sweep_base, param: v} for v in values]
             run_grid(scenario_cfgs, args.decoders, seeds,
                      decoder_overrides=overrides,
                      cache_path=CACHE_PATH, force=args.force, verbose=True)
@@ -108,11 +123,12 @@ def main(argv: list[str] | None = None) -> None:
     print(f"Cache rows: {len(rows)}  ->  generating plots in {PLOTS_DIR}")
     for sweep_name in args.sweeps:
         sc = SWEEP_CONFIGS[sweep_name]
+        sweep_base = {**base, **sc.get("base_overrides", {})}
         sweep_dir = PLOTS_DIR / sweep_name
         plot_sweep_lines(
             rows,
             swept_param=sc["param"], values=sc["values"],
-            decoders=args.decoders, scenario_filter=base,
+            decoders=args.decoders, scenario_filter=sweep_base,
             out_dir=sweep_dir, sweep_label=sc["label"],
             metrics=("f1", "l1_acc"))
         print(f"  -> {sweep_dir}/")
