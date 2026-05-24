@@ -31,6 +31,7 @@ METRIC_LABELS = {
     "l1_acc": "L1 accuracy",
     "l1_err": "L1 error",
     "nmse":   "NMSE",
+    "pupe":   "PUPE",
 }
 
 
@@ -295,6 +296,48 @@ def plot_count_estimates(true_counts, decoder_counts: dict[str, np.ndarray],
     ax.set_xlabel("Message index"); ax.set_ylabel("Count")
     ax.set_title("Estimated counts — active messages only")
     ax.legend(fontsize=8); ax.grid(True, alpha=0.3, axis="y")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=140, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_required_ebn0(summary_rows: list[dict], out_path: Path, *, title: str = "Required Eb/N0") -> None:
+    """Plot threshold curves produced by tests.threshold_test."""
+    _configure_matplotlib()
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    if not summary_rows:
+        return
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    groups: dict[tuple[str, float], list[dict]] = {}
+    for row in summary_rows:
+        groups.setdefault((row["decoder"], float(row["target_pupe"])), []).append(row)
+
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    any_data = False
+    for (decoder, target), rows in sorted(groups.items(), key=lambda item: (item[0][1], item[0][0])):
+        rows = sorted(rows, key=lambda row: row["num_devices_active"])
+        x = np.array([row["num_devices_active"] for row in rows], dtype=float)
+        y = np.array([row["required_ebn0_db"] for row in rows], dtype=float)
+        finite = np.isfinite(y)
+        if not np.any(finite):
+            continue
+        any_data = True
+        color = PALETTE.get(decoder, "#333333")
+        marker = MARKER.get(decoder, "o")
+        ls = LINESTYLE.get(decoder, "-")
+        ax.plot(x[finite], y[finite], marker=marker, lw=2, ms=5, color=color, ls=ls,
+                label=f"{decoder}, PUPE<={target:g}")
+
+    ax.set_xlabel("Active devices K")
+    ax.set_ylabel("Required Eb/N0 (dB)")
+    ax.grid(True, alpha=0.3)
+    if any_data:
+        ax.legend(fontsize=8, loc="best")
+    ax.set_title(title)
     fig.tight_layout()
     fig.savefig(out_path, dpi=140, bbox_inches="tight")
     plt.close(fig)

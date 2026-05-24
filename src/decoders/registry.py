@@ -163,6 +163,12 @@ DECODER_REGISTRY: dict[str, dict] = {
         "kind": "greedy",
         "params": {},
     },
+    "NNOMP-OracleK": {
+        "fn": omp.run_oracle_k,
+        "oracle": "K",
+        "kind": "greedy",
+        "params": {},
+    },
 }
 
 
@@ -190,6 +196,7 @@ PALETTE = {
     "VAMP-Poisson-EM": "#0F766E",
     "BlockMAP": "#D0021B",
     "NNOMP":    "#417505",
+    "NNOMP-OracleK": "#2F6B00",
 }
 
 
@@ -217,6 +224,7 @@ LINESTYLE = {
     "VAMP-Poisson-EM": "--",
     "BlockMAP": ":",
     "NNOMP":    "-",
+    "NNOMP-OracleK": "--",
 }
 
 
@@ -244,6 +252,7 @@ MARKER = {
     "VAMP-Poisson-EM": "P",
     "BlockMAP": "p",
     "NNOMP": "H",
+    "NNOMP-OracleK": "D",
 }
 
 

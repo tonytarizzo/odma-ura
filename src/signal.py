@@ -7,14 +7,30 @@ import numpy as np
 
 def esn0_db_to_noise_var(esn0_db: float, d: int) -> float:
     """Es/N0 (dB) -> per-entry noise variance.  Es = 1/d (unit-norm codewords)."""
+    if d <= 0:
+        raise ValueError(f"d must be positive, got {d}")
     esn0_lin = 10.0 ** (esn0_db / 10.0)
     return 1.0 / (d * esn0_lin)
 
 
 def esn0_db_to_ebn0_db(esn0_db: float, d: int, num_codewords: int) -> float:
     """Convert internal Es/N0 control to GMAC-style Eb/N0 (no real-AWGN 1/2 factor)."""
-    bits_per_msg = max(np.log2(max(num_codewords, 2)), 1e-12)
+    if d <= 0:
+        raise ValueError(f"d must be positive, got {d}")
+    if num_codewords < 2:
+        raise ValueError(f"num_codewords must be at least 2, got {num_codewords}")
+    bits_per_msg = np.log2(num_codewords)
     return esn0_db + 10.0 * np.log10(d / bits_per_msg)
+
+
+def ebn0_db_to_esn0_db(ebn0_db: float, d: int, num_codewords: int) -> float:
+    """Inverse of esn0_db_to_ebn0_db for the current unit-norm local-codeword convention."""
+    if d <= 0:
+        raise ValueError(f"d must be positive, got {d}")
+    if num_codewords < 2:
+        raise ValueError(f"num_codewords must be at least 2, got {num_codewords}")
+    bits_per_msg = np.log2(num_codewords)
+    return ebn0_db - 10.0 * np.log10(d / bits_per_msg)
 
 
 def synthesize_received_signal(P_mats: dict[int, np.ndarray],
