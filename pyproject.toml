@@ -10,5 +10,10 @@ dependencies = [
     "scipy>=1.11",
 ]
 
+[project.optional-dependencies]
+framework = [
+    "torch>=2.2",
+]
+
 [tool.uv]
 package = false

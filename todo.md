@@ -1,10 +1,7 @@
 
-- test vamp until starts to breakdown, check they actually do (sanity check)
-- eb/n_0 per number of users, e.g. 5% error acceptable, what is minimum transmit power required for fixed number of active users (compare with curve from normal ura paper, plot for different percentages of error, e.g. 10% or 5%)
-- check/compare the plot with other paper's to sense check
-- relate to information theoretic bound for decoding, polyansky (can also look at constrained bounded versions if you want)
-- add plot for complexity gap for global decoder vs odma structure enhanced, is there genuine need to close the gap?
-- also with the global framework, have we done that in the odma method, and is the resulting global codebook way bigger than it would have otherwise been? suprised that the decoding time is so small
+- figure out conclusions from stress level tests, patterns for scaling implications
+- if conclusive, make new proposed framework setup
+
 
 - definitely test learnt framework with just decoding objective "true" as an ablation to then justify extra strucutres/etc used to guide structures in learnt matrices
 - odma decoder and learning framework and seeing odma pattern be learnt would be amazing demonstration of successful learning framework
