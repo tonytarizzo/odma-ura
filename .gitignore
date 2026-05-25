@@ -25,6 +25,7 @@ venv/
 *.log
 jobs/*/*.o*
 jobs/*/*.e*
+jobs/README.md
 jobs/*/results/
 .cache/
 docs/
