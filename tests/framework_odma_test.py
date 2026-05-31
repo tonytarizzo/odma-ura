@@ -1,7 +1,8 @@
-"""Framework ODMA+URA inference sanity test.
+"""Framework explicit-URA inference sanity test.
 
-This script checks that the new framework can represent the legacy ODMA+URA
-setup and then runs oracle-K OMP inference over job-style parameters.
+This script checks that the new framework can represent a known dense or
+legacy ODMA+URA setup and then runs oracle-K OMP inference over job-style
+parameters.
 """
 
 from __future__ import annotations
@@ -26,12 +27,13 @@ from framework.core import ComponentSpec, URASpec  # noqa: E402
 from framework.decoders import oracle_k_omp  # noqa: E402
 from framework.encoder import build_encoder  # noqa: E402
 from framework.metrics import batch_evaluate  # noqa: E402
-from framework.pipeline import odma_component_specs  # noqa: E402
+from framework.pipeline import dense_component_specs, odma_component_specs  # noqa: E402
 from src.scenario import build_scenario  # noqa: E402
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--preset", choices=["dense", "odma"], default="odma")
     p.add_argument("-B", "--payload-bits", type=int, default=10)
     p.add_argument("--n", type=int, default=1024)
     p.add_argument("--d", type=int, default=128)
@@ -48,15 +50,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def build_framework_odma_encoder(n: int, d: int, num_blocks: int, num_codewords: int,
-                                 K: int, num_antennas: int, dtype: torch.dtype,
-                                 generator: torch.Generator):
+def build_framework_encoder(preset: str, n: int, d: int, num_blocks: int, num_codewords: int,
+                            K: int, num_antennas: int, dtype: torch.dtype,
+                            generator: torch.Generator):
     spec = URASpec(n=n, num_codewords=num_codewords, num_active=K, num_antennas=num_antennas)
-    components = odma_component_specs(spec, d, num_blocks, learn_C=False, learn_R=False)
+    if preset == "dense":
+        components = dense_component_specs(spec, learn_C=False)
+    elif preset == "odma":
+        components = odma_component_specs(spec, d, num_blocks, learn_C=False, learn_R=False)
+    else:
+        raise ValueError(f"unknown preset '{preset}'")
     return build_encoder(spec, components, dtype=dtype, generator=generator)
 
 
-def check_legacy_algebra() -> None:
+def check_odma_algebra() -> None:
     n, d, num_blocks, M, K, ant, seed = 32, 8, 4, 16, 3, 2, 123
     legacy = build_scenario(
         n=n, d=d, num_blocks=num_blocks, num_codewords=M,
@@ -82,13 +89,46 @@ def check_legacy_algebra() -> None:
         raise AssertionError(f"framework ODMA Phi does not match legacy construction; max error {err:.3e}")
 
 
+def check_dense_algebra() -> None:
+    n, M, K, ant, seed = 32, 16, 3, 2, 123
+    legacy = build_scenario(
+        n=n, d=n, num_blocks=1, num_codewords=M,
+        num_devices_active=K, num_antennas=ant, esn0_db=0.0, seed=seed)
+    R = torch.as_tensor(legacy.P_mats[0], dtype=torch.float64).unsqueeze(0)
+    C = torch.as_tensor(legacy.codebook.T, dtype=torch.float64)
+    msg = torch.arange(M)
+    component = ComponentSpec(
+        Q=1, d=n, V=M, N=M,
+        R_init="explicit", C_init="explicit", U_init="explicit", T_init="identity",
+        explicit_R=R, explicit_C=C,
+        explicit_atom_q=torch.zeros(M, dtype=torch.long),
+        explicit_atom_v=msg,
+    )
+    spec = URASpec(n=n, num_codewords=M, num_active=K, num_antennas=ant)
+    encoder = build_encoder(spec, [component], dtype=torch.float64)
+    phi_legacy = R[0] @ C
+    if not torch.allclose(encoder.explicit_matrix(), phi_legacy, atol=1e-12, rtol=1e-12):
+        raise AssertionError("framework dense Phi does not match direct dense construction")
+
+    dense = build_framework_encoder("dense", n, n, 1, M, K, ant, torch.float64, torch.Generator().manual_seed(seed))
+    if not torch.allclose(dense.explicit_matrix(), dense.components[0].C, atol=1e-12, rtol=1e-12):
+        raise AssertionError("dense preset must reduce exactly to Phi=C")
+
+
+def check_known_algebra(preset: str) -> None:
+    if preset == "dense":
+        check_dense_algebra()
+    else:
+        check_odma_algebra()
+
+
 def run_point(args: argparse.Namespace, K: int, ebn0_db: float, seeds: list[int]) -> tuple[list[dict], dict]:
     dtype = torch.float64 if args.dtype == "float64" else torch.float32
     M = 1 << int(args.payload_bits)
     rows = []
     for seed in seeds:
         gen = torch.Generator().manual_seed(int(seed))
-        encoder = build_framework_odma_encoder(args.n, args.d, args.num_blocks, M, K, args.num_antennas, dtype, gen)
+        encoder = build_framework_encoder(args.preset, args.n, args.d, args.num_blocks, M, K, args.num_antennas, dtype, gen)
         counts_sampler = uniform_counts_generator(K, M, gen, encoder.device)
         fading_sampler = constant_fading(args.num_antennas, dtype, encoder.device)
         batch = sample_batch(encoder, 1, counts_sampler, fading_sampler, ebn0_db, gen)
@@ -111,7 +151,7 @@ def run_point(args: argparse.Namespace, K: int, ebn0_db: float, seeds: list[int]
     return rows, point
 
 
-def plot_summary(points: list[dict], out_path: Path) -> None:
+def plot_summary(points: list[dict], out_path: Path, preset: str) -> None:
     import matplotlib.pyplot as plt
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -127,7 +167,7 @@ def plot_summary(points: list[dict], out_path: Path) -> None:
         ax.set_xlabel("Active devices K")
         ax.grid(True, alpha=0.3)
         ax.legend(title="Eb/N0")
-    fig.suptitle("Framework ODMA+URA oracle-K OMP inference")
+    fig.suptitle(f"Framework {preset} URA oracle-K OMP inference")
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
@@ -136,13 +176,13 @@ def plot_summary(points: list[dict], out_path: Path) -> None:
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     if args.check_legacy_algebra:
-        check_legacy_algebra()
-        print("Legacy algebra check passed: framework Phi matches src ODMA construction.")
+        check_known_algebra(args.preset)
+        print(f"Known algebra check passed: framework {args.preset} Phi matches its direct construction.")
 
     seeds = list(range(args.seed_start, args.seed_start + args.num_seeds))
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    print(f"Framework ODMA test: n={args.n}, d={args.d}, blocks={args.num_blocks}, "
+    print(f"Framework {args.preset} test: n={args.n}, d={args.d}, blocks={args.num_blocks}, "
           f"B={args.payload_bits}, M={1 << args.payload_bits}, antennas={args.num_antennas}")
     print(f"K values: {args.K_values}")
     print(f"Eb/N0 grid: {args.ebn0_grid}")
@@ -157,16 +197,17 @@ def main(argv: list[str] | None = None) -> None:
             points.append(point)
 
     payload = {"args": vars(args), "points": points, "trials": all_rows}
-    (out_dir / "framework_odma_summary.json").write_text(json.dumps(payload, indent=2, default=str))
-    plot_summary(points, out_dir / "framework_odma_summary.png")
-    representative_encoder = build_framework_odma_encoder(
-        args.n, args.d, args.num_blocks, 1 << int(args.payload_bits),
+    stem = f"framework_{args.preset}_summary"
+    (out_dir / f"{stem}.json").write_text(json.dumps(payload, indent=2, default=str))
+    plot_summary(points, out_dir / f"{stem}.png", args.preset)
+    representative_encoder = build_framework_encoder(
+        args.preset, args.n, args.d, args.num_blocks, 1 << int(args.payload_bits),
         int(args.K_values[0]), args.num_antennas,
         torch.float64 if args.dtype == "float64" else torch.float32,
         torch.Generator().manual_seed(int(args.seed_start)))
     analyze_encoder(representative_encoder, out_dir / "encoding_analysis")
-    print(f"Wrote {out_dir / 'framework_odma_summary.json'}")
-    print(f"Wrote {out_dir / 'framework_odma_summary.png'}")
+    print(f"Wrote {out_dir / f'{stem}.json'}")
+    print(f"Wrote {out_dir / f'{stem}.png'}")
 
 
 if __name__ == "__main__":

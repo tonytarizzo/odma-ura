@@ -1,6 +1,6 @@
 
-- figure out conclusions from stress level tests, patterns for scaling implications
-- if conclusive, make new proposed framework setup
+- grab rerun test 8, merge results and finalise conclusions from stress level tests, add scaling conclusions too
+- decide how to incorporate constraints and loss functions into setup
 
 
 - definitely test learnt framework with just decoding objective "true" as an ablation to then justify extra strucutres/etc used to guide structures in learnt matrices
