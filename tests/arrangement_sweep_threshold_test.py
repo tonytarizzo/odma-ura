@@ -16,7 +16,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.config import RESULTS_DIR  # noqa: E402
 from src.decoders.registry import all_names  # noqa: E402
-from tests.plot_arrangement_sweep import plot_series  # noqa: E402
+from src.ura_bound import required_ebn0_curve  # noqa: E402
+from tests.plot_arrangement_sweep import bootstrap_required_ci, plot_series  # noqa: E402
 from tests.threshold_test import run_bisect_search  # noqa: E402
 
 
@@ -50,6 +51,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--seed-start", type=int, default=42)
     p.add_argument("--out-name", required=True, help="subdirectory under results/threshold")
     p.add_argument("--out-dir", default=None, help="explicit output directory; overrides --out-name when provided")
+    p.add_argument("--no-resume", action="store_true", help="ignore any existing summary and recompute every (arrangement, K) from scratch")
+    p.add_argument("--ci-bootstrap", type=int, default=500,
+                   help="bootstrap resamples for required-Eb/N0 CIs (0 disables the CI plot)")
+    p.add_argument("--overlay-ura-bound", action="store_true", help="overlay the Polyanskiy canonical/count/strict achievability variants (src/ura_bound.py)")
     return p.parse_args(argv)
 
 
@@ -79,6 +84,39 @@ def validate_args(args: argparse.Namespace) -> None:
             raise SystemExit(f"invalid arrangement {label}: blocks={blocks}")
 
 
+def load_checkpoint(summary_path: Path) -> tuple[list[dict], list[dict], set[tuple[str, int]]]:
+    """Return (trials, summary, done) from an existing summary file, if any.
+
+    ``done`` is the set of (arrangement_label, K) pairs already computed, used to
+    skip finished work on resume. A corrupt/partial file is treated as empty so
+    a restart never crashes on a half-written checkpoint.
+    """
+    if not summary_path.exists():
+        return [], [], set()
+    try:
+        data = json.loads(summary_path.read_text())
+    except (json.JSONDecodeError, ValueError):
+        print(f"[resume] could not parse {summary_path}; starting fresh")
+        return [], [], set()
+    trials = list(data.get("trials", []))
+    summary = list(data.get("summary", []))
+    done = {(row["arrangement"], int(row["num_devices_active"])) for row in summary}
+    if done:
+        print(f"[resume] loaded {len(summary)} completed (arrangement, K) points from {summary_path}")
+    return trials, summary, done
+
+
+def write_summary(summary_path: Path, args: argparse.Namespace, seeds: list[int],
+                  all_trials: list[dict], all_summary: list[dict]) -> None:
+    payload = {"payload_bits": int(args.payload_bits), "K_values": args.K_values, "target": float(args.target),
+               "decoder": args.decoder, "ebn0_min": args.ebn0_min, "ebn0_max": args.ebn0_max,
+               "ebn0_tol": args.ebn0_tol, "seeds": seeds, "arrangements": args.arrangements,
+               "trials": all_trials, "summary": all_summary}
+    tmp = summary_path.with_suffix(summary_path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2, default=str))
+    tmp.replace(summary_path)
+
+
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     validate_args(args)
@@ -87,6 +125,8 @@ def main(argv: list[str] | None = None) -> None:
     num_codewords = 1 << int(args.payload_bits)
     out_dir = Path(args.out_dir) if args.out_dir is not None else RESULTS_DIR / "threshold" / args.out_name
     out_dir.mkdir(parents=True, exist_ok=True)
+    summary_path = out_dir / "arrangement_sweep_threshold_summary.json"
+    plot_path = out_dir / "arrangement_sweep_required_ebn0.png"
 
     print(f"Decoder      : {args.decoder}")
     print(f"Payload bits : {args.payload_bits}  (M={num_codewords})")
@@ -98,38 +138,77 @@ def main(argv: list[str] | None = None) -> None:
     print(f"Seeds        : {seeds}")
     print(f"Output       : {out_dir}\n")
 
-    t0 = time.time()
-    all_trials = []
-    all_summary = []
-    plot_rows: list[tuple[str, list[dict]]] = []
+    if args.no_resume:
+        all_trials, all_summary, done = [], [], set()
+    else:
+        all_trials, all_summary, done = load_checkpoint(summary_path)
 
+    title = f"{args.decoder}: arrangement sweep required Eb/N0 (n={args.n}, bits={args.payload_bits}, PUPE<={args.target:g})"
+
+    def plot_rows_from(summary: list[dict]) -> list[tuple[str, list[dict]]]:
+        rows: dict[str, list[dict]] = {}
+        for row in summary:
+            rows.setdefault(row["arrangement"], []).append(row)
+        return [(label, rows[label]) for label, _, _ in args.arrangements if label in rows]
+
+    t0 = time.time()
     for label, d, blocks in args.arrangements:
         base = {"n": int(args.n), "d": int(d), "num_blocks": int(blocks),
                 "num_codewords": num_codewords, "num_antennas": int(args.num_antennas)}
         print(f"=== {label}: n={base['n']}, d={base['d']}, blocks={base['num_blocks']}, "
               f"antennas={base['num_antennas']} ===")
-        trials, summary = run_bisect_search(
-            base, [args.decoder], args.K_values, [args.target], seeds,
-            float(args.ebn0_min), float(args.ebn0_max), float(args.ebn0_tol), int(args.max_search_steps))
-        for row in trials:
-            row["arrangement"] = label
-            row["base"] = base
-        for row in summary:
-            row["arrangement"] = label
-            row["base"] = base
-        all_trials.extend(trials)
-        all_summary.extend(summary)
-        plot_rows.append((label, summary))
+        for K in args.K_values:
+            if (label, int(K)) in done:
+                print(f"  [resume] skipping completed K={K}")
+                continue
+            # One (arrangement, K) point at a time so each result is checkpointed.
+            trials, summary = run_bisect_search(
+                base, [args.decoder], [int(K)], [args.target], seeds,
+                float(args.ebn0_min), float(args.ebn0_max), float(args.ebn0_tol), int(args.max_search_steps))
+            for row in trials:
+                row["arrangement"] = label
+                row["base"] = base
+            for row in summary:
+                row["arrangement"] = label
+                row["base"] = base
+            all_trials.extend(trials)
+            all_summary.extend(summary)
+            done.add((label, int(K)))
+            write_summary(summary_path, args, seeds, all_trials, all_summary)
+            for row in summary:
+                req = row["required_ebn0_db"]
+                req_str = f"{req:.2f} dB" if np.isfinite(req) else "not reached"
+                print(f"  -> K={K:<4d} {req_str}  [{row['search_status']}]  (checkpointed)")
         print()
 
-    payload = {"payload_bits": int(args.payload_bits), "K_values": args.K_values, "target": float(args.target),
-               "decoder": args.decoder, "ebn0_min": args.ebn0_min, "ebn0_max": args.ebn0_max,
-               "ebn0_tol": args.ebn0_tol, "seeds": seeds, "arrangements": args.arrangements,
-               "trials": all_trials, "summary": all_summary}
-    (out_dir / "arrangement_sweep_threshold_summary.json").write_text(json.dumps(payload, indent=2, default=str))
+    series = plot_rows_from(all_summary)
 
-    title = f"{args.decoder}: arrangement sweep required Eb/N0 (n={args.n}, bits={args.payload_bits}, PUPE<={args.target:g})"
-    plot_series(plot_rows, out_dir / "arrangement_sweep_required_ebn0.png", title=title)
+    bounds = None
+    if args.overlay_ura_bound:
+        curve = required_ebn0_curve(int(args.n), int(args.payload_bits), list(args.K_values),
+                                    float(args.target), num_antennas=int(args.num_antennas))
+        bounds = {v: [(K, entry[v]["ebn0_db_experiment"]) for K, entry in curve.items()]
+                  for v in ("canonical", "count", "strict")}
+        (out_dir / "ura_bound_diagnostics.json").write_text(
+            json.dumps({"target": float(args.target), "num_antennas": int(args.num_antennas),
+                        "curve": curve}, indent=2, default=str))
+        print("[ura-bound] overlaying canonical / count / strict variants "
+              "(strict truncates where its collision floor exceeds the target).")
+
+    # Plain plot (no error bars) plus a CI variant, so the presentation choice is open.
+    plot_series(series, plot_path, title=title, bounds=bounds)
+    if args.ci_bootstrap > 0:
+        yerr = {label: {} for label, _ in series}
+        for label, rows in series:
+            for r in rows:
+                K = int(r["num_devices_active"])
+                ci = bootstrap_required_ci(all_trials, label, K, float(args.target),
+                                           num_boot=int(args.ci_bootstrap))
+                if ci is not None:
+                    yerr[label][K] = ci
+        ci_path = out_dir / "arrangement_sweep_required_ebn0_ci.png"
+        plot_series(series, ci_path, title=title + " (95% seed CI)", yerr=yerr, bounds=bounds)
+        print(f"Wrote {ci_path}")
 
     print("Required Eb/N0 summary:")
     for row in all_summary:
@@ -137,8 +216,8 @@ def main(argv: list[str] | None = None) -> None:
         req_str = f"{req:.2f} dB" if np.isfinite(req) else "not reached"
         print(f"  {row['arrangement']:<18s} K={row['num_devices_active']:<4d} PUPE<={row['target_pupe']:<5g} "
               f"{req_str}  [{row['search_status']}]")
-    print(f"\nWrote {out_dir / 'arrangement_sweep_threshold_summary.json'}")
-    print(f"Wrote {out_dir / 'arrangement_sweep_required_ebn0.png'}")
+    print(f"\nWrote {summary_path}")
+    print(f"Wrote {plot_path}")
     print(f"Total wall: {(time.time() - t0) / 60.0:.1f} min")
 
 

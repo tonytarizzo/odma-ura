@@ -1,5 +1,7 @@
 
 - grab rerun test 8, merge results and finalise conclusions from stress level tests, add scaling conclusions too
+- run analytical and framework to both get same l1 accuracy, make sure graphs are same
+- decrease n to e.g. 256 for B of 10+, bit more comparable ratio
 - decide how to incorporate constraints and loss functions into setup
 
 

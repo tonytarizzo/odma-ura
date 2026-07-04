@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from . import admm, amp, block_cd, block_map_decoder, graph_bp, lmmse, omp, sic, vamp
+from . import admm, amp, block_cd, block_map_decoder, genie, graph_bp, lmmse, omp, sic, vamp
 
 
 DecoderFn = Callable[..., tuple]
@@ -169,6 +169,12 @@ DECODER_REGISTRY: dict[str, dict] = {
         "kind": "greedy",
         "params": {},
     },
+    "Genie-OracleSupport": {
+        "fn": genie.run_oracle_support,
+        "oracle": "support,K",
+        "kind": "linear",
+        "params": {},
+    },
 }
 
 
@@ -197,6 +203,7 @@ PALETTE = {
     "BlockMAP": "#D0021B",
     "NNOMP":    "#417505",
     "NNOMP-OracleK": "#2F6B00",
+    "Genie-OracleSupport": "#111827",
 }
 
 
@@ -225,6 +232,7 @@ LINESTYLE = {
     "BlockMAP": ":",
     "NNOMP":    "-",
     "NNOMP-OracleK": "--",
+    "Genie-OracleSupport": ":",
 }
 
 
@@ -253,6 +261,7 @@ MARKER = {
     "BlockMAP": "p",
     "NNOMP": "H",
     "NNOMP-OracleK": "D",
+    "Genie-OracleSupport": "*",
 }
 
 
