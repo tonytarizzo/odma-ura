@@ -19,7 +19,7 @@ JOB_DIR="jobs/009_framework_odma_job1"
 OUT_DIR="$JOB_DIR/results"
 mkdir -p "$OUT_DIR"
 
-uv run --extra framework python -m tests.framework_odma_test \
+uv run python -m tests.framework_odma_test \
   -B 10 \
   --n 1024 \
   --d 128 \

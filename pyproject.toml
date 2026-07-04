@@ -8,10 +8,6 @@ dependencies = [
     "matplotlib>=3.8",
     "numpy>=1.25",
     "scipy>=1.11",
-]
-
-[project.optional-dependencies]
-framework = [
     "torch>=2.2",
 ]
 

@@ -19,7 +19,7 @@ JOB_DIR="jobs/010_framework_dense_job1"
 OUT_DIR="$JOB_DIR/results"
 mkdir -p "$OUT_DIR"
 
-uv run --extra framework python -m tests.framework_odma_test \
+uv run python -m tests.framework_odma_test \
   --preset dense \
   -B 10 \
   --n 1024 \
