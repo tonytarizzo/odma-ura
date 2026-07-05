@@ -42,6 +42,14 @@ Checks exact equivalence between the legacy `src.scenario` dictionary and the ne
 
 Builds small explicit global codebooks for several framework-style families, including dense, slotted, ODMA, spreading, CCS, SPARC, and coded-pattern constructions. It does not run a decoder; it analyses codebook geometry through coherence, support overlap, row load, active-set conditioning, and related morphology plots.
 
+## `framework_geometry_optimisation.py`
+
+Runs decoder-free optimisation of framework codebook factors against global recovery-geometry objectives. It keeps the message plumbing fixed, learns `C` by default, optionally learns values on a fixed `R` mask, and writes before/after encoder analysis plus optimisation curves for AMP-style active-set Gram loss, VAMP-style spectral loss, or support-margin loss.
+
+## `framework_geometry_decoder_eval.py`
+
+Loads the `encoder_before.pt` and `encoder_after.pt` checkpoints from a geometry-optimisation run and evaluates them with the same sampled active messages and noise realisations. It reports paired before/after decoder metrics over an `Eb/N0` grid so geometry improvements can be checked against actual sparse-recovery performance.
+
 ## `framework_unrolled_decoder_test.py`
 
 Trains the unrolled nonnegative ISTA decoder on a frozen dense or ODMA framework encoder. It compares the learned decoder against matched filtering and oracle-K NNOMP, writes a training summary and progress plot, and is mainly used to test whether the learned decoder is a credible training surrogate.
