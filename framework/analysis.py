@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import torch
@@ -12,6 +13,7 @@ from .encoder import Encoder
 
 MAX_PAIRWISE_COLUMNS = 2048
 MAX_EXACT_SVD_NUMEL = 6_000_000
+DEFAULT_ACTIVE_SET_SAMPLES = 128
 
 
 def tensor_stats(x: torch.Tensor) -> dict:
@@ -116,6 +118,89 @@ def effective_support(x: torch.Tensor, dim: int) -> torch.Tensor:
     return (a.sum(dim=dim) ** 2) / (a ** 2).sum(dim=dim).clamp_min(1e-24)
 
 
+def unit_columns(Phi: torch.Tensor) -> torch.Tensor:
+    return Phi / Phi.norm(dim=0, keepdim=True).clamp_min(1e-12)
+
+
+def support_structure(Phi: torch.Tensor, abs_tol: float = 1e-9) -> dict:
+    support = sampled_columns(Phi).detach().abs() > abs_tol
+    row_load = support.to(torch.float64).sum(dim=1)
+    col_support = support.to(torch.float64).sum(dim=0)
+    out = {
+        "sampled_columns": int(support.shape[1]),
+        "column_support": tensor_stats(col_support),
+        "row_load": tensor_stats(row_load),
+        "row_load_gini": gini(row_load),
+    }
+    if support.shape[1] > 1:
+        overlap = support.to(torch.float64).T @ support.to(torch.float64)
+        off = overlap[~torch.eye(overlap.shape[0], dtype=torch.bool, device=overlap.device)]
+        out["support_overlap"] = tensor_stats(off)
+    else:
+        out["support_overlap"] = {}
+    return out
+
+
+def active_set_diagnostics(Phi: torch.Tensor, active_k: int, num_samples: int,
+                           generator: torch.Generator | None = None) -> dict:
+    n, M = Phi.shape
+    K = min(int(active_k), M)
+    if K <= 0:
+        return {"skipped": "active_k must be positive"}
+    P = unit_columns(Phi.detach())
+    gram_dev, cond, mineig = [], [], []
+    eye = torch.eye(K, dtype=P.real.dtype if P.is_complex() else P.dtype, device=P.device)
+    for _ in range(int(num_samples)):
+        idx = torch.randperm(M, generator=generator, device=P.device)[:K]
+        A = P.index_select(1, idx)
+        Gs = A.conj().T @ A if A.is_complex() else A.T @ A
+        Gs = Gs.real.to(torch.float64)
+        eig = torch.linalg.eigvalsh(Gs)
+        min_eig = eig.min().clamp_min(1e-12)
+        gram_dev.append(torch.linalg.norm(Gs - eye.to(Gs.dtype), ord="fro") / math.sqrt(K))
+        mineig.append(eig.min())
+        cond.append(eig.max() / min_eig)
+    return {
+        "active_k": int(K),
+        "num_samples": int(num_samples),
+        "gram_deviation_per_active": tensor_stats(torch.stack(gram_dev)),
+        "condition_number": tensor_stats(torch.stack(cond)),
+        "min_eigenvalue": tensor_stats(torch.stack(mineig)),
+    }
+
+
+def support_search_margin(Phi: torch.Tensor, active_k: int, num_samples: int,
+                          generator: torch.Generator | None = None) -> dict:
+    M = Phi.shape[1]
+    K = min(int(active_k), M)
+    if K <= 0:
+        return {"skipped": "active_k must be positive"}
+    if K >= M:
+        return {"skipped": "active_k leaves no inactive columns"}
+    P = unit_columns(Phi.detach())
+    margins, ratios, true_min, false_max = [], [], [], []
+    for _ in range(int(num_samples)):
+        idx = torch.randperm(M, generator=generator, device=P.device)[:K]
+        active = torch.zeros(M, dtype=torch.bool, device=P.device)
+        active[idx] = True
+        y = P.index_select(1, idx).sum(dim=1)
+        scores = ((P.conj().T @ y) if P.is_complex() else (P.T @ y)).real
+        t_min = scores[active].min()
+        f_max = scores[~active].max()
+        margins.append(t_min - f_max)
+        ratios.append(f_max / t_min.clamp_min(1e-12))
+        true_min.append(t_min)
+        false_max.append(f_max)
+    return {
+        "active_k": int(K),
+        "num_samples": int(num_samples),
+        "margin_min_true_minus_max_false": tensor_stats(torch.stack(margins)),
+        "false_to_true_score_ratio": tensor_stats(torch.stack(ratios)),
+        "min_true_score": tensor_stats(torch.stack(true_min)),
+        "max_false_score": tensor_stats(torch.stack(false_max)),
+    }
+
+
 def matrix_features(Phi: torch.Tensor) -> dict:
     Phi = Phi.detach()
     col_energy = (Phi.conj() * Phi).sum(dim=0).real if Phi.is_complex() else (Phi ** 2).sum(dim=0)
@@ -172,7 +257,9 @@ def gaussian_reference(Phi: torch.Tensor, num_refs: int = 4) -> dict:
     }
 
 
-def matrix_analysis(name: str, Phi: torch.Tensor, include_gaussian_reference: bool = True) -> dict:
+def matrix_analysis(name: str, Phi: torch.Tensor, include_gaussian_reference: bool = True,
+                    active_k: int | None = None, num_active_samples: int = DEFAULT_ACTIVE_SET_SAMPLES,
+                    include_recovery: bool = False) -> dict:
     Phi = Phi.detach()
     col_energy = (Phi.conj() * Phi).sum(dim=0).real if Phi.is_complex() else (Phi ** 2).sum(dim=0)
     row_energy = (Phi.conj() * Phi).sum(dim=1).real if Phi.is_complex() else (Phi ** 2).sum(dim=1)
@@ -195,10 +282,15 @@ def matrix_analysis(name: str, Phi: torch.Tensor, include_gaussian_reference: bo
         "entry_near_zero_fraction": float((Phi.abs() <= 1e-9).to(torch.float64).mean()),
         "entry_abs_gini": gini(Phi.abs()),
         "entry_gaussian_js": js_divergence_to_gaussian(Phi.real if Phi.is_complex() else Phi),
+        "support_structure": support_structure(Phi),
         "codeword_effective_support": tensor_stats(effective_support(Phi, dim=0)),
         "row_effective_participation": tensor_stats(effective_support(Phi.T, dim=0)),
         "sampled_near_duplicate_codeword_pairs": near_duplicate_pairs,
     }
+    if include_recovery and active_k is not None:
+        gen = torch.Generator(device=Phi.device).manual_seed(2027)
+        out["active_set_diagnostics"] = active_set_diagnostics(Phi, active_k, num_active_samples, gen)
+        out["support_search_margin"] = support_search_margin(Phi, active_k, num_active_samples, gen)
     if include_gaussian_reference:
         out["gaussian_reference"] = gaussian_reference(Phi)
     return out
@@ -337,25 +429,26 @@ def plot_matrix_comparison(payload: dict, out_dir: Path) -> None:
 
     rows = [payload["global"], *payload["matrices"].values()]
     names = [r["name"] for r in rows]
-    unrandomness = [
-        r.get("gaussian_reference", {}).get("unrandomness_rms_z", float("nan"))
-        for r in rows
-    ]
     sparsity = [r.get("entry_near_zero_fraction", float("nan")) for r in rows]
     row_gini = [r.get("row_energy_gini", float("nan")) for r in rows]
-    coherence = [r.get("coherence", {}).get("max_abs", float("nan")) for r in rows]
+    coh_mean = [r.get("coherence", {}).get("mean_abs", float("nan")) for r in rows]
+    coh_q99 = [r.get("coherence", {}).get("q99_abs", float("nan")) for r in rows]
+    coh_max = [r.get("coherence", {}).get("max_abs", float("nan")) for r in rows]
     eff_rank = [
-        r.get("singular_values", {}).get("effective_rank", float("nan"))
+        r.get("singular_values", {}).get("effective_rank", float("nan")) / max(1, min(
+            r.get("shape", {}).get("n", 1), r.get("shape", {}).get("M", 1)))
         for r in rows
     ]
 
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    fig, axes = plt.subplots(2, 3, figsize=(14, 8))
     x = range(len(names))
     series = [
-        ("Gaussian-reference RMS z", unrandomness),
         ("Near-zero fraction", sparsity),
         ("Row-energy Gini", row_gini),
-        ("Max coherence", coherence),
+        ("Mean |Gram offdiag|", coh_mean),
+        ("q99 |Gram offdiag|", coh_q99),
+        ("Max |Gram offdiag|", coh_max),
+        ("Effective-rank fraction", eff_rank),
     ]
     for ax, (title, vals) in zip(axes.flat, series):
         ax.bar(x, vals)
@@ -367,18 +460,10 @@ def plot_matrix_comparison(payload: dict, out_dir: Path) -> None:
     fig.savefig(out_dir / "matrix_structure_comparison.png", dpi=150)
     plt.close(fig)
 
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.bar(x, eff_rank)
-    ax.set_title("Effective rank by analysed matrix")
-    ax.set_xticks(list(x))
-    ax.set_xticklabels(names, rotation=35, ha="right", fontsize=8)
-    ax.grid(True, axis="y", alpha=0.3)
-    fig.tight_layout()
-    fig.savefig(out_dir / "matrix_effective_rank.png", dpi=150)
-    plt.close(fig)
 
-
-def analyze_encoder(encoder: Encoder, out_dir: Path | str) -> dict:
+def analyze_encoder(encoder: Encoder, out_dir: Path | str, *,
+                    active_k: int | None = None,
+                    num_active_samples: int = DEFAULT_ACTIVE_SET_SAMPLES) -> dict:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     with torch.no_grad():
@@ -387,7 +472,9 @@ def analyze_encoder(encoder: Encoder, out_dir: Path | str) -> dict:
         singular_values = torch.linalg.svdvals(Phi).detach().cpu().to(torch.float64)
         matrices = interesting_matrices(encoder)
         payload = {
-            "global": matrix_analysis("global", Phi),
+            "global": matrix_analysis("global", Phi, active_k=active_k,
+                                      num_active_samples=num_active_samples,
+                                      include_recovery=active_k is not None),
             "matrices": {name: matrix_analysis(name, matrix, include_gaussian_reference=(matrix.numel() <= MAX_EXACT_SVD_NUMEL))
                          for name, matrix in matrices.items() if name != "global"},
             "components": component_analysis(encoder),

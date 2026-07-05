@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from numbers import Number
+
 import torch
 
 
@@ -19,7 +21,12 @@ def list_mask(scores: torch.Tensor, max_list_size: int | None) -> torch.Tensor:
 
 def evaluate_counts(counts_true: torch.Tensor, counts_est: torch.Tensor, *,
                       max_list_size: int | None = None) -> dict:
-    """Standard URA detection/count metrics for one realisation."""
+    """Standard URA detection/count metrics for one realisation.
+
+    ``f1`` is support-only: it sees which messages are nonzero, not whether their
+    multiplicities are right. Count errors are captured by ``l1_err`` and
+    ``total_count_err``.
+    """
     if counts_true.shape != counts_est.shape or counts_true.ndim != 1:
         raise ValueError(
             f"expected matching 1-D shapes, got {tuple(counts_true.shape)} vs {tuple(counts_est.shape)}")
@@ -39,15 +46,29 @@ def evaluate_counts(counts_true: torch.Tensor, counts_est: torch.Tensor, *,
     l1_err = float(diff.abs().sum().item()) / max(total_true, 1e-12)
     nmse = float((diff ** 2).sum().item()) / max(float((ct ** 2).sum().item()), 1e-12)
     missed = float(ct[supp_true & ~list_est].sum().item())
+    list_tp = int((supp_true & list_est).sum().item())
+    list_fp = int((~supp_true & list_est).sum().item())
+    list_fn = int((supp_true & ~list_est).sum().item())
+    list_size = int(list_est.sum().item())
+    raw_list_size = int(supp_est.sum().item())
     return {
         "tp": tp, "fp": fp, "fn": fn, "f1": float(f1),
         "l1_err": float(l1_err),
         "l1_acc": float(max(0.0, min(1.0, 1.0 - l1_err))),
         "nmse": float(nmse),
+        "total_count_err": float(abs(ce.sum().item() - ct.sum().item())),
+        "exact_count": float(torch.all(ce == ct).item()),
+        "support_true": int(supp_true.sum().item()),
         "pupe": float(missed / max(total_true, 1e-12)),
         "missed_users": missed,
-        "raw_list_size": int(supp_est.sum().item()),
-        "list_size": int(list_est.sum().item()),
+        "raw_list_size": raw_list_size,
+        "list_size": list_size,
+        "max_list_size": None if max_list_size is None else int(max_list_size),
+        "list_overflow": 0 if max_list_size is None else max(0, raw_list_size - int(max_list_size)),
+        "list_tp": list_tp,
+        "list_fp": list_fp,
+        "list_fn": list_fn,
+        "false_alarm_rate": float(list_fp / max(list_size, 1)),
     }
 
 
@@ -56,7 +77,14 @@ def aggregate_metrics(per_sample: list[dict]) -> dict:
     if not per_sample:
         return {}
     keys = list(per_sample[0])
-    return {k: float(sum(float(d[k]) for d in per_sample) / len(per_sample)) for k in keys}
+    out = {}
+    for k in keys:
+        vals = [d[k] for d in per_sample]
+        if all(isinstance(v, Number) for v in vals):
+            out[k] = float(sum(float(v) for v in vals) / len(vals))
+        else:
+            out[k] = vals[0]
+    return out
 
 
 def batch_evaluate(counts_true: torch.Tensor, counts_est: torch.Tensor, *,

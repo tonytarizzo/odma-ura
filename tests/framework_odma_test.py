@@ -205,7 +205,7 @@ def main(argv: list[str] | None = None) -> None:
         int(args.K_values[0]), args.num_antennas,
         torch.float64 if args.dtype == "float64" else torch.float32,
         torch.Generator().manual_seed(int(args.seed_start)))
-    analyze_encoder(representative_encoder, out_dir / "encoding_analysis")
+    analyze_encoder(representative_encoder, out_dir / "encoding_analysis", active_k=max(args.K_values))
     print(f"Wrote {out_dir / f'{stem}.json'}")
     print(f"Wrote {out_dir / f'{stem}.png'}")
 

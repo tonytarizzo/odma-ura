@@ -37,11 +37,15 @@ def evaluate_counts(counts_true: np.ndarray, counts_hard: np.ndarray,
     Returns a dict with support/count metrics and URA-style list metrics.
 
     Definitions:
-      f1      — support detection F1 (counts_hard > 0 as the active set).
+      f1      — support detection F1 (counts_hard > 0 as the active set); ignores multiplicity.
       l1_err  — sum(|a_true - a_hat|) / sum(a_true).
       l1_acc  — clamp(1 - l1_err, 0, 1).
       nmse    — ||a_hat - a_true||_2^2 / ||a_true||_2^2.
       pupe    — user-weighted missed-list probability after applying max_list_size if supplied.
+      raw_list_size — number of positive estimated messages before any list budget.
+      list_size — number of reported messages after applying max_list_size.
+      list_overflow — excess positive estimates beyond max_list_size.
+      total_count_err — absolute error in the estimated total active-user count.
 
     Standard URA constrains the output list to at most K_a messages. When max_list_size is supplied, the list is
     the top positive estimated counts under that budget. Multiplicity errors are still captured by l1_err/nmse.

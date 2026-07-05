@@ -27,6 +27,7 @@ jobs/*/*.o*
 jobs/*/*.e*
 jobs/README.md
 jobs/*/results/
+jobs/*/results_*/
 .cache/
 docs/
 results/
