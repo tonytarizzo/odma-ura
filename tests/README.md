@@ -36,7 +36,48 @@ Runs a framework-side inference sanity check for dense or ODMA presets. It verif
 
 ## `framework_equivalence_curve.py`
 
-Checks exact equivalence between the legacy `src.scenario` dictionary and the new framework `(R, C, U, T)` construction. For dense and/or ODMA presets, it asserts that both dictionaries match exactly and that a shared oracle-K NNOMP decoder gives identical counts on the same observation.
+Checks exact equivalence between the legacy `src.scenario` dictionary and the new framework `(R, C, U, T)`
+construction. For dense and/or ODMA presets, it asserts that both dictionaries match exactly and that a shared oracle-K
+NNOMP decoder gives identical counts on the same observation. Default outputs go under
+`results/framework_equivalence_odma/` and include Polyanskiy canonical/count/strict bound references plus empirical
+required-Eb/N0 curves overlaid with those bounds.
+
+## `framework_ccs_test.py`
+
+Runs a direct CCS/tree-coded compressed sensing construction against the same global codebook represented through the
+framework. It builds a shared section-level Gaussian sensing matrix, preceding-fragment random linear parity checks,
+section-wise NNLS candidate lists, and root-wise tree stitching, then asserts exact direct/framework `Phi` equality and identical decoded counts before
+writing Eb/N0/K comparison plots.
+Default outputs go under `results/framework_equivalence_ccs/`; the dense baseline is included by default when using the
+same `(B, n, K, Eb/N0, seeds)` grid. The required-Eb/N0 output is grid-threshold based, so use a fine enough
+`--ebn0-grid` for meaningful curves.
+
+## `ccs_bound_curve.py`
+
+Runs an implicit paper-scale NNLS/tree CCS experiment without forming the `2^B` global dictionary. Its defaults match the
+original paper's `B=75`, `N=22517`, `L=11`, `J=14` dimensions and physical real-AWGN Eb/N0 convention. Full NNLS and
+the original `K_a+10` list rule are available. The current sensing matrix is Gaussian rather than BCH-derived, and the
+default parity profile is uniform rather than the paper's load-dependent optimised profile; generated validation reports
+surface both mismatches. A positive `--nnls-pool` enables a faster correlation-preselected approximation, but that mode is
+not a paper-faithful NNLS reproduction.
+
+## `ccs_amp_author_curve.py`
+
+Runs the original factor-graph and AMP classes from a pinned checkout of the authors' `CCS-AMP-Code` repository. The
+checkout is not vendored because upstream declares no software licence. The `paper_b128` preset matches the published
+one-pass core dimensions (`B=128`, `n=38400`, 16-bit sections); the paper curve additionally used a two-pass SIC extension
+whose empirical delta schedule is not present in the public code. The separately labelled `adapted_b100` preset uses a
+Triadic10 graph with ten-bit sections and must not be compared directly with the paper's `B=128` points.
+
+## `framework_ccs_amp_test.py`
+
+Builds the authors' reduced `Triadic4(2)` CCS-AMP construction at `B=8`, extracts its exact seeded subsampled-Hadamard
+inner operator, and represents the resulting global message dictionary with explicit framework components. It requires
+machine-precision dictionary agreement and identical author-AMP estimates and decoded lists on shared observations.
+
+## `ccs_amp_merge.py`
+
+Merges per-load CCS-AMP author-code summaries produced in parallel by the HPC job into one required-Eb/N0 and PUPE plot.
 
 ## `framework_codebook_morphology.py`
 

@@ -64,7 +64,9 @@ def ccs_component_specs(spec: URASpec, num_sections: int, learn_C: bool) -> list
         raise ValueError(
             f"n ({spec.n}) must be divisible by num_sections ({num_sections}) for the ccs preset")
     d = spec.n // num_sections
-    J = max(int(round(spec.num_codewords ** (1.0 / num_sections))), 2)
+    J = max(int(math.ceil(spec.num_codewords ** (1.0 / num_sections))), 2)
+    while J ** num_sections < spec.num_codewords:
+        J += 1
     components: list[ComponentSpec] = []
     for l in range(num_sections):
         section_R = torch.zeros(1, spec.n, d)

@@ -1,11 +1,15 @@
 
-- grab rerun test 8, merge results and finalise conclusions from stress level tests, add scaling conclusions too
+- finish odma and ccs implemenations, run on hpc 
+- run the 50-seed collision Genie run 18
+
+- read up on transformer implementations, look for patterns and approaches, how it might be possible use a transformer as unbiased decoder, and possible to handle that translation stage to the explicit frameowkr and therefore structured approach. Maybe explicit framework guides how to design transformer decoder itself?
 
 - decide how to incorporate constraints and loss functions into setup
-
-
 - definitely test learnt framework with just decoding objective "true" as an ablation to then justify extra strucutres/etc used to guide structures in learnt matrices
 - odma decoder and learning framework and seeing odma pattern be learnt would be amazing demonstration of successful learning framework
 
+- make clear plan with steps, deadlines etc for both SPAWC and TMLCN (use codex research outputs)
+- prepare print version of conference paper, submit and register as attending author for SPAWC
+- prepare extension paper and submit to TMLCN
+
 THOUGHTS:
-- separately, look into quantifying bounds/theory in terms of quantities such as average block overlap per resource, active symbol load, or more graph-native measures such as local treewidth, maximum resource degree, overlap spectrum, or chordality of the block-intersection graph. These are exactly the quantities that should control whether block-state BP, junction-tree elimination, or coordinate descent remain tractable. This gap is especially attractive because it connects coding design, graph structure, and decoder complexity in one place.

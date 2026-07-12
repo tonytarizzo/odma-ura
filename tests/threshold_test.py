@@ -127,9 +127,14 @@ def summarize_point(rows: list[dict], decoder: str, K: int, ebn0_db: float) -> d
     l1_err = [r["metrics"]["l1_err"] for r in rows]
     raw_list_size = [r["metrics"]["raw_list_size"] for r in rows]
     list_overflow = [r["metrics"]["list_overflow"] for r in rows]
+    mean_pupe = float(np.mean(pupe))
+    pupe_se = float(np.std(pupe, ddof=1) / math.sqrt(len(pupe))) if len(pupe) > 1 else float("nan")
     return {
         "ebn0_db": float(ebn0_db),
-        "mean_pupe": float(np.mean(pupe)),
+        "mean_pupe": mean_pupe,
+        "pupe_seed_se": pupe_se,
+        "pupe_seed_ci95": [max(0.0, mean_pupe - 1.96 * pupe_se), min(1.0, mean_pupe + 1.96 * pupe_se)]
+        if np.isfinite(pupe_se) else [float("nan"), float("nan")],
         "mean_l1_err": float(np.mean(l1_err)),
         "mean_raw_list_size": float(np.mean(raw_list_size)),
         "mean_list_overflow": float(np.mean(list_overflow)),
@@ -223,6 +228,8 @@ def run_bisect_search(base: dict, decoders: list[str], K_values: list[int], targ
                             low = mid
                     required = high
                     curve = sorted(curve, key=lambda p: p["ebn0_db"])
+                ordered = sorted({float(p["ebn0_db"]): p for p in curve}.values(), key=lambda p: p["ebn0_db"])
+                increases = [ordered[i + 1]["mean_pupe"] - ordered[i]["mean_pupe"] for i in range(len(ordered) - 1)]
                 summary.append({
                     "decoder": decoder,
                     "num_devices_active": int(K),
@@ -232,7 +239,9 @@ def run_bisect_search(base: dict, decoders: list[str], K_values: list[int], targ
                     "ebn0_min": float(ebn0_min),
                     "ebn0_max": float(ebn0_max),
                     "ebn0_tol": float(ebn0_tol),
-                    "curve": curve,
+                    "curve": ordered,
+                    "monotonicity_violations": int(sum(v > 1e-12 for v in increases)),
+                    "max_pupe_increase": float(max([0.0, *increases])),
                 })
     return trials, summary
 

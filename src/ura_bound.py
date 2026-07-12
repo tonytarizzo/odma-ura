@@ -58,9 +58,14 @@ VARIANTS = ("canonical", "strict", "count")
 
 
 def distinct_count(num_codewords: int, num_active: int) -> float:
-    """Expected number of distinct messages E[D] = M(1-(1-1/M)^Ka)."""
-    M, Ka = int(num_codewords), int(num_active)
-    return M * (1.0 - (1.0 - 1.0 / M) ** Ka)
+    """Expected number of distinct messages E[D] = M(1-(1-1/M)^Ka).
+
+    Evaluated as -M*expm1(Ka*log1p(-1/M)) so it stays accurate when M is huge
+    (e.g. B=100): the naive form rounds (1-1/M)^Ka to exactly 1.0 in float64 and
+    collapses E[D] to 0. Uses Python floats throughout to tolerate M=2^100.
+    """
+    M, Ka = float(num_codewords), int(num_active)
+    return -M * math.expm1(Ka * math.log1p(-1.0 / M))
 
 
 def collision_floor_strict(num_codewords: int, num_active: int) -> float:

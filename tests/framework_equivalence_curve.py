@@ -28,6 +28,11 @@ from framework.encoder import build_encoder  # noqa: E402
 from src.metrics import evaluate_counts  # noqa: E402
 from src.scenario import Scenario, build_scenario  # noqa: E402
 from src.signal import ebn0_db_to_esn0_db  # noqa: E402
+from tests.equivalence_outputs import (  # noqa: E402
+    write_polyanskiy_outputs,
+    write_required_ebn0_outputs,
+    write_validation_report,
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -43,7 +48,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--num-seeds", type=int, default=20)
     p.add_argument("--seed-start", type=int, default=42)
     p.add_argument("--phi-atol", type=float, default=1e-12)
-    p.add_argument("--out-dir", default="results/framework_equivalence_curve")
+    p.add_argument("--out-dir", default="results/framework_equivalence_odma")
+    p.add_argument("--bound-target-pupe", type=float, default=0.05)
+    p.add_argument("--bound-grid", type=int, default=25)
+    p.add_argument("--bound-num-pprime", type=int, default=25)
+    p.add_argument("--skip-bounds", action="store_true")
+    p.add_argument("--skip-required-ebn0", action="store_true")
     return p.parse_args(argv)
 
 
@@ -234,12 +244,46 @@ def main(argv: list[str] | None = None) -> None:
                       f"L1 legacy={legacy_l1:.4f} framework={framework_l1:.4f} phi_err<={max_phi_err:.1e}", flush=True)
 
     points = summarize(rows)
-    payload = {"args": vars(args), "rows": rows, "points": points, "max_phi_abs_err": max_phi_err}
+    polyanskiy_rows = []
+    if not args.skip_bounds:
+        polyanskiy_rows = write_polyanskiy_outputs(
+            args, out_dir, target_pupe=args.bound_target_pupe,
+            grid=args.bound_grid, num_pprime=args.bound_num_pprime)
+    required_ebn0_rows = []
+    if not args.skip_required_ebn0:
+        required_ebn0_rows = write_required_ebn0_outputs(
+            points, polyanskiy_rows, out_dir, target_pupe=args.bound_target_pupe,
+            preferred={"dense": "framework", "odma": "framework"},
+            title=f"Empirical required Eb/N0 with Polyanskiy bounds, PUPE<={args.bound_target_pupe:g}")
+    validation_notes = [
+        "Dense is a direct iid Gaussian global-codebook baseline.",
+        "ODMA is the project-specific placement/codebook construction; this script validates exact algebraic equivalence "
+        "to the explicit framework.",
+        "The shared oracle-K NNOMP decoder is intentionally held fixed across legacy and framework matrices.",
+        "SCOPE: this ODMA construction is an EXPLICIT global codebook of M=2^B independent columns decoded by oracle-K "
+        "NNOMP, so it is inherently exponential in B and cannot run at B=100 (unlike CCS, which never forms the 2^B "
+        "codebook). There is no structured large-B decoder for this construction here, so ODMA is validated only at "
+        "small B for framework equivalence; the paper-scale ODMA+polar+SIC scheme is a separate implementation. See "
+        "tests/ccs_bound_curve.py for the implicit paper-scale CCS validation scaffold.",
+    ]
+    write_validation_report(
+        out_dir, scheme="ODMA/dense equivalence", max_phi_err=max_phi_err,
+        decoded_match=True, paper_refs={}, notes=validation_notes,
+        polyanskiy_written=not args.skip_bounds, required_ebn0_written=not args.skip_required_ebn0)
+    payload = {"args": vars(args), "rows": rows, "points": points,
+               "polyanskiy_bounds": polyanskiy_rows,
+               "required_ebn0": required_ebn0_rows,
+               "max_phi_abs_err": max_phi_err}
     (out_dir / "equivalence_summary.json").write_text(json.dumps(payload, indent=2, default=str))
     plot_summary(points, out_dir / "equivalence_curves.png")
     print(f"Max Phi abs error: {max_phi_err:.3e}")
     print(f"Wrote {out_dir / 'equivalence_summary.json'}")
     print(f"Wrote {out_dir / 'equivalence_curves.png'}")
+    if not args.skip_bounds:
+        print(f"Wrote {out_dir / 'polyanskiy_bounds.png'}")
+    if not args.skip_required_ebn0:
+        print(f"Wrote {out_dir / 'required_ebn0_with_bounds.png'}")
+    print(f"Wrote {out_dir / 'validation_report.md'}")
 
 
 if __name__ == "__main__":
