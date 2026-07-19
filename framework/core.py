@@ -74,6 +74,7 @@ class URABatch:
         Y_clean:  (B, n, M_ant)     -- after fading channel: outer(y, h)
         Y:        (B, n, M_ant)     -- Y_clean + AWGN
         H:        (B, M_ant)        -- per-realisation channel vector (known)
+        num_active: (B,)            -- realised K_a for each sample
     """
 
     counts: torch.Tensor
@@ -83,6 +84,8 @@ class URABatch:
     H: torch.Tensor
     noise_var: float
     active_messages: torch.Tensor
+    num_active: torch.Tensor
+    ebn0_db: float
 
 
 @dataclass

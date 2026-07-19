@@ -11,7 +11,6 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -22,6 +21,7 @@ from framework.core import URASpec  # noqa: E402
 from framework.decoders import oracle_k_omp  # noqa: E402
 from framework.encoder import build_encoder  # noqa: E402
 from framework.learned_decoders import UnrolledNonnegativeISTA, matched_filter_decoder  # noqa: E402
+from framework.losses import support_count_loss  # noqa: E402
 from framework.metrics import aggregate_metrics, batch_evaluate  # noqa: E402
 from framework.pipeline import dense_component_specs, odma_component_specs  # noqa: E402
 
@@ -42,8 +42,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--eval-batches", type=int, default=8)
     p.add_argument("--lr", type=float, default=1e-2)
-    p.add_argument("--lambda-support", type=float, default=0.1)
-    p.add_argument("--lambda-sum", type=float, default=0.01)
+    p.add_argument("--lambda-count", type=float, default=0.1)
+    p.add_argument("--lambda-symmetry", type=float, default=0.01)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--dtype", choices=["float32", "float64"], default="float32")
     p.add_argument("--out-dir", default="results/framework_unrolled_decoder_test")
@@ -65,19 +65,11 @@ def build_frozen_encoder(args: argparse.Namespace, gen: torch.Generator):
     return encoder
 
 
-def decoder_loss(out, counts_true: torch.Tensor, num_active: int,
-                 lambda_support: float, lambda_sum: float) -> tuple[torch.Tensor, dict]:
-    soft = out.meta["soft_counts"].to(dtype=counts_true.dtype, device=counts_true.device)
-    logits = out.meta["support_logits"].to(dtype=counts_true.dtype, device=counts_true.device)
-    count_loss = F.mse_loss(soft, counts_true)
-    target = (counts_true > 0).to(counts_true.dtype)
-    pos_weight = torch.as_tensor((counts_true.shape[1] - num_active) / max(num_active, 1),
-                                 dtype=counts_true.dtype, device=counts_true.device)
-    support_loss = F.binary_cross_entropy_with_logits(logits, target, pos_weight=pos_weight)
-    sum_loss = (((soft.sum(dim=1) - float(num_active)) / max(float(num_active), 1.0)) ** 2).mean()
-    loss = count_loss + float(lambda_support) * support_loss + float(lambda_sum) * sum_loss
-    return loss, {"loss": float(loss.detach()), "loss_count": float(count_loss.detach()),
-                  "loss_support": float(support_loss.detach()), "loss_sum": float(sum_loss.detach())}
+def decoder_loss(out, counts_true: torch.Tensor, lambda_count: float,
+                 lambda_symmetry: float) -> tuple[torch.Tensor, dict]:
+    loss, tensors = support_count_loss(out, counts_true, lambda_count, lambda_symmetry)
+    parts = {f"loss_{k}": float(v.detach()) for k, v in tensors.items() if k != "total"}
+    return loss, {"loss": float(loss.detach()), **parts}
 
 
 def evaluate_decoder(encoder, decoder_fn, counts_sampler, fading_sampler, ebn0_db: float,
@@ -86,7 +78,7 @@ def evaluate_decoder(encoder, decoder_fn, counts_sampler, fading_sampler, ebn0_d
     with torch.no_grad():
         for _ in range(num_batches):
             batch = sample_batch(encoder, batch_size, counts_sampler, fading_sampler, ebn0_db, gen)
-            out = decoder_fn(encoder, batch.Y, batch.H, encoder.spec.num_active)
+            out = decoder_fn(encoder, batch.Y, batch.H, batch.num_active, noise_var=batch.noise_var)
             counts_est = out.counts.to(dtype=batch.counts.dtype, device=batch.counts.device)
             rows, _ = batch_evaluate(batch.counts, counts_est, max_list_size=encoder.spec.num_active)
             per.extend(rows)
@@ -120,8 +112,6 @@ def plot_progress(progress: list[dict], out_path: Path) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    if args.num_antennas < 2:
-        raise SystemExit("--num-antennas must be >= 2")
     if args.preset == "odma" and (args.d <= 0 or args.d > args.n):
         raise SystemExit(f"invalid ODMA geometry: d={args.d}, n={args.n}")
     torch.manual_seed(int(args.seed))
@@ -134,8 +124,8 @@ def main(argv: list[str] | None = None) -> None:
     model = UnrolledNonnegativeISTA(num_layers=int(args.num_layers)).to(device=encoder.device)
     opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
 
-    def learned_fn(enc, Y, H, K): return model(enc, Y, H, K)
-    def nnomp_fn(enc, Y, H, K): return oracle_k_omp(enc, Y, H, K)
+    def learned_fn(enc, Y, H, K, noise_var=None): return model(enc, Y, H, K, noise_var=noise_var)
+    def nnomp_fn(enc, Y, H, K, noise_var=None): return oracle_k_omp(enc, Y, H, K, noise_var=noise_var)
 
     matched = evaluate_decoder(encoder, matched_filter_decoder, counts_sampler, fading_sampler,
                                args.ebn0_db, args.eval_batches, args.batch_size, gen)
@@ -154,8 +144,8 @@ def main(argv: list[str] | None = None) -> None:
         model.train()
         for _ in range(int(args.batches_per_epoch)):
             batch = sample_batch(encoder, int(args.batch_size), counts_sampler, fading_sampler, float(args.ebn0_db), gen)
-            out = model(encoder, batch.Y, batch.H, encoder.spec.num_active)
-            loss, parts = decoder_loss(out, batch.counts, encoder.spec.num_active, args.lambda_support, args.lambda_sum)
+            out = model(encoder, batch.Y, batch.H, batch.num_active, noise_var=batch.noise_var)
+            loss, parts = decoder_loss(out, batch.counts, args.lambda_count, args.lambda_symmetry)
             opt.zero_grad(set_to_none=True)
             loss.backward()
             opt.step()

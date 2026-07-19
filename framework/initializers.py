@@ -10,7 +10,7 @@ import math
 import torch
 
 
-# --- R: operator/resource bank, shape (Q, n, d) ----------------------------
+# --- R: operator/resource bank ----------------------------------------------
 
 
 def init_R(strategy: str, Q: int, n: int, d: int, dtype: torch.dtype,
@@ -20,6 +20,19 @@ def init_R(strategy: str, Q: int, n: int, d: int, dtype: torch.dtype,
         raise ValueError(f"R requires Q,n,d > 0; got Q={Q}, n={n}, d={d}")
     if strategy == "random_gaussian":
         R = torch.randn(Q, n, d, dtype=dtype, generator=generator) / math.sqrt(d)
+    elif strategy == "random_sign_diagonal":
+        if d != n:
+            raise ValueError(f"random_sign_diagonal requires d=n, got d={d}, n={n}")
+        signs = torch.randint(0, 2, (Q, n), generator=generator)
+        R = (2 * signs - 1).to(dtype=dtype)
+    elif strategy == "random_phase_diagonal":
+        if d != n:
+            raise ValueError(f"random_phase_diagonal requires d=n, got d={d}, n={n}")
+        if not dtype.is_complex:
+            raise ValueError("random_phase_diagonal requires a complex dtype; use random_sign_diagonal for real experiments")
+        real_dtype = torch.float32 if dtype == torch.complex64 else torch.float64
+        phase = 2.0 * math.pi * torch.rand(Q, n, dtype=real_dtype, generator=generator)
+        R = torch.polar(torch.ones_like(phase), phase).to(dtype=dtype)
     elif strategy == "random_placements":
         R = torch.zeros(Q, n, d, dtype=dtype)
         rng_np = torch.Generator().manual_seed(int(torch.randint(0, 2**31 - 1, (1,), generator=generator).item()))

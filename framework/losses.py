@@ -16,7 +16,7 @@ def count_mse_loss(counts_pred: torch.Tensor, counts_true: torch.Tensor) -> torc
     """Mean squared error against the true count vector."""
     if counts_pred.shape != counts_true.shape:
         raise ValueError(f"count shapes disagree: {tuple(counts_pred.shape)} vs {tuple(counts_true.shape)}")
-    return ((counts_pred - counts_true) ** 2).mean()
+    return ((counts_pred.real - counts_true.real) ** 2).mean()
 
 
 def support_bce_loss(scores: torch.Tensor, counts_true: torch.Tensor) -> torch.Tensor:
@@ -25,8 +25,41 @@ def support_bce_loss(scores: torch.Tensor, counts_true: torch.Tensor) -> torch.T
     `scores` are real-valued logits of shape (B, M). The target indicator is
     (counts_true > 0).
     """
-    target = (counts_true > 0).to(scores.dtype)
-    return torch.nn.functional.binary_cross_entropy_with_logits(scores, target)
+    target = (counts_true.real > 0).to(scores.real.dtype)
+    return torch.nn.functional.binary_cross_entropy_with_logits(scores.real, target)
+
+
+def support_count_loss(output, counts_true: torch.Tensor, lambda_count: float = 0.1,
+                       lambda_symmetry: float = 0.01, deep_supervision: bool = True
+                       ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """Balanced support BCE plus a collision-aware count loss and optional D1 symmetry.
+
+    BCE targets message presence, so two users selecting one message still produce a
+    single positive target. The auxiliary count term preserves that multiplicity
+    information without changing the low-collision support-recovery objective.
+    """
+    logits = output.meta.get("layer_logits", [output.meta["support_logits"]])
+    if not deep_supervision:
+        logits = logits[-1:]
+    target_counts = counts_true.real
+    target = (target_counts > 0).to(logits[-1].dtype)
+    active = target.sum(dim=1).clamp_min(1.0)
+    inactive = (target.shape[1] - target.sum(dim=1)).clamp_min(1.0)
+    layer_losses = []
+    for layer_logits in logits:
+        per_entry = torch.nn.functional.binary_cross_entropy_with_logits(layer_logits, target, reduction="none")
+        positive = (per_entry * target).sum(dim=1) / active
+        negative = (per_entry * (1.0 - target)).sum(dim=1) / inactive
+        layer_losses.append(0.5 * (positive + negative).mean())
+    weights = torch.arange(1, len(layer_losses) + 1, dtype=target.dtype, device=target.device)
+    support = torch.sum(weights * torch.stack(layer_losses)) / weights.sum()
+    soft = output.meta["soft_counts"]
+    K = target_counts.sum(dim=1).clamp_min(1.0)
+    count = torch.nn.functional.smooth_l1_loss(soft, target_counts.to(soft.dtype), reduction="none").sum(dim=1)
+    count = (count / K.to(count.dtype)).mean()
+    symmetry = output.meta.get("symmetry_loss", support.new_zeros(()))
+    total = support + float(lambda_count) * count + float(lambda_symmetry) * symmetry
+    return total, {"support": support, "count": count, "symmetry": symmetry, "total": total}
 
 
 def power_penalty(encoder: Encoder, target_per_codeword: float = 1.0) -> torch.Tensor:

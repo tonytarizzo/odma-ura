@@ -304,11 +304,11 @@ def interesting_matrices(encoder: Encoder) -> dict[str, torch.Tensor]:
         component_mats.append(Phi_i)
         matrices[f"component_{i}_global_contribution"] = Phi_i
         matrices[f"component_{i}_local_C"] = comp.C.detach()
-        product_cols = int(comp.R.shape[0] * comp.C.shape[1])
+        product_cols = int(comp.Q * comp.V)
         if product_cols <= 4096:
             cols = []
-            for q in range(comp.R.shape[0]):
-                cols.append(comp.R[q] @ comp.C)
+            for q in range(comp.Q):
+                cols.append(comp.R[q].unsqueeze(1) * comp.C if comp.diagonal_operators else comp.R[q] @ comp.C)
             matrices[f"component_{i}_product_library_B"] = torch.cat(cols, dim=1).detach()
     if 1 < len(component_mats) <= 4:
         running = component_mats[0].clone()
@@ -324,7 +324,8 @@ def interesting_matrices(encoder: Encoder) -> dict[str, torch.Tensor]:
 def component_analysis(encoder: Encoder) -> list[dict]:
     out = []
     for i, comp in enumerate(encoder.components):
-        R = comp.R.detach()
+        R_stored = comp.R.detach()
+        R = comp.materialize_operator_bank().detach()
         C = comp.C.detach()
         support = R.abs() > 1e-9
         overlap = support.reshape(R.shape[0], -1).to(torch.float64) @ support.reshape(R.shape[0], -1).to(torch.float64).T
@@ -332,11 +333,14 @@ def component_analysis(encoder: Encoder) -> list[dict]:
         out.append({
             "index": i,
             "R_shape": list(R.shape),
+            "R_stored_shape": list(R_stored.shape),
+            "R_diagonal": comp.diagonal_operators,
             "C_shape": list(C.shape),
             "num_atoms": int(comp.atom_q.numel()),
             "R_nonzero_fraction": float(support.to(torch.float64).mean()),
             "R_operator_overlap_mean": float(overlap.mean()),
-            "R_operator_overlap_max_offdiag": float(overlap[~torch.eye(R.shape[0], dtype=torch.bool)].max()) if R.shape[0] > 1 else 0.0,
+            "R_operator_overlap_max_offdiag": (
+                float(overlap[~torch.eye(R.shape[0], dtype=torch.bool)].max()) if R.shape[0] > 1 else 0.0),
             "R_operator_load_gini": gini(R.reshape(R.shape[0], -1).abs().sum(dim=1)),
             "atom_operator_count_stats": tensor_stats(atom_counts),
             "C_value_stats": tensor_stats(C),
@@ -361,8 +365,9 @@ def plot_encoding_analysis(Phi: torch.Tensor, abs_gram: torch.Tensor, singular_v
 
     out_dir.mkdir(parents=True, exist_ok=True)
     Phi_cpu = Phi.detach().cpu()
-    col_energy = ((Phi_cpu.conj() * Phi_cpu).sum(dim=0).real if Phi_cpu.is_complex() else (Phi_cpu ** 2).sum(dim=0)).to(torch.float64)
-    row_energy = ((Phi_cpu.conj() * Phi_cpu).sum(dim=1).real if Phi_cpu.is_complex() else (Phi_cpu ** 2).sum(dim=1)).to(torch.float64)
+    squared = (Phi_cpu.conj() * Phi_cpu).real if Phi_cpu.is_complex() else Phi_cpu ** 2
+    col_energy = squared.sum(dim=0).to(torch.float64)
+    row_energy = squared.sum(dim=1).to(torch.float64)
     off = abs_gram[~torch.eye(abs_gram.shape[0], dtype=torch.bool)].flatten()
 
     fig, axes = plt.subplots(2, 2, figsize=(11, 8))
@@ -398,9 +403,10 @@ def plot_component_analysis(encoder: Encoder, out_dir: Path) -> None:
     import matplotlib.pyplot as plt
 
     for i, comp in enumerate(encoder.components):
-        R_support = comp.R.detach().abs() > 1e-9
+        R_support = comp.materialize_operator_bank().detach().abs() > 1e-9
         if R_support.shape[0] > 1:
-            overlap = R_support.reshape(R_support.shape[0], -1).to(torch.float64) @ R_support.reshape(R_support.shape[0], -1).to(torch.float64).T
+            flat_support = R_support.reshape(R_support.shape[0], -1).to(torch.float64)
+            overlap = flat_support @ flat_support.T
             fig, ax = plt.subplots(figsize=(5, 4))
             im = ax.imshow(overlap.cpu().numpy(), aspect="auto")
             ax.set_title(f"Component {i} operator support overlap")

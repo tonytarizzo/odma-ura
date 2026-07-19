@@ -148,7 +148,7 @@ def evaluate(encoder: Encoder, counts_sampler, fading_sampler, ebn0_db: float,
     with torch.no_grad():
         for _ in range(num_batches):
             batch = sample_batch(encoder, batch_size, counts_sampler, fading_sampler, ebn0_db, generator)
-            out = decoder(encoder, batch.Y, batch.H, num_active=encoder.spec.num_active)
+            out = decoder(encoder, batch.Y, batch.H, num_active=batch.num_active, noise_var=batch.noise_var)
             counts_est = out.counts.to(dtype=batch.counts.dtype, device=batch.counts.device)
             per, _ = batch_evaluate(batch.counts, counts_est, max_list_size=max_list_size)
             all_per_sample.extend(per)

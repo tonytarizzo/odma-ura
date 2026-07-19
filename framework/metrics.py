@@ -30,8 +30,8 @@ def evaluate_counts(counts_true: torch.Tensor, counts_est: torch.Tensor, *,
     if counts_true.shape != counts_est.shape or counts_true.ndim != 1:
         raise ValueError(
             f"expected matching 1-D shapes, got {tuple(counts_true.shape)} vs {tuple(counts_est.shape)}")
-    ct = counts_true.detach()
-    ce = counts_est.detach()
+    ct = counts_true.detach().real
+    ce = counts_est.detach().real
     supp_true = ct > 0
     supp_est = ce > 0
     list_est = list_mask(ce, max_list_size)

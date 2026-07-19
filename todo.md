@@ -1,6 +1,5 @@
 
-- finish odma and ccs implemenations, run on hpc 
-- run the 50-seed collision Genie run 18
+- grab odma and ccs implemenations 18, 19, 20
 
 - read up on transformer implementations, look for patterns and approaches, how it might be possible use a transformer as unbiased decoder, and possible to handle that translation stage to the explicit frameowkr and therefore structured approach. Maybe explicit framework guides how to design transformer decoder itself?
 

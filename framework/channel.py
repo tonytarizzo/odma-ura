@@ -40,6 +40,25 @@ def uniform_counts_generator(num_active: int, num_codewords: int,
     return sample
 
 
+def uniform_count_range_generator(num_active_min: int, num_active_max: int, num_codewords: int,
+                                  generator: torch.Generator | None = None,
+                                  device: torch.device | str | None = None
+                                  ) -> Callable[[int], tuple[torch.Tensor, torch.Tensor]]:
+    """Sample one K_a uniformly from an inclusive range for each generated batch."""
+    if num_active_min <= 0 or num_active_max < num_active_min:
+        raise ValueError(f"invalid active-user range [{num_active_min}, {num_active_max}]")
+    if num_active_max > num_codewords:
+        raise ValueError(f"num_active_max={num_active_max} exceeds message alphabet M={num_codewords}")
+
+    def sample(batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
+        K = int(torch.randint(num_active_min, num_active_max + 1, (1,), generator=generator, device=device).item())
+        active = torch.randint(num_codewords, (batch_size, K), generator=generator, device=device)
+        counts = torch.zeros(batch_size, num_codewords, dtype=torch.float32, device=device)
+        counts.scatter_add_(1, active.long(), torch.ones_like(active, dtype=counts.dtype))
+        return counts, active
+    return sample
+
+
 # --- channel realisation generators ---------------------------------------
 
 
@@ -83,8 +102,7 @@ def ebn0_db_to_noise_var(ebn0_db: float, payload_bits: int,
 
 
 def empirical_codeword_energy(encoder: Encoder) -> float:
-    Phi = encoder.explicit_matrix().detach()
-    return float(torch.mean(torch.sum(torch.abs(Phi) ** 2, dim=0)).cpu())
+    return encoder.mean_codeword_energy()
 
 
 # --- one-batch sampler ----------------------------------------------------
@@ -94,17 +112,19 @@ def sample_batch(encoder: Encoder, batch_size: int,
                   counts_sampler: Callable[[int], tuple[torch.Tensor, torch.Tensor]],
                   fading_sampler: Callable[[int], torch.Tensor],
                   ebn0_db: float,
-                  generator: torch.Generator | None = None) -> URABatch:
+                  generator: torch.Generator | None = None,
+                  energy_per_codeword: float | None = None) -> URABatch:
     if batch_size <= 0:
         raise ValueError(f"batch_size must be positive, got {batch_size}")
     counts, active = counts_sampler(batch_size)
     counts = counts.to(dtype=encoder.dtype, device=encoder.device)
+    num_active = counts.real.sum(dim=1).round().to(torch.long)
     actual_batch_size = int(counts.shape[0])
     y = encoder.encode(counts)                    # (B, n)
     H = fading_sampler(actual_batch_size).to(dtype=encoder.dtype, device=encoder.device)
     Y_clean = y.unsqueeze(-1) * H.unsqueeze(1)     # (B, n, M_ant)
-    noise_var = ebn0_db_to_noise_var(ebn0_db, encoder.spec.payload_bits,
-                                       empirical_codeword_energy(encoder))
+    energy = empirical_codeword_energy(encoder) if energy_per_codeword is None else float(energy_per_codeword)
+    noise_var = ebn0_db_to_noise_var(ebn0_db, encoder.spec.payload_bits, energy)
     if encoder.dtype.is_complex:
         noise = torch.randn(Y_clean.shape, dtype=Y_clean.dtype, device=Y_clean.device,
                              generator=generator) * math.sqrt(noise_var / 2.0)
@@ -113,7 +133,8 @@ def sample_batch(encoder: Encoder, batch_size: int,
                              generator=generator) * math.sqrt(noise_var)
     Y = Y_clean + noise
     return URABatch(counts=counts, y_clean=y, Y_clean=Y_clean, Y=Y, H=H,
-                     noise_var=noise_var, active_messages=active)
+                     noise_var=noise_var, active_messages=active, num_active=num_active,
+                     ebn0_db=float(ebn0_db))
 
 
 def matched_filter_collapse(Y: torch.Tensor, H: torch.Tensor) -> torch.Tensor:

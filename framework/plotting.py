@@ -35,6 +35,8 @@ def plot_training_curves(progress: list[dict], path: Path, *,
 
 def plot_count_estimate(counts_true, counts_est, path: Path) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
+    counts_true = counts_true.real
+    counts_est = counts_est.real
     fig, ax = plt.subplots(figsize=(8, 3))
     idx = list(range(len(counts_true)))
     ax.bar(idx, counts_true, alpha=0.4, label="true")

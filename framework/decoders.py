@@ -12,6 +12,8 @@ The signature is `fn(encoder, Y, H, *, num_active, ...) -> DecoderOutput`.
 
 from __future__ import annotations
 
+import itertools
+import math
 from typing import Callable
 
 import numpy as np
@@ -62,6 +64,18 @@ def project_nonneg_integer_total(x: torch.Tensor, total: int) -> torch.Tensor:
     return counts
 
 
+def active_count_vector(num_active: int | torch.Tensor, batch_size: int, device: torch.device) -> torch.Tensor:
+    """Normalise scalar or per-sample K_a into a length-B integer tensor."""
+    K = torch.as_tensor(num_active, dtype=torch.long, device=device)
+    if K.ndim == 0:
+        K = K.repeat(batch_size)
+    if K.shape != (batch_size,):
+        raise ValueError(f"num_active must be scalar or shape ({batch_size},), got {tuple(K.shape)}")
+    if bool(torch.any(K <= 0)):
+        raise ValueError(f"num_active entries must be positive, got {K.tolist()}")
+    return K
+
+
 def solve_nonnegative_least_squares(Phi_s: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     """Non-negative least squares via scipy. Real/complex inputs are stacked."""
     A = Phi_s.detach().cpu().numpy()
@@ -94,30 +108,69 @@ def oracle_k_omp_single(Phi: torch.Tensor, y: torch.Tensor, K: int) -> tuple[tor
 
 
 def oracle_k_omp(encoder: Encoder, Y: torch.Tensor, H: torch.Tensor,
-                  num_active: int) -> DecoderOutput:
+                  num_active: int | torch.Tensor, noise_var: float | torch.Tensor | None = None) -> DecoderOutput:
     """Oracle-K non-negative OMP over the multi-antenna observation.
 
     Y has shape (B, n, M_ant); the routine matched-filters with the known H
     to collapse to a (B, n) signal and then runs scalar NNOMP.
     """
-    if num_active <= 0:
-        raise ValueError(f"num_active must be positive, got {num_active}")
     y_mf = matched_filter_collapse(Y, H)
     Phi = encoder.explicit_matrix().detach()
     B, M = y_mf.shape[0], encoder.num_codewords
+    K_vec = active_count_vector(num_active, B, Y.device)
     counts = torch.zeros(B, M, dtype=torch.float64, device=Y.device)
     supports: list[list[int]] = []
     for b in range(B):
-        x_s, support = oracle_k_omp_single(Phi, y_mf[b], int(num_active))
+        K = int(K_vec[b].item())
+        x_s, support = oracle_k_omp_single(Phi, y_mf[b], K)
         if support:
-            projected = project_nonneg_integer_total(x_s, int(num_active))
+            projected = project_nonneg_integer_total(x_s, K)
             counts[b, torch.tensor(support, dtype=torch.long, device=Y.device)] = projected
         supports.append(support)
     return DecoderOutput(counts=counts, meta={
         "decoder": "oracle_k_omp",
-        "K_target": int(num_active),
+        "K_target": K_vec.detach().cpu().tolist(),
         "supports": supports,
     })
+
+
+def exact_count_ml(encoder: Encoder, Y: torch.Tensor, H: torch.Tensor,
+                   num_active: int | torch.Tensor, noise_var: float | torch.Tensor | None = None,
+                   max_hypotheses: int = 250_000, chunk_size: int = 4096) -> DecoderOutput:
+    """Exact oracle-K count ML for tiny certification problems, including collisions.
+
+    The hypothesis count is C(M+K-1,K), so this deliberately refuses scalable
+    settings. Candidate signals are encoded through the implicit operator.
+    """
+    y = matched_filter_collapse(Y, H)
+    K_vec = active_count_vector(num_active, y.shape[0], y.device)
+    counts = torch.zeros(y.shape[0], encoder.num_codewords, dtype=torch.float64, device=y.device)
+    tested: dict[int, int] = {}
+    for K in torch.unique(K_vec, sorted=True).tolist():
+        hypotheses = math.comb(encoder.num_codewords + int(K) - 1, int(K))
+        if hypotheses > int(max_hypotheses):
+            raise ValueError(f"exact_count_ml requires {hypotheses} hypotheses for M={encoder.num_codewords}, K={K}; "
+                             f"limit is {max_hypotheses}")
+        rows = torch.nonzero(K_vec == int(K), as_tuple=False).flatten()
+        best_error = torch.full((rows.numel(),), float("inf"), dtype=y.real.dtype, device=y.device)
+        best_counts = torch.zeros(rows.numel(), encoder.num_codewords, dtype=torch.float64, device=y.device)
+        iterator = itertools.combinations_with_replacement(range(encoder.num_codewords), int(K))
+        while True:
+            combinations = list(itertools.islice(iterator, int(chunk_size)))
+            if not combinations:
+                break
+            candidate = torch.zeros(len(combinations), encoder.num_codewords, dtype=encoder.dtype, device=y.device)
+            indices = torch.tensor(combinations, dtype=torch.long, device=y.device)
+            candidate.scatter_add_(1, indices, torch.ones_like(indices, dtype=encoder.dtype))
+            signals = encoder.matvec(candidate)
+            error = torch.sum(torch.abs(y.index_select(0, rows).unsqueeze(1) - signals.unsqueeze(0)) ** 2, dim=2).real
+            chunk_error, chunk_index = torch.min(error, dim=1)
+            improved = chunk_error < best_error
+            best_error = torch.where(improved, chunk_error, best_error)
+            best_counts[improved] = candidate.index_select(0, chunk_index[improved]).real.to(torch.float64)
+        counts.index_copy_(0, rows, best_counts)
+        tested[int(K)] = hypotheses
+    return DecoderOutput(counts=counts, meta={"decoder": "exact_count_ml", "hypotheses_by_K": tested})
 
 
 DecoderFn = Callable[..., DecoderOutput]
@@ -125,6 +178,7 @@ DecoderFn = Callable[..., DecoderOutput]
 
 DECODERS: dict[str, DecoderFn] = {
     "oracle_k_omp": oracle_k_omp,
+    "exact_count_ml": exact_count_ml,
 }
 
 

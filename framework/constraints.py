@@ -31,6 +31,13 @@ def project_unit_frob(M: torch.Tensor, eps: float = 1e-12) -> None:
     M.div_(f)
 
 
+def project_unit_modulus(M: torch.Tensor, eps: float = 1e-12) -> None:
+    """Project every real/complex entry onto the unit circle."""
+    magnitude = M.abs()
+    M.div_(magnitude.clamp_min(eps))
+    M.masked_fill_(magnitude < eps, 1.0)
+
+
 def apply_constraints(named_tensors: Iterable[tuple[str, torch.Tensor, str]]) -> None:
     """Dispatch projections by name."""
     with torch.no_grad():
@@ -41,5 +48,7 @@ def apply_constraints(named_tensors: Iterable[tuple[str, torch.Tensor, str]]) ->
                 project_unit_norm_columns(tensor)
             elif kind == "unit_frob":
                 project_unit_frob(tensor)
+            elif kind == "unit_modulus":
+                project_unit_modulus(tensor)
             else:
                 raise ValueError(f"unknown constraint '{kind}' on '{name}'")

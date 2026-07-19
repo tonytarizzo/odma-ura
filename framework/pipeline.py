@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from numbers import Number
 from dataclasses import asdict
 from pathlib import Path
 
@@ -57,6 +58,35 @@ def odma_component_specs(spec: URASpec, d: int, num_blocks: int, learn_C: bool,
                             learn_R=learn_R, learn_C=learn_C,
                             explicit_atom_q=msg % num_blocks,
                             explicit_atom_v=msg)]
+
+
+def product_all_pairs_component_specs(spec: URASpec, num_operators: int, learn_C: bool,
+                                      operator_init: str = "random_sign_diagonal") -> list[ComponentSpec]:
+    """One-layer all-pairs product family Phi=[R_1 C|...|R_Q C], with QV=M."""
+    Q = int(num_operators)
+    if Q <= 0 or spec.num_codewords % Q:
+        raise ValueError(f"all-pairs product requires Q to divide M={spec.num_codewords}, got Q={Q}")
+    V = spec.num_codewords // Q
+    return [ComponentSpec(Q=Q, d=spec.n, V=V, N=spec.num_codewords,
+                          R_init=operator_init, C_init="random_gaussian",
+                          U_init="all_pairs", T_init="identity",
+                          learn_R=False, learn_C=learn_C)]
+
+
+def sparse_global_component_specs(spec: URASpec, support_size: int,
+                                  generator: torch.Generator | None = None) -> list[ComponentSpec]:
+    """Fixed sparse global-codebook control without product sharing."""
+    s = int(support_size)
+    if s <= 0 or s > spec.n:
+        raise ValueError(f"support_size must satisfy 0 < s <= n={spec.n}, got {s}")
+    C = torch.zeros(spec.n, spec.num_codewords)
+    for m in range(spec.num_codewords):
+        rows = torch.randperm(spec.n, generator=generator)[:s]
+        C[rows, m] = torch.randn(s, generator=generator)
+    C = C / C.norm(dim=0, keepdim=True).clamp_min(1e-12)
+    return [ComponentSpec(Q=1, d=spec.n, V=spec.num_codewords, N=spec.num_codewords,
+                          R_init="identity", C_init="explicit", U_init="all_pairs", T_init="identity",
+                          learn_R=False, learn_C=False, explicit_C=C)]
 
 
 def ccs_component_specs(spec: URASpec, num_sections: int, learn_C: bool) -> list[ComponentSpec]:
@@ -99,16 +129,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--mode", choices=["train", "infer"], default="infer")
-    p.add_argument("--preset", choices=["dense", "odma", "ccs"], default="odma")
+    p.add_argument("--preset", choices=["dense", "product", "odma", "ccs"], default="odma")
     # URASpec
     p.add_argument("--n", type=int, default=64)
     p.add_argument("--num-codewords", type=int, default=32)
     p.add_argument("--num-active", type=int, default=4)
     p.add_argument("--num-antennas", type=int, default=2)
     p.add_argument("--ebn0-db", type=float, default=5.0)
-    p.add_argument("--dtype", choices=["float32", "float64"], default="float32")
+    p.add_argument("--dtype", choices=["float32", "float64", "complex64", "complex128"], default="float32")
     # preset-specific
     p.add_argument("--num-blocks", type=int, default=4, help="odma preset only")
+    p.add_argument("--num-operators", type=int, default=4, help="all-pairs product preset only")
+    p.add_argument("--operator-init", choices=["random_sign_diagonal", "random_phase_diagonal"],
+                   default="random_sign_diagonal", help="all-pairs product preset only")
     p.add_argument("--d", type=int, default=None, help="local codeword length for odma preset")
     p.add_argument("--num-sections", type=int, default=2, help="ccs preset only")
     # learnability
@@ -159,6 +192,8 @@ def build_for_args(args: argparse.Namespace, gen: torch.Generator) -> tuple:
                     num_active=args.num_active, num_antennas=args.num_antennas)
     if args.preset == "dense":
         component_specs = dense_component_specs(spec, args.learn_C)
+    elif args.preset == "product":
+        component_specs = product_all_pairs_component_specs(spec, args.num_operators, args.learn_C, args.operator_init)
     elif args.preset == "odma":
         d = args.d if args.d is not None else max(spec.n // args.num_blocks, 1)
         component_specs = odma_component_specs(spec, d, args.num_blocks, args.learn_C, args.learn_R)
@@ -167,7 +202,8 @@ def build_for_args(args: argparse.Namespace, gen: torch.Generator) -> tuple:
     else:
         raise ValueError(f"unknown preset '{args.preset}'")
     constraints = component_constraints(component_specs, args.constrain_C_unit_norm)
-    dtype = torch.float32 if args.dtype == "float32" else torch.float64
+    dtype = {"float32": torch.float32, "float64": torch.float64,
+             "complex64": torch.complex64, "complex128": torch.complex128}[args.dtype]
     encoder = build_encoder(spec, component_specs, constraints=constraints,
                               dtype=dtype, generator=gen)
     if args.dataset_path is None:
@@ -205,7 +241,7 @@ def main(argv: list[str] | None = None) -> None:
         "n_resources": spec.n,
         "num_learnable_params": sum(p.numel() for p in encoder.parameters() if p.requires_grad),
         "components": [
-            {"Q": int(c.R.shape[0]), "d": int(c.R.shape[2]), "V": int(c.C.shape[1]),
+            {"Q": c.Q, "d": c.d, "V": c.V,
              "N": int(c.atom_q.numel()), "learn_R": isinstance(c.R, torch.nn.Parameter),
              "learn_C": isinstance(c.C, torch.nn.Parameter)}
             for c in encoder.components],
@@ -237,12 +273,14 @@ def main(argv: list[str] | None = None) -> None:
                          num_batches=args.num_trials, batch_size=args.batch_size,
                          decoder=decoder, max_list_size=args.max_list_size,
                          generator=gen)
-    print("[framework] eval:", "  ".join(f"{k}={v:.4f}" for k, v in summary.items()))
+    formatted = [f"{key}={value:.4f}" if isinstance(value, Number) else f"{key}={value}"
+                 for key, value in summary.items()]
+    print("[framework] eval:", "  ".join(formatted))
 
     # one extra batch saved as a count comparison plot for diagnostic purposes
     batch = sample_batch(encoder, 1, test_sampler, fading_sampler, args.ebn0_db, gen)
     with torch.no_grad():
-        out = decoder(encoder, batch.Y, batch.H, num_active=spec.num_active)
+        out = decoder(encoder, batch.Y, batch.H, num_active=batch.num_active, noise_var=batch.noise_var)
     plot_count_estimate(batch.counts[0].cpu(), out.counts[0].cpu(),
                          out_dir / "count_estimate.png")
     if args.save_dataset:
