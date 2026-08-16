@@ -14,6 +14,7 @@ composes the two operations without constructing a global lookup table.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+import math
 
 import torch
 from torch import nn
@@ -21,26 +22,94 @@ from torch import nn
 from .channel import ebn0_db_to_noise_var
 from .constraints import apply_constraints
 from .core import ComponentSpec, SectionedURABatch, SectionedURASpec
-from .encoder import ComponentConstraints, Encoder, LocalAtomBank
+from .encoder import ComponentConstraints, Encoder, LocalAtomBank, SubsampledHadamardAtomBank
 from .initializers import init_C, init_R, init_U
-from .outer_code import OuterCode
+from .outer_code import OuterCode, SparseLinearOuterCode, ccs_amp_paper_outer_code
+
+
+class FixedOrthogonalMixer(nn.Module):
+    """Implicit orthogonal mixing built from fixed permutations and 2x2 Hadamard rotations."""
+
+    def __init__(self, n: int, num_stages: int, generator: torch.Generator | None = None) -> None:
+        super().__init__()
+        if n <= 0 or num_stages < 0:
+            raise ValueError(f"n must be positive and num_stages nonnegative, got n={n}, stages={num_stages}")
+        permutations = [torch.randperm(n, generator=generator) for _ in range(num_stages)]
+        if permutations:
+            permutation = torch.stack(permutations)
+            inverse = torch.argsort(permutation, dim=1)
+        else:
+            permutation = torch.empty(0, n, dtype=torch.long)
+            inverse = torch.empty(0, n, dtype=torch.long)
+        self.register_buffer("permutation", permutation)
+        self.register_buffer("inverse_permutation", inverse)
+        self.n = int(n)
+
+    @staticmethod
+    def _pair_mix(x: torch.Tensor) -> torch.Tensor:
+        pair_length = 2 * (x.shape[-1] // 2)
+        if pair_length == 0:
+            return x
+        pairs = x[..., :pair_length].reshape(*x.shape[:-1], -1, 2)
+        scale = math.sqrt(0.5)
+        mixed = torch.stack(((pairs[..., 0] + pairs[..., 1]) * scale,
+                             (pairs[..., 0] - pairs[..., 1]) * scale), dim=-1).flatten(-2)
+        return torch.cat((mixed, x[..., pair_length:]), dim=-1) if pair_length < x.shape[-1] else mixed
+
+    def _stage(self, x: torch.Tensor, stage: int) -> torch.Tensor:
+        permuted = x.index_select(-1, self.permutation[stage])
+        return self._pair_mix(permuted).index_select(-1, self.inverse_permutation[stage])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.shape[-1] != self.n:
+            raise ValueError(f"mixer expected trailing dimension {self.n}, got {tuple(x.shape)}")
+        for stage in range(self.permutation.shape[0]):
+            x = self._stage(x, stage)
+        return x
+
+    def adjoint(self, x: torch.Tensor) -> torch.Tensor:
+        if x.shape[-1] != self.n:
+            raise ValueError(f"mixer expected trailing dimension {self.n}, got {tuple(x.shape)}")
+        for stage in range(self.permutation.shape[0] - 1, -1, -1):
+            x = self._stage(x, stage)
+        return x
 
 
 class SectionedEncoder(nn.Module):
     """A sum of local atom banks whose state size is ``sum_l N_l``, not ``M``."""
 
-    def __init__(self, banks: Sequence[LocalAtomBank], spec: SectionedURASpec) -> None:
+    def __init__(self, banks: Sequence[LocalAtomBank], spec: SectionedURASpec,
+                 orthogonal_mixer: FixedOrthogonalMixer | None = None,
+                 section_energies: Sequence[float] | None = None) -> None:
         super().__init__()
         if not banks:
             raise ValueError("SectionedEncoder requires at least one local atom bank")
-        if any(bank.n != spec.n for bank in banks):
-            raise ValueError("all local atom banks must use the SectionedURASpec resource length")
-        dtype = banks[0].R.dtype
-        device = banks[0].R.device
-        if any(bank.R.dtype != dtype or bank.R.device != device for bank in banks):
+        dtype = banks[0].dtype
+        device = banks[0].device
+        if any(bank.dtype != dtype or bank.device != device for bank in banks):
             raise ValueError("all local atom banks must share dtype and device")
+        if orthogonal_mixer is None:
+            if any(bank.n != spec.n for bank in banks):
+                raise ValueError("overlapping local atom banks must use the full SectionedURASpec resource length")
+            if section_energies is not None:
+                raise ValueError("section_energies are only defined for the orthogonal direct-sum mode")
+            energies = (1.0,) * len(banks)
+        else:
+            if orthogonal_mixer.n != spec.n or sum(bank.n for bank in banks) > spec.n:
+                raise ValueError("orthogonal local dimensions must fit inside the mixer resource length")
+            energies = ((1.0 / len(banks),) * len(banks) if section_energies is None
+                        else tuple(float(value) for value in section_energies))
+            if len(energies) != len(banks) or any(value <= 0.0 for value in energies) or abs(sum(energies) - 1.0) > 1e-10:
+                raise ValueError("positive section energies must have one entry per bank and sum to one")
         self.banks = nn.ModuleList(banks)
+        self.orthogonal_mixer = orthogonal_mixer
+        real_dtype = torch.float32 if dtype in (torch.float32, torch.complex64) else torch.float64
+        self.register_buffer("section_scales", torch.sqrt(torch.tensor(energies, dtype=real_dtype, device=device)))
         self.spec = spec
+        offsets = [0]
+        for bank in banks:
+            offsets.append(offsets[-1] + bank.n)
+        self._resource_slices = tuple(slice(offsets[ell], offsets[ell + 1]) for ell in range(len(banks)))
         self._spectral_cache: dict[int, torch.Tensor] = {}
 
     @property
@@ -56,10 +125,13 @@ class SectionedEncoder(nn.Module):
     def state_size(self) -> int: return sum(self.section_sizes)
 
     @property
-    def dtype(self) -> torch.dtype: return self.banks[0].R.dtype
+    def energy_mode(self) -> str: return "orthogonal_exact" if self.orthogonal_mixer is not None else "overlapping"
 
     @property
-    def device(self) -> torch.device: return self.banks[0].R.device
+    def dtype(self) -> torch.dtype: return self.banks[0].dtype
+
+    @property
+    def device(self) -> torch.device: return self.banks[0].device
 
     def _validate_section_counts(self, section_counts: Sequence[torch.Tensor]) -> tuple[torch.Tensor, ...]:
         if len(section_counts) != self.num_sections:
@@ -78,14 +150,25 @@ class SectionedEncoder(nn.Module):
     def synthesize(self, section_counts: Sequence[torch.Tensor]) -> torch.Tensor:
         """Compute ``sum_l F_l s_l`` from local count tensors only."""
         counts = self._validate_section_counts(section_counts)
-        out = self.banks[0].local_matvec(counts[0].to(self.dtype))
-        for bank, local in zip(self.banks[1:], counts[1:]):
-            out = out + bank.local_matvec(local.to(self.dtype))
-        return out
+        if self.orthogonal_mixer is None:
+            out = self.banks[0].local_matvec(counts[0].to(self.dtype))
+            for bank, local in zip(self.banks[1:], counts[1:]):
+                out = out + bank.local_matvec(local.to(self.dtype))
+            return out
+        pieces = [scale.to(self.dtype) * bank.local_matvec(local.to(self.dtype))
+                  for scale, bank, local in zip(self.section_scales, self.banks, counts)]
+        used = sum(piece.shape[-1] for piece in pieces)
+        if used < self.n:
+            pieces.append(torch.zeros(*pieces[0].shape[:-1], self.n - used, dtype=self.dtype, device=self.device))
+        return self.orthogonal_mixer(torch.cat(pieces, dim=-1))
 
     def local_adjoint(self, residual: torch.Tensor) -> tuple[torch.Tensor, ...]:
         """Return ``(F_l^H residual)_l`` without broadcasting to global messages."""
-        return tuple(bank.local_rmatvec(residual) for bank in self.banks)
+        if self.orthogonal_mixer is None:
+            return tuple(bank.local_rmatvec(residual) for bank in self.banks)
+        latent = self.orthogonal_mixer.adjoint(residual)
+        return tuple(scale.to(self.dtype) * bank.local_rmatvec(latent[..., resource_slice])
+                     for scale, bank, resource_slice in zip(self.section_scales, self.banks, self._resource_slices))
 
     def counts_from_paths(self, paths: torch.Tensor) -> tuple[torch.Tensor, ...]:
         """Scatter active paths ``(batch,K,L)`` directly into local count tensors.
@@ -139,6 +222,41 @@ class SectionedEncoder(nn.Module):
         signal, counts = self.encode_paths(paths)
         return signal, counts, paths
 
+    def codeword_columns(self, paths: torch.Tensor) -> torch.Tensor:
+        """Materialise only requested procedural codewords, returning shape ``(...,n)``."""
+        paths = torch.as_tensor(paths, dtype=torch.long, device=self.device)
+        if paths.ndim == 0 or paths.shape[-1] != self.num_sections:
+            raise ValueError(f"paths must have trailing shape ({self.num_sections},), got {tuple(paths.shape)}")
+        leading = paths.shape[:-1]
+        flat = paths.reshape(-1, self.num_sections)
+        if self.orthogonal_mixer is None:
+            columns = sum(bank.atom_columns(flat[:, ell]) for ell, bank in enumerate(self.banks)).transpose(0, 1)
+        else:
+            pieces = [scale.to(self.dtype) * bank.atom_columns(flat[:, ell])
+                      for ell, (scale, bank) in enumerate(zip(self.section_scales, self.banks))]
+            used = sum(piece.shape[0] for piece in pieces)
+            if used < self.n:
+                pieces.append(torch.zeros(self.n - used, flat.shape[0], dtype=self.dtype, device=self.device))
+            columns = self.orthogonal_mixer(torch.cat(pieces, dim=0).transpose(0, 1))
+        return columns.reshape(*leading, self.n)
+
+    def path_energies(self, paths: torch.Tensor) -> torch.Tensor:
+        columns = self.codeword_columns(paths)
+        return torch.sum(torch.abs(columns) ** 2, dim=-1).real
+
+    def certify_exact_energy(self, tolerance: float = 1e-6) -> dict[str, float | bool | str]:
+        """Certify the structural unit-energy guarantee without enumerating complete paths."""
+        if self.orthogonal_mixer is None:
+            return {"guaranteed": False, "mode": "overlapping"}
+        deviations = []
+        for bank in self.banks:
+            deviations.append(bank.max_unit_energy_deviation())
+        max_local_deviation = float(torch.stack(deviations).max().detach())
+        energy_sum_deviation = abs(float(torch.sum(self.section_scales.square()).detach()) - 1.0)
+        return {"guaranteed": max(max_local_deviation, energy_sum_deviation) <= tolerance,
+                "mode": "orthogonal_exact", "max_local_energy_deviation": max_local_deviation,
+                "section_energy_sum_deviation": energy_sum_deviation, "tolerance": float(tolerance)}
+
     def apply_constraints(self) -> None:
         items: list[tuple[str, torch.Tensor, str]] = []
         for ell, bank in enumerate(self.banks):
@@ -158,7 +276,7 @@ class SectionedEncoder(nn.Module):
             raise ValueError(f"num_iters must be positive, got {num_iters}")
         if use_cache and int(num_iters) in self._spectral_cache:
             return self._spectral_cache[int(num_iters)]
-        real_dtype = self.banks[0].R.real.dtype if self.dtype.is_complex else self.dtype
+        real_dtype = torch.float32 if self.dtype in (torch.float32, torch.complex64) else torch.float64
         state = tuple(torch.randn(size, dtype=real_dtype, device=self.device, generator=generator)
                       for size in self.section_sizes)
         norm = self._state_norm(state)
@@ -193,6 +311,60 @@ def build_sectioned_encoder(spec: SectionedURASpec, component_specs: Sequence[Co
         banks.append(LocalAtomBank(R, C, atom_q, atom_v, learn_R=cs.learn_R, learn_C=cs.learn_C,
                                    constraints=bank_constraints))
     return SectionedEncoder(banks, spec)
+
+
+def build_orthogonal_sectioned_encoder(spec: SectionedURASpec, outer_code: OuterCode,
+                                       section_dimensions: int | Sequence[int] | None = None,
+                                       section_energies: Sequence[float] | None = None,
+                                       learn_C: bool = True, mixing_stages: int | None = None,
+                                       bank_type: str = "explicit",
+                                       dtype: torch.dtype = torch.float32,
+                                       generator: torch.Generator | None = None) -> SectionedEncoder:
+    """Build an exact-unit-energy direct sum, optionally spread by a fixed orthogonal mixer."""
+    if outer_code.payload_bits != spec.payload_bits:
+        raise ValueError("outer-code payload does not match the SectionedURASpec")
+    L = outer_code.num_sections
+    if section_dimensions is None:
+        base, remainder = divmod(spec.n, L)
+        dimensions = tuple(base + (ell < remainder) for ell in range(L))
+    elif isinstance(section_dimensions, int):
+        dimensions = (int(section_dimensions),) * L
+    else:
+        dimensions = tuple(int(value) for value in section_dimensions)
+    if len(dimensions) != L or any(value <= 0 for value in dimensions) or sum(dimensions) > spec.n:
+        raise ValueError(f"positive section dimensions must have length {L} and sum to at most n={spec.n}")
+    stages = int(math.ceil(math.log2(spec.n))) if mixing_stages is None else int(mixing_stages)
+    mixer = FixedOrthogonalMixer(spec.n, stages, generator)
+    if bank_type not in {"explicit", "subsampled_hadamard"}:
+        raise ValueError(f"bank_type must be explicit or subsampled_hadamard, got {bank_type!r}")
+    if bank_type == "subsampled_hadamard" and learn_C:
+        raise ValueError("the implicit subsampled-Hadamard bank is fixed; pass learn_C=False")
+    banks = []
+    for dimension, size in zip(dimensions, outer_code.section_sizes):
+        if bank_type == "subsampled_hadamard":
+            banks.append(SubsampledHadamardAtomBank(size, dimension, dtype, generator))
+        else:
+            R = torch.ones(1, dimension, dtype=dtype)
+            C = init_C("random_gaussian", dimension, size, dtype, generator)
+            atom_q = torch.zeros(size, dtype=torch.long)
+            atom_v = torch.arange(size, dtype=torch.long)
+            banks.append(LocalAtomBank(R, C, atom_q, atom_v, learn_R=False, learn_C=learn_C,
+                                       constraints=ComponentConstraints(C="unit_norm_columns")))
+    encoder = SectionedEncoder(banks, spec, mixer, section_energies)
+    encoder.apply_constraints()
+    return encoder
+
+
+def build_default_scalable_setup(num_active: int, n: int = 38_400, num_antennas: int = 1,
+                                 mixing_stages: int | None = None, dtype: torch.dtype = torch.float32,
+                                 generator: torch.Generator | None = None
+                                 ) -> tuple[SectionedEncoder, SparseLinearOuterCode]:
+    """B=128,J=16 default with exact energy and implicit local banks; not a claim of paper-inner equivalence."""
+    outer_code = ccs_amp_paper_outer_code()
+    spec = SectionedURASpec(n=n, payload_bits=128, num_active=num_active, num_antennas=num_antennas)
+    encoder = build_orthogonal_sectioned_encoder(spec, outer_code, learn_C=False, mixing_stages=mixing_stages,
+                                                 bank_type="subsampled_hadamard", dtype=dtype, generator=generator)
+    return encoder, outer_code
 
 
 def sectioned_from_explicit(encoder: Encoder) -> SectionedEncoder:
@@ -234,6 +406,20 @@ def outer_code_path_generator(num_active: int, outer_code: OuterCode,
         return outer_code.encode_bits(bits)
 
     return sample
+
+
+def sampled_energy_report(encoder: SectionedEncoder, outer_code: OuterCode, num_samples: int = 1024,
+                          generator: torch.Generator | None = None) -> dict[str, float | int | str]:
+    """Measure procedural codeword energies on uniformly sampled messages without an M-axis."""
+    if num_samples <= 0:
+        raise ValueError(f"num_samples must be positive, got {num_samples}")
+    encoder._validate_outer_code(outer_code)
+    bits = torch.randint(2, (num_samples, outer_code.payload_bits), generator=generator, device=encoder.device)
+    with torch.no_grad():
+        energies = encoder.path_energies(outer_code.encode_bits(bits))
+    return {"mode": encoder.energy_mode, "num_samples": int(num_samples),
+            "minimum": float(energies.min()), "mean": float(energies.mean()),
+            "maximum": float(energies.max()), "max_abs_unit_deviation": float(torch.max(torch.abs(energies - 1.0)))}
 
 
 def sample_sectioned_batch(encoder: SectionedEncoder, batch_size: int,

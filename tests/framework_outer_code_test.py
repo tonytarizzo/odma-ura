@@ -6,8 +6,7 @@ import torch
 
 from framework.core import ComponentSpec, URASpec
 from framework.encoder import build_encoder
-from framework.outer_code import (IdentityOuterCode, SparseLinearOuterCode, gf_multiply,
-                                  random_sparse_outer_code, triadic_outer_code)
+from framework.outer_code import IdentityOuterCode, SparseLinearOuterCode, random_sparse_outer_code, triadic_outer_code
 from framework.sectioned import sectioned_from_explicit
 
 
@@ -41,17 +40,17 @@ def test_identity_code() -> None:
         raise AssertionError("identity code accepted an out-of-range local symbol")
 
 
-def test_finite_field_and_generic_sparse_code() -> None:
+def test_modular_arithmetic_and_generic_sparse_code() -> None:
     values = torch.arange(16)
-    for multiplier in range(1, 16):
-        if torch.unique(gf_multiply(values, multiplier, 4)).numel() != 16:
-            raise AssertionError(f"nonzero GF(16) multiplier {multiplier} is not invertible")
+    for multiplier in range(1, 16, 2):
+        if torch.unique((values * multiplier).remainder(16)).numel() != 16:
+            raise AssertionError(f"odd multiplier {multiplier} is not invertible modulo 16")
     a = torch.tensor([1, 3, 7, 12]); b = torch.tensor([2, 5, 9, 4]); c = torch.tensor([6, 11, 3, 8])
-    check_equal("GF distributivity", gf_multiply(a, b ^ c, 4), gf_multiply(a, b, 4) ^ gf_multiply(a, c, 4))
+    check_equal("modular distributivity", (a * (b + c)).remainder(16), (a * b + a * c).remainder(16))
 
     code = SparseLinearOuterCode(payload_bits=8, section_bits=2,
                                  parity_supports=[(0, 1), (1, 2, 3), (0, 3)],
-                                 parity_coefficients=[(1, 2), (3, 1, 2), (2, 3)])
+                                 parity_coefficients=[(1, 3), (3, 1, 3), (3, 1)])
     bits = all_payload_bits(8)
     paths = code.enumerate_paths()
     if paths.shape != (256, 7) or torch.unique(paths, dim=0).shape[0] != 256:
@@ -77,6 +76,8 @@ def test_triadic_structure() -> None:
     if paths.shape != (3, 5, 8) or not bool(code.is_valid(paths).all()):
         raise AssertionError("triadic code did not produce valid batched paths")
     check_equal("triadic round trip", code.decode_bits(paths), bits)
+    author_example = code.encode_bits(torch.tensor([[0, 0, 0, 0, 0, 0, 0, 1]]))
+    check_equal("CCS-AMP modular triadic parity", author_example, torch.tensor([[0, 0, 0, 0, 0, 3, 1, 3]]))
 
 
 def test_explicit_framework_equivalence() -> None:
@@ -125,7 +126,7 @@ def test_b100_procedural_scaling() -> None:
 
 def main() -> None:
     test_identity_code()
-    test_finite_field_and_generic_sparse_code()
+    test_modular_arithmetic_and_generic_sparse_code()
     test_triadic_structure()
     test_explicit_framework_equivalence()
     test_b100_procedural_scaling()

@@ -151,3 +151,22 @@ class SectionedDecoderOutput:
 
     section_counts: tuple[torch.Tensor, ...]
     meta: dict = field(default_factory=dict)
+
+
+@dataclass
+class OuterBPOutput:
+    """Differentiable outer-code beliefs over one randomly selected active path."""
+
+    log_beliefs: torch.Tensor             # (batch,L,2^J), normalised over the final axis
+    meta: dict = field(default_factory=dict)
+
+
+@dataclass
+class PathListOutput:
+    """Discrete valid-path list and inferred complete-message multiplicities."""
+
+    paths: torch.Tensor                   # (batch,list_size,L)
+    counts: torch.Tensor                  # (batch,list_size)
+    scores: torch.Tensor                  # (batch,list_size)
+    bits: torch.Tensor                    # (batch,list_size,B)
+    meta: dict = field(default_factory=dict)

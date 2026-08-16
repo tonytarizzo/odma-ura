@@ -13,18 +13,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+import math
 
 import torch
-
-
-# Low-degree irreducible polynomials, represented with the x^J coefficient.
-# These cover practical section widths while keeping finite-field arithmetic
-# dependency-free and exactly reproducible.
-_IRREDUCIBLE_POLYNOMIALS = {
-    1: 0x3, 2: 0x7, 3: 0xB, 4: 0x13, 5: 0x25, 6: 0x43, 7: 0x83, 8: 0x11B,
-    9: 0x203, 10: 0x409, 11: 0x805, 12: 0x1009, 13: 0x201B, 14: 0x4021,
-    15: 0x8003, 16: 0x1002B,
-}
 
 
 def _validate_binary(bits: torch.Tensor, payload_bits: int) -> torch.Tensor:
@@ -50,36 +41,9 @@ def _symbols_to_bits(symbols: torch.Tensor, section_bits: int) -> torch.Tensor:
     return bits.reshape(*symbols.shape[:-1], symbols.shape[-1] * section_bits)
 
 
-def gf_multiply(a: torch.Tensor | int, b: torch.Tensor | int, field_bits: int,
-                irreducible_polynomial: int | None = None) -> torch.Tensor:
-    """Multiply values in GF(2^J) using a polynomial basis."""
-    if field_bits not in _IRREDUCIBLE_POLYNOMIALS and irreducible_polynomial is None:
-        raise ValueError(f"field_bits must lie in [1,16] unless a polynomial is supplied, got {field_bits}")
-    polynomial = _IRREDUCIBLE_POLYNOMIALS.get(field_bits) if irreducible_polynomial is None else int(irreducible_polynomial)
-    if polynomial <= 0 or polynomial.bit_length() != field_bits + 1:
-        raise ValueError(f"irreducible polynomial must have degree {field_bits}, got {polynomial:#x}")
-    device = a.device if isinstance(a, torch.Tensor) else b.device if isinstance(b, torch.Tensor) else None
-    left, right = torch.broadcast_tensors(torch.as_tensor(a, dtype=torch.long, device=device),
-                                          torch.as_tensor(b, dtype=torch.long, device=device))
-    size = 1 << field_bits
-    if left.numel() and (int(left.min()) < 0 or int(right.min()) < 0
-                        or int(left.max()) >= size or int(right.max()) >= size):
-        raise ValueError(f"field elements must lie in [0,{size})")
-    mask = size - 1
-    reduction = polynomial & mask
-    x = left.clone(); y = right.clone(); product = torch.zeros_like(x)
-    for _ in range(field_bits):
-        product ^= torch.where((y & 1).bool(), x, 0)
-        carry = ((x >> (field_bits - 1)) & 1).bool()
-        x = (x << 1) & mask
-        x ^= torch.where(carry, reduction, 0)
-        y >>= 1
-    return product
-
-
 @dataclass(frozen=True)
 class LinearCheck:
-    """One sparse parity row: ``sum_i coefficients[i] * x[variables[i]] = 0``."""
+    """One sparse modular row: ``sum_i coefficients[i] * x[variables[i]] = 0 mod q``."""
 
     variables: tuple[int, ...]
     coefficients: tuple[int, ...]
@@ -95,25 +59,29 @@ class LinearCheck:
 
 @dataclass(frozen=True)
 class OuterFactorGraph:
-    """Sparse representation of ``H x = 0`` over GF(2^J)."""
+    """Sparse representation of ``H x = 0 mod 2^J`` used by CCS-AMP."""
 
     section_sizes: tuple[int, ...]
     checks: tuple[LinearCheck, ...]
-    field_bits: int
-    irreducible_polynomial: int
+    section_bits: int
 
     def __post_init__(self) -> None:
-        expected_size = 1 << self.field_bits
+        expected_size = 1 << self.section_bits
         if not self.section_sizes or any(size != expected_size for size in self.section_sizes):
-            raise ValueError(f"every linear-code section must have size 2^{self.field_bits}={expected_size}")
+            raise ValueError(f"every linear-code section must have size 2^{self.section_bits}={expected_size}")
         for check in self.checks:
             if max(check.variables) >= len(self.section_sizes):
                 raise ValueError("linear check references a nonexistent section")
             if max(check.coefficients) >= expected_size:
-                raise ValueError("linear-check coefficient lies outside the field")
+                raise ValueError("linear-check coefficient lies outside the modular alphabet")
+            if any(math.gcd(coefficient, expected_size) != 1 for coefficient in check.coefficients):
+                raise ValueError("linear-check coefficients must be invertible modulo 2^J (therefore odd)")
 
     @property
     def num_variables(self) -> int: return len(self.section_sizes)
+
+    @property
+    def modulus(self) -> int: return 1 << self.section_bits
 
     def parity_check_matrix(self, device: torch.device | str | None = None) -> torch.Tensor:
         """Materialise the small ``H`` matrix; this is section-sized, never message-sized."""
@@ -130,14 +98,14 @@ class OuterFactorGraph:
         for row, check in enumerate(self.checks):
             value = torch.zeros(paths.shape[:-1], dtype=torch.long, device=paths.device)
             for variable, coefficient in zip(check.variables, check.coefficients):
-                value ^= gf_multiply(paths[..., variable], coefficient, self.field_bits, self.irreducible_polynomial).to(paths.device)
-            syndrome[..., row] = value
+                value += coefficient * paths[..., variable]
+            syndrome[..., row] = value.remainder(self.modulus)
         return syndrome
 
     def is_valid(self, paths: torch.Tensor) -> torch.Tensor:
         paths = torch.as_tensor(paths, dtype=torch.long)
-        in_range = ((paths >= 0) & (paths < (1 << self.field_bits))).all(dim=-1)
-        safe_paths = paths.clamp(0, (1 << self.field_bits) - 1)
+        in_range = ((paths >= 0) & (paths < self.modulus)).all(dim=-1)
+        safe_paths = paths.clamp(0, self.modulus - 1)
         return in_range & (self.syndrome(safe_paths) == 0).all(dim=-1)
 
 
@@ -231,7 +199,7 @@ class IdentityOuterCode(OuterCode):
 
 
 class SparseLinearOuterCode(OuterCode):
-    """Systematic sparse linear outer code over GF(2^J).
+    """Systematic sparse linear outer code over integers modulo ``q=2^J``.
 
     The payload becomes ``k=B/J`` information symbols.  Each configured check
     adds one parity symbol, so the transmitted path has ``L=k+r`` sections.
@@ -243,12 +211,9 @@ class SparseLinearOuterCode(OuterCode):
                  parity_supports: Sequence[Sequence[int]],
                  parity_coefficients: Sequence[Sequence[int]] | None = None,
                  info_positions: Sequence[int] | None = None,
-                 parity_positions: Sequence[int] | None = None,
-                 irreducible_polynomial: int | None = None) -> None:
+                 parity_positions: Sequence[int] | None = None) -> None:
         if payload_bits <= 0 or section_bits <= 0 or payload_bits % section_bits:
             raise ValueError("payload_bits and section_bits must be positive, with section_bits dividing payload_bits")
-        if section_bits not in _IRREDUCIBLE_POLYNOMIALS and irreducible_polynomial is None:
-            raise ValueError("built-in finite-field arithmetic supports section_bits in [1,16]")
         self.payload_bits = int(payload_bits)
         self.uniform_section_bits = int(section_bits)
         self.num_information_sections = payload_bits // section_bits
@@ -262,24 +227,22 @@ class SparseLinearOuterCode(OuterCode):
             coefficients = tuple(tuple(int(value) for value in row) for row in parity_coefficients)
             if len(coefficients) != len(supports) or any(len(row) != len(support) for row, support in zip(coefficients, supports)):
                 raise ValueError("parity coefficients must match parity supports")
-        field_size = 1 << section_bits
-        if any(value <= 0 or value >= field_size for row in coefficients for value in row):
-            raise ValueError(f"parity coefficients must be nonzero GF(2^{section_bits}) elements")
+        modulus = 1 << section_bits
+        if any(value <= 0 or value >= modulus or math.gcd(value, modulus) != 1
+               for row in coefficients for value in row):
+            raise ValueError(f"parity coefficients must be odd integers in [1,{modulus})")
         num_sections = self.num_information_sections + len(supports)
         info = tuple(range(self.num_information_sections)) if info_positions is None else tuple(int(x) for x in info_positions)
-        parity = tuple(range(self.num_information_sections, num_sections)) if parity_positions is None else tuple(int(x) for x in parity_positions)
+        parity = (tuple(range(self.num_information_sections, num_sections)) if parity_positions is None
+                  else tuple(int(x) for x in parity_positions))
         if (len(info) != self.num_information_sections or len(parity) != len(supports)
                 or sorted(info + parity) != list(range(num_sections))):
             raise ValueError("information and parity positions must partition all path sections")
-        polynomial = _IRREDUCIBLE_POLYNOMIALS.get(section_bits) if irreducible_polynomial is None else int(irreducible_polynomial)
-        # Validate the polynomial representation through one harmless multiply.
-        gf_multiply(0, 0, section_bits, polynomial)
         self.parity_supports = supports
         self.parity_coefficients = coefficients
         self.info_positions = info
         self.parity_positions = parity
-        self.irreducible_polynomial = polynomial
-        self.section_sizes = (field_size,) * num_sections
+        self.section_sizes = (modulus,) * num_sections
         checks = []
         for support, coefficient_row, parity_position in zip(supports, coefficients, parity):
             entries = [(info[index], coefficient) for index, coefficient in zip(support, coefficient_row)]
@@ -287,7 +250,7 @@ class SparseLinearOuterCode(OuterCode):
             entries.sort()
             checks.append(LinearCheck(tuple(variable for variable, _ in entries),
                                       tuple(coefficient for _, coefficient in entries)))
-        self._factor_graph = OuterFactorGraph(self.section_sizes, tuple(checks), section_bits, polynomial)
+        self._factor_graph = OuterFactorGraph(self.section_sizes, tuple(checks), section_bits)
 
     @property
     def factor_graph(self) -> OuterFactorGraph: return self._factor_graph
@@ -300,15 +263,23 @@ class SparseLinearOuterCode(OuterCode):
 
     def encode_bits(self, bits: torch.Tensor) -> torch.Tensor:
         bits = _validate_binary(bits, self.payload_bits)
-        information = _bits_to_symbols(bits, self.uniform_section_bits)
-        paths = torch.zeros(*bits.shape[:-1], self.num_sections, dtype=torch.long, device=bits.device)
+        return self.encode_symbols(_bits_to_symbols(bits, self.uniform_section_bits))
+
+    def encode_symbols(self, information: torch.Tensor) -> torch.Tensor:
+        """Encode systematic section symbols directly; useful for list extraction."""
+        information = torch.as_tensor(information, dtype=torch.long)
+        if information.ndim == 0 or information.shape[-1] != self.num_information_sections:
+            raise ValueError(f"information must have trailing shape ({self.num_information_sections},)")
+        modulus = 1 << self.uniform_section_bits
+        if information.numel() and (int(information.min()) < 0 or int(information.max()) >= modulus):
+            raise ValueError(f"information symbols must lie in [0,{modulus})")
+        paths = torch.zeros(*information.shape[:-1], self.num_sections, dtype=torch.long, device=information.device)
         paths[..., list(self.info_positions)] = information
         for support, coefficients, position in zip(self.parity_supports, self.parity_coefficients, self.parity_positions):
-            parity = torch.zeros(bits.shape[:-1], dtype=torch.long, device=bits.device)
+            parity = torch.zeros(information.shape[:-1], dtype=torch.long, device=information.device)
             for index, coefficient in zip(support, coefficients):
-                parity ^= gf_multiply(information[..., index], coefficient, self.uniform_section_bits,
-                                      self.irreducible_polynomial).to(bits.device)
-            paths[..., position] = parity
+                parity += coefficient * information[..., index]
+            paths[..., position] = (-parity).remainder(modulus)
         return paths
 
     def is_valid(self, paths: torch.Tensor) -> torch.Tensor:
@@ -336,7 +307,8 @@ def random_sparse_outer_code(payload_bits: int, section_bits: int, num_parity_se
                 for _ in range(num_parity_sections)]
     coefficients = None
     if random_coefficients:
-        coefficients = [tuple(torch.randint(1, 1 << section_bits, (check_degree,), generator=generator).tolist())
+        half = 1 << max(section_bits - 1, 0)
+        coefficients = [tuple((2 * torch.randint(0, half, (check_degree,), generator=generator) + 1).tolist())
                         for _ in range(num_parity_sections)]
     return SparseLinearOuterCode(payload_bits, section_bits, supports, coefficients)
 
@@ -353,3 +325,8 @@ def triadic_outer_code(payload_bits: int, section_bits: int) -> SparseLinearOute
     parity_positions = tuple(2 * ell + 1 for ell in range(num_information))
     return SparseLinearOuterCode(payload_bits, section_bits, supports,
                                  info_positions=info_positions, parity_positions=parity_positions)
+
+
+def ccs_amp_paper_outer_code() -> SparseLinearOuterCode:
+    """Published CCS-AMP outer dimensions: B=128, J=16, eight information and eight parity sections."""
+    return triadic_outer_code(payload_bits=128, section_bits=16)

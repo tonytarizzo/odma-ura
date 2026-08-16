@@ -14,6 +14,7 @@ optimiser step.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import torch
 from torch import nn
 
@@ -80,6 +81,12 @@ class LocalAtomBank(nn.Module):
 
     @property
     def n(self) -> int: return int(self.R.shape[1])
+
+    @property
+    def dtype(self) -> torch.dtype: return self.R.dtype
+
+    @property
+    def device(self) -> torch.device: return self.R.device
 
     @property
     def d(self) -> int: return int(self.C.shape[0])
@@ -193,6 +200,101 @@ class LocalAtomBank(nn.Module):
         if isinstance(self.C, nn.Parameter):
             out.append(("C", self.C.data, self.constraints.C))
         return out
+
+    def max_unit_energy_deviation(self) -> torch.Tensor:
+        energies = torch.sum(torch.abs(self.explicit_local_matrix()) ** 2, dim=0).real
+        return torch.max(torch.abs(energies - 1.0))
+
+
+def _fwht(x: torch.Tensor) -> torch.Tensor:
+    """Unnormalised Walsh-Hadamard transform on the final power-of-two axis."""
+    length = x.shape[-1]
+    if length <= 0 or length & (length - 1):
+        raise ValueError(f"Walsh-Hadamard length must be a positive power of two, got {length}")
+    y = x
+    block = 1
+    while block < length:
+        pairs = y.reshape(*y.shape[:-1], -1, 2, block)
+        left, right = pairs[..., 0, :], pairs[..., 1, :]
+        y = torch.cat((left + right, left - right), dim=-1).reshape(*y.shape[:-1], length)
+        block *= 2
+    return y
+
+
+class SubsampledHadamardAtomBank(nn.Module):
+    """Implicit ``d x 2^J`` unit-column dictionary with no stored dense matrix."""
+
+    def __init__(self, num_atoms: int, output_dimension: int, dtype: torch.dtype = torch.float32,
+                 generator: torch.Generator | None = None) -> None:
+        super().__init__()
+        if num_atoms <= 0 or num_atoms & (num_atoms - 1):
+            raise ValueError(f"num_atoms must be a positive power of two, got {num_atoms}")
+        if output_dimension <= 0 or output_dimension > num_atoms:
+            raise ValueError(f"output_dimension must lie in [1,{num_atoms}], got {output_dimension}")
+        rows = torch.randperm(num_atoms, generator=generator)[:output_dimension]
+        real_dtype = torch.float32 if dtype in (torch.float32, torch.complex64) else torch.float64
+        signs = (2 * torch.randint(2, (num_atoms,), generator=generator) - 1).to(real_dtype)
+        if dtype.is_complex:
+            signs = signs.to(dtype)
+        self.register_buffer("rows", rows)
+        self.register_buffer("signs", signs)
+        self._num_atoms = int(num_atoms)
+        self._output_dimension = int(output_dimension)
+
+    @property
+    def n(self) -> int: return self._output_dimension
+
+    @property
+    def num_atoms(self) -> int: return self._num_atoms
+
+    @property
+    def dtype(self) -> torch.dtype: return self.signs.dtype
+
+    @property
+    def device(self) -> torch.device: return self.signs.device
+
+    @staticmethod
+    def _as_batch(x: torch.Tensor, expected: int, name: str) -> tuple[torch.Tensor, bool]:
+        if x.ndim == 1 and x.shape[0] == expected:
+            return x.unsqueeze(0), True
+        if x.ndim == 2 and x.shape[1] == expected:
+            return x, False
+        raise ValueError(f"{name} must have shape ({expected},) or (batch,{expected}), got {tuple(x.shape)}")
+
+    def local_matvec(self, atom_counts: torch.Tensor) -> torch.Tensor:
+        atom_counts, squeezed = self._as_batch(atom_counts, self.num_atoms, "atom_counts")
+        transformed = _fwht(atom_counts.to(self.dtype) * self.signs)
+        output = transformed.index_select(-1, self.rows) / math.sqrt(self.n)
+        return output.squeeze(0) if squeezed else output
+
+    def local_rmatvec(self, residual: torch.Tensor) -> torch.Tensor:
+        residual, squeezed = self._as_batch(residual, self.n, "residual")
+        embedded = torch.zeros(residual.shape[0], self.num_atoms, dtype=self.dtype, device=self.device)
+        embedded.index_copy_(1, self.rows, residual.to(self.dtype))
+        output = self.signs.conj() * _fwht(embedded) / math.sqrt(self.n)
+        return output.squeeze(0) if squeezed else output
+
+    def atom_columns(self, indices: torch.Tensor) -> torch.Tensor:
+        indices = torch.as_tensor(indices, dtype=torch.long, device=self.device).reshape(-1)
+        if indices.numel() and (int(indices.min()) < 0 or int(indices.max()) >= self.num_atoms):
+            raise ValueError(f"atom index outside [0,{self.num_atoms})")
+        parity = torch.zeros(self.n, indices.numel(), dtype=torch.long, device=self.device)
+        bits = self.num_atoms.bit_length() - 1
+        for shift in range(bits):
+            parity ^= ((self.rows >> shift) & 1).unsqueeze(1) * ((indices >> shift) & 1).unsqueeze(0)
+        columns = (1 - 2 * parity).to(self.dtype) * self.signs.index_select(0, indices).unsqueeze(0)
+        return columns / math.sqrt(self.n)
+
+    def explicit_local_matrix(self, max_elements: int = 20_000_000) -> torch.Tensor:
+        if self.n * self.num_atoms > max_elements:
+            raise ValueError("refusing to materialise a large implicit Hadamard dictionary; request selected atom_columns instead")
+        return self.atom_columns(torch.arange(self.num_atoms, device=self.device))
+
+    def constraint_items(self) -> list[tuple[str, torch.Tensor, str]]:
+        return []
+
+    def max_unit_energy_deviation(self) -> torch.Tensor:
+        return torch.zeros((), dtype=self.signs.real.dtype, device=self.device)
 
 
 class ProductComponent(LocalAtomBank):

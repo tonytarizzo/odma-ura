@@ -239,11 +239,6 @@ class UnrolledSectionedCountPGD(UnrolledBernoulliPGD):
                                       "section_denoiser": "binomial_count",
                                       "noise_effective": noise_eff.detach()})
 
-
-# Compatibility for existing experiment scripts written during the sectioned refactor.
-UnrolledSectionedBernoulliPGD = UnrolledSectionedCountPGD
-
-
 class FactorAttentionProx(nn.Module):
     """Nonlocal, permutation-compatible analysis/threshold/synthesis proximal correction."""
 

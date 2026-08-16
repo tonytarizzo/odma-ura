@@ -61,17 +61,35 @@ uses the exact `Binomial(K_a,1/N_l)` marginal count prior, so local collisions n
 multi-section learning check verifies that this count-aware loss reaches every learned `C_l` and the decoder.
 A separate `B=100,L=10,N_l=1024` construction
 runs channel generation and one decoder layer with 10,240 local states and asserts that no `num_codewords`,
-`msg_to_atom`, global count vector, or global codebook is present. This is an execution/scaling certification only: the
-current local decoder does not yet contain an outer parity graph or return associated full-message paths for `L>1`.
+`msg_to_atom`, global count vector, or global codebook is present. This test deliberately isolates the physical and D0
+layers; outer BP and full-message association are certified separately below.
 
 ## `framework_outer_code_test.py`
 
 Certifies the procedural payload-to-path layer without an `M=2^B` table. It covers unrestricted identity splitting,
-generic systematic sparse-linear checks over `GF(2^J)`, and cyclic triadic CCS-style checks; verifies finite-field
+generic systematic sparse-linear checks modulo `2^J`, and cyclic triadic CCS-AMP checks; verifies modular
 arithmetic, `Hx=0`, exact bit/path round trips, and corrupted-parity rejection; and proves exact signal equivalence to a
 small explicit `M=256` framework encoder. A `B=100,J=10` case encodes batched messages into 14 bounded sections while
-explicitly refusing global enumeration. The factor graph is exposed for a later BP decoder, but BP/path association is
-not part of this test.
+explicitly refusing global enumeration. BP/path association is not part of this particular test. The modular triadic
+mapping is also checked against a known CCS-AMP parity example.
+
+## `framework_sectioned_energy_test.py`
+
+Certifies both energy modes. The exact mode places unit-norm local columns in mutually orthogonal subspaces, optionally
+spreads them with an implicit fixed orthogonal mixer, and proves that every procedural message combination has unit
+energy after projected training updates. The sampled overlapping-mode penalty remains differentiable but is explicitly
+not treated as an all-message guarantee. It also checks a dense-free subsampled-Hadamard atom bank and constructs a
+`B=128,J=16` physical encoder with 1,048,576 local states and no stored `d x 2^J` codebook. The corresponding
+`build_default_scalable_setup()` uses `n=38400` unless overridden; its paper match is only the outer dimensions, not the
+inner physical construction.
+
+## `framework_outer_decoder_test.py`
+
+Checks full-alphabet differentiable modular BP against exact exhaustive marginals on a tree, verifies gradients through
+the combined D0, BP marginal, valid-path contrastive, and sampled-power losses, and exercises evaluation-only beam
+association. Complete-path multiplicities are fitted for `B<=20`; the negligible-global-collision route returns unique
+paths above that threshold while retaining local counts. A `B=128,J=16,L=16` test executes BP directly over all 65,536
+symbols per section without top-list pruning.
 
 ## `ccs_bound_curve.py`
 

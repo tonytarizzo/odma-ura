@@ -20,6 +20,7 @@ import torch
 
 from framework.core import ComponentSpec, URASpec
 from framework.encoder import build_encoder
+from framework.outer_code import triadic_outer_code
 from src.plotting import _configure_matplotlib
 from tests.ccs_amp_author import default_author_dir, graph_for_preset, load_author_modules, number_matches
 
@@ -112,6 +113,9 @@ def main(argv=None):
             inner = modules.inner.DenseInnerCode(args.n, power, 1.0, K, graph)
             codewords = graph.encodemessages(bits)
             encoded_indices = np.argmax(codewords.reshape(global_M, L, section_M), axis=2).T
+            procedural_indices = triadic_outer_code(B, J).encode_bits(torch.as_tensor(bits)).numpy().T
+            if not np.array_equal(procedural_indices, encoded_indices):
+                raise AssertionError("procedural modular triadic encoder disagrees with the CCS-AMP author encoder")
             direct_phi = np.column_stack([inner.Encode(codeword).reshape(-1) for codeword in codewords])
             section_matrices = extract_section_matrices(inner, L, section_M, args.n)
             encoder = build_framework(section_matrices, encoded_indices, K)

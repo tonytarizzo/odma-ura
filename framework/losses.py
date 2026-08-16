@@ -10,6 +10,7 @@ from __future__ import annotations
 import torch
 
 from .encoder import Encoder
+from .sectioned import SectionedEncoder
 
 
 def count_mse_loss(counts_pred: torch.Tensor, counts_true: torch.Tensor) -> torch.Tensor:
@@ -101,6 +102,13 @@ def power_penalty(encoder: Encoder, target_per_codeword: float = 1.0) -> torch.T
     Phi = encoder.explicit_matrix()
     energies = (Phi.conj() * Phi).sum(0).real if Phi.is_complex() else (Phi ** 2).sum(0)
     return ((energies - float(target_per_codeword)) ** 2).mean()
+
+
+def sectioned_power_penalty(encoder: SectionedEncoder, valid_paths: torch.Tensor,
+                            target_per_codeword: float = 1.0) -> torch.Tensor:
+    """Scalable power penalty evaluated only on supplied procedurally valid paths."""
+    energies = encoder.path_energies(valid_paths)
+    return torch.mean((energies - float(target_per_codeword)) ** 2)
 
 
 def coherence_penalty(encoder: Encoder) -> torch.Tensor:
