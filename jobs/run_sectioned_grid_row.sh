@@ -9,11 +9,12 @@ if [[ -z "$ROW" ]]; then
   echo "No manifest row for array index $INDEX in $MANIFEST" >&2
   exit 2
 fi
-IFS=$'\t' read -r NAME B J N K OUTER PARITY DEGREE ENERGY BANK LEARN STEPS WARMUP BATCH EVAL_BATCHES EVAL_EBN0 CANDIDATE SEED <<< "$ROW"
+IFS=$'\t' read -r NAME B J N K OUTER PARITY DEGREE ENERGY BANK LEARN STEPS WARMUP BATCH TRAIN_MIN TRAIN_MAX EVAL_BATCHES EVAL_EBN0 CANDIDATE SEED <<< "$ROW"
 
 ARGS=(--preset custom -B "$B" -J "$J" --n "$N" --num-active "$K" --outer-code "$OUTER"
       --energy-mode "$ENERGY" --bank-type "$BANK" --steps "$STEPS" --outer-warmup-steps "$WARMUP"
-      --batch-size "$BATCH" --eval-batches "$EVAL_BATCHES" --eval-ebn0 "$EVAL_EBN0"
+      --batch-size "$BATCH" --train-ebn0-min "$TRAIN_MIN" --train-ebn0-max "$TRAIN_MAX"
+      --eval-batches "$EVAL_BATCHES" --eval-ebn0 "$EVAL_EBN0"
       --d0-layers 8 --bp-iterations 4 --power-iters 12 --num-path-negatives 32 --log-every 25
       --beam-width 512 --list-extra 32 --mixing-stages 8 --seed "$SEED" --no-assert-reasonable)
 if [[ "$OUTER" == random_sparse ]]; then
