@@ -99,6 +99,22 @@ without an `M=2^B` object. `--preset laptop` is the longer CPU sanity run; it tr
 first, freezes the encoder, then ramps in the outer marginal/path losses. Summaries report BP-assisted and D0-only PUPE
 separately so outer BP is credited only when it helps.
 
+## `framework_sectioned_bridge.py`
+
+Runs the small-`B` causal bridge between jobs `021/022` and the scalable section-domain experiments. In `l1` mode it
+keeps a dense, sparse-global, or ODMA codebook fixed, trains the old global Bernoulli D0, and requires the section
+backend's explicit Bernoulli-compatibility mode to reproduce its logits, soft/hard counts, and PUPE on the same
+multi-user observations. The preferred Binomial section prior is trained and reported separately. In `lgt` mode it
+freezes one procedural `L>1` encoder, materialises its induced `Phi` only at small `B`, and compares materialised-global
+D0, local D0 plus association, and local D0 plus BP plus association on paired batches. The identity outer-code row is a
+labelled association-ambiguity control; its physical section count differs from the redundant triadic construction and
+is not a one-factor BP ablation. Jobs `025` and `026` use this driver.
+
+## `framework_sectioned_bridge_merge.py`
+
+Combines returned job-`025/026` summaries across seeds, writes JSON/TSV tables including the exact `L=1` equivalence
+errors, and plots all bridge routes on common `B=12,n=256` PUPE-versus-`Eb/N0` panels for each evaluated load.
+
 ## `framework_sectioned_merge.py`
 
 Merges a completed sectioned manifest result tree across seeds and writes a compact JSON/TSV table plus a paired-dot

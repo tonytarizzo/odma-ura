@@ -109,6 +109,34 @@ def test_l1_decoder_and_gradient_equivalence() -> None:
         check_close(f"L=1 gradient {name}", local_parameter.grad, parameter.grad, atol=2e-9)
 
 
+def test_l1_multiactive_compatibility() -> None:
+    gen = torch.Generator().manual_seed(27)
+    spec = URASpec(n=20, num_codewords=16, num_active=5, num_antennas=1, payload_bits=4)
+    explicit = build_encoder(spec, product_all_pairs_component_specs(spec, 4, False),
+                             dtype=torch.float64, generator=gen)
+    sectioned = sectioned_from_explicit(explicit)
+    active = torch.tensor([[1, 1, 4, 8, 11], [0, 3, 3, 3, 15], [2, 5, 7, 9, 12]])
+    counts = global_counts(active, spec.num_codewords, torch.float64)
+    y = explicit.matvec(counts)
+    Y = (y + 0.02 * torch.randn(y.shape, dtype=y.dtype, generator=gen)).unsqueeze(-1)
+    H = torch.ones(Y.shape[0], 1, dtype=Y.dtype)
+    global_decoder = UnrolledBernoulliPGD(num_layers=3, power_iters=6).to(dtype=torch.float64)
+    section_decoder = UnrolledSectionedCountPGD(
+        num_layers=3, power_iters=6, prior_mode="bernoulli_compat").to(dtype=torch.float64)
+    section_decoder.load_state_dict(global_decoder.state_dict())
+    exact_lipschitz = torch.linalg.matrix_norm(explicit.explicit_matrix(), ord=2) ** 2
+    explicit._spectral_cache[6] = exact_lipschitz
+    sectioned._spectral_cache[6] = exact_lipschitz
+    global_output = global_decoder(explicit, Y, H, spec.num_active, noise_var=0.02 ** 2)
+    section_output = section_decoder(sectioned, Y, H, spec.num_active, noise_var=0.02 ** 2)
+    check_close("multi-active L=1 soft decoder state", section_output.meta["soft_section_counts"][0],
+                global_output.meta["soft_counts"])
+    check_close("multi-active L=1 hard decoder state", section_output.section_counts[0], global_output.counts)
+    for layer, (global_logits, local_logits) in enumerate(zip(global_output.meta["layer_logits"],
+                                                               section_output.meta["section_layer_logits"])):
+        check_close(f"multi-active L=1 layer {layer} logits", local_logits[0], global_logits)
+
+
 def test_b100_has_no_global_axis() -> None:
     gen = torch.Generator().manual_seed(29)
     spec = SectionedURASpec(n=64, payload_bits=100, num_active=5, num_antennas=1)
@@ -169,6 +197,7 @@ def test_binomial_count_posterior() -> None:
 def main() -> None:
     test_multisection_equivalence()
     test_l1_decoder_and_gradient_equivalence()
+    test_l1_multiactive_compatibility()
     test_multisection_learning_gradients()
     test_binomial_count_posterior()
     test_b100_has_no_global_axis()

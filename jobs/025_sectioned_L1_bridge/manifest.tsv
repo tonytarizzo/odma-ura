@@ -1,0 +1,7 @@
+name	encoder	B	n	seed
+B12_n256_dense_L1_s1	dense_fixed	12	256	2501
+B12_n256_dense_L1_s2	dense_fixed	12	256	2502
+B12_n256_sparse_global_L1_s1	sparse_global_fixed	12	256	2501
+B12_n256_sparse_global_L1_s2	sparse_global_fixed	12	256	2502
+B12_n256_odma_L1_s1	odma_fixed	12	256	2501
+B12_n256_odma_L1_s2	odma_fixed	12	256	2502

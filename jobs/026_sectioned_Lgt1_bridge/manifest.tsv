@@ -1,0 +1,7 @@
+name	outer	learn	B	J	n	seed
+B12_J4_triadic_exact_fixed_s1	triadic	0	12	4	256	2601
+B12_J4_triadic_exact_fixed_s2	triadic	0	12	4	256	2602
+B12_J4_triadic_exact_learned_s1	triadic	1	12	4	256	2601
+B12_J4_triadic_exact_learned_s2	triadic	1	12	4	256	2602
+B12_J4_identity_exact_fixed_s1	identity	0	12	4	256	2601
+B12_J4_identity_exact_fixed_s2	identity	0	12	4	256	2602

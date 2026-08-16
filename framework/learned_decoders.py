@@ -170,10 +170,20 @@ class UnrolledSectionedCountPGD(UnrolledBernoulliPGD):
     Every section is constrained to carry total mass ``K_a`` because every
     active message selects one atom in every section. No outer association or
     parity update is applied here; that will be a separate factor-graph step.
-    Every coordinate uses its exact Binomial(K_a, 1/N_l) marginal prior, so
-    local collisions require no separate decoder branch. At K_a=1 this reduces
-    algebraically to the original Bernoulli denoiser.
+    Every coordinate normally uses its exact Binomial(K_a, 1/N_l) marginal
+    prior, so local collisions require no separate decoder branch. The optional
+    ``bernoulli_compat`` mode exists only to certify the old global D0 path at
+    finite K_a; it applies that decoder's Bernoulli-support equations section by
+    section and is not the scalable model default.
     """
+
+    def __init__(self, num_layers: int = 10, init_step_scale: float = 0.9,
+                 init_damping: float = 0.05, power_iters: int = 12,
+                 prior_mode: str = "binomial_count") -> None:
+        super().__init__(num_layers, init_step_scale, init_damping, power_iters)
+        if prior_mode not in {"binomial_count", "bernoulli_compat"}:
+            raise ValueError(f"unknown section prior mode {prior_mode!r}")
+        self.prior_mode = prior_mode
 
     @staticmethod
     def _binomial_count_proposal(u: torch.Tensor, K: torch.Tensor, size: int, tau: torch.Tensor,
@@ -224,8 +234,15 @@ class UnrolledSectionedCountPGD(UnrolledBernoulliPGD):
             logits_this_layer: list[torch.Tensor] = []
             for local, gradient, size in zip(state, gradients, encoder.section_sizes):
                 u = local + eta * gradient
-                proposal, logits = self._binomial_count_proposal(
-                    u, K, size, tau, evidence_gain, prior_gain, self.bias[t])
+                if self.prior_mode == "binomial_count":
+                    proposal, logits = self._binomial_count_proposal(
+                        u, K, size, tau, evidence_gain, prior_gain, self.bias[t])
+                else:
+                    rho = (K.to(dtype) / float(size)).clamp(1e-7, 1.0 - 1e-7)
+                    prior_logit = torch.log(rho) - torch.log1p(-rho)
+                    logits = (evidence_gain * (u - 0.5) / tau.unsqueeze(1)
+                              + prior_gain * prior_logit.unsqueeze(1) + self.bias[t]).clamp(-30.0, 30.0)
+                    proposal = torch.sigmoid(logits)
                 proposal = _mass_normalize(proposal.clamp_min(1e-12), K)
                 updated = _mass_normalize((damping * local + (1.0 - damping) * proposal).clamp_min(1e-12), K)
                 next_state.append(updated); logits_this_layer.append(logits)
@@ -236,7 +253,7 @@ class UnrolledSectionedCountPGD(UnrolledBernoulliPGD):
                                       "section_support_logits": layer_logits[-1],
                                       "section_layer_logits": layer_logits,
                                       "decoder": "unrolled_sectioned_count_pgd",
-                                      "section_denoiser": "binomial_count",
+                                      "section_denoiser": self.prior_mode,
                                       "noise_effective": noise_eff.detach()})
 
 class FactorAttentionProx(nn.Module):
