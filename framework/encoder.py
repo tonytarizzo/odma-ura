@@ -28,22 +28,24 @@ class ComponentConstraints:
     C: str = "none"
 
 
-class ProductComponent(nn.Module):
-    """One factor (B_l U_l T_l).
+class LocalAtomBank(nn.Module):
+    """One scalable physical factor ``F_l = B_l U_l`` without a global message axis.
+
+    The bank owns the existing ``R``, ``C``, and valid-atom ``U`` data. Its
+    numerical state is indexed only by the ``N`` local atoms. In particular it
+    has no ``msg_to_atom`` lookup and no dependency on ``M = 2^B``.
+
+    Parameters or buffers (depending on ``learn_R`` / ``learn_C``):
+        R          (Q, n, d), or (Q, n) for diagonal operators with d=n
+        C          (d, V)
 
     Buffers:
         atom_q     (N,)   operator index of each valid atom
         atom_v     (N,)   local-codeword index of each valid atom
-        msg_to_atom (M,)  global-message -> atom index
-
-    Parameters or buffers (depending on `learn_R` / `learn_C`):
-        R          (Q, n, d), or (Q, n) for diagonal operators with d=n
-        C          (d, V)
     """
 
     def __init__(self, R: torch.Tensor, C: torch.Tensor, atom_q: torch.Tensor,
-                 atom_v: torch.Tensor, msg_to_atom: torch.Tensor,
-                 learn_R: bool = False, learn_C: bool = False,
+                 atom_v: torch.Tensor, learn_R: bool = False, learn_C: bool = False,
                  constraints: ComponentConstraints | None = None) -> None:
         super().__init__()
         if R.ndim not in (2, 3):
@@ -56,12 +58,12 @@ class ProductComponent(nn.Module):
             raise ValueError(f"diagonal R requires d=n={R.shape[1]}, got C local dimension {C.shape[0]}")
         if not (atom_q.shape == atom_v.shape and atom_q.ndim == 1):
             raise ValueError("atom_q and atom_v must be 1-D tensors of equal length")
-        if msg_to_atom.ndim != 1:
-            raise ValueError(f"msg_to_atom must be 1-D, got shape {tuple(msg_to_atom.shape)}")
+        if atom_q.numel() == 0:
+            raise ValueError("a local atom bank must contain at least one valid atom")
+        if int(atom_q.min()) < 0 or int(atom_v.min()) < 0:
+            raise ValueError("atom_q and atom_v must be nonnegative")
         if int(atom_q.max()) >= R.shape[0] or int(atom_v.max()) >= C.shape[1]:
             raise ValueError("atom_q or atom_v contains an out-of-range index")
-        if int(msg_to_atom.max()) >= atom_q.numel():
-            raise ValueError("msg_to_atom contains an out-of-range atom index")
 
         R = R.clone(); C = C.clone().to(dtype=R.dtype, device=R.device)
         if learn_R:
@@ -74,7 +76,6 @@ class ProductComponent(nn.Module):
             self.register_buffer("C", C)
         self.register_buffer("atom_q", atom_q.long().clone())
         self.register_buffer("atom_v", atom_v.long().clone())
-        self.register_buffer("msg_to_atom", msg_to_atom.long().clone())
         self.constraints = constraints or ComponentConstraints()
 
     @property
@@ -90,16 +91,17 @@ class ProductComponent(nn.Module):
     def V(self) -> int: return int(self.C.shape[1])
 
     @property
-    def diagonal_operators(self) -> bool: return self.R.ndim == 2
+    def num_atoms(self) -> int: return int(self.atom_q.numel())
 
     @property
-    def num_codewords(self) -> int: return int(self.msg_to_atom.numel())
+    def diagonal_operators(self) -> bool: return self.R.ndim == 2
 
     def materialize_operator_bank(self) -> torch.Tensor:
         """Return the operator bank as (Q,n,d), expanding diagonal masks only for diagnostics."""
         return torch.diag_embed(self.R) if self.diagonal_operators else self.R
 
-    def _as_batch(self, x: torch.Tensor, expected: int, name: str) -> tuple[torch.Tensor, bool]:
+    @staticmethod
+    def _as_batch(x: torch.Tensor, expected: int, name: str) -> tuple[torch.Tensor, bool]:
         if x.ndim == 1:
             if x.shape[0] != expected:
                 raise ValueError(f"{name} must have length {expected}, got {tuple(x.shape)}")
@@ -108,28 +110,27 @@ class ProductComponent(nn.Module):
             return x, False
         raise ValueError(f"{name} must have shape ({expected},) or (B,{expected}), got {tuple(x.shape)}")
 
-    def _messages_to_pairs(self, a: torch.Tensor) -> torch.Tensor:
-        """Apply T then U, returning coefficients over the complete (Q,V) product grid."""
-        a, squeezed = self._as_batch(a, self.num_codewords, "a")
-        atom = torch.zeros(a.shape[0], self.atom_q.numel(), dtype=a.dtype, device=a.device)
-        atom.scatter_add_(1, self.msg_to_atom.unsqueeze(0).expand(a.shape[0], -1), a)
-        pair = torch.zeros(a.shape[0], self.Q * self.V, dtype=a.dtype, device=a.device)
+    def _atoms_to_pairs(self, atom: torch.Tensor) -> torch.Tensor:
+        """Apply U, scattering valid-atom coefficients onto the complete (Q,V) grid."""
+        atom, squeezed = self._as_batch(atom, self.num_atoms, "atom")
+        pair = torch.zeros(atom.shape[0], self.Q * self.V, dtype=atom.dtype, device=atom.device)
         pair_idx = self.atom_q * self.V + self.atom_v
-        pair.scatter_add_(1, pair_idx.unsqueeze(0).expand(a.shape[0], -1), atom)
-        pair = pair.reshape(a.shape[0], self.Q, self.V)
+        pair.scatter_add_(1, pair_idx.unsqueeze(0).expand(atom.shape[0], -1), atom)
+        pair = pair.reshape(atom.shape[0], self.Q, self.V)
         return pair.squeeze(0) if squeezed else pair
 
-    def _pairs_to_messages(self, pair: torch.Tensor) -> torch.Tensor:
-        """Apply U^H then T^H to scores on the complete (Q,V) product grid."""
+    def _pairs_to_atoms(self, pair: torch.Tensor) -> torch.Tensor:
+        """Apply U^H, returning scores only for the N valid local atoms."""
         if pair.ndim == 2:
             pair = pair.unsqueeze(0); squeezed = True
         elif pair.ndim == 3:
             squeezed = False
         else:
             raise ValueError(f"pair must have shape (Q,V) or (B,Q,V), got {tuple(pair.shape)}")
+        if pair.shape[1:] != (self.Q, self.V):
+            raise ValueError(f"pair must have trailing shape ({self.Q},{self.V}), got {tuple(pair.shape)}")
         atom = pair[:, self.atom_q, self.atom_v]
-        msg = atom[:, self.msg_to_atom]
-        return msg.squeeze(0) if squeezed else msg
+        return atom.squeeze(0) if squeezed else atom
 
     def apply_operators(self, local: torch.Tensor) -> torch.Tensor:
         """Apply every R_q and sum over q. local has shape (Q,d) or (B,Q,d)."""
@@ -154,12 +155,13 @@ class ProductComponent(nn.Module):
             local = torch.einsum("qnd,bn->bqd", self.R.conj(), r)
         return local.squeeze(0) if squeezed else local
 
-    def message_columns(self, indices: torch.Tensor) -> torch.Tensor:
-        """Materialise selected component columns without an (M,n,d) intermediate."""
+    def atom_columns(self, indices: torch.Tensor) -> torch.Tensor:
+        """Materialise selected columns of F_l without constructing its complete product grid."""
         indices = torch.as_tensor(indices, dtype=torch.long, device=self.R.device).reshape(-1)
-        atoms = self.msg_to_atom.index_select(0, indices)
-        q = self.atom_q.index_select(0, atoms)
-        v = self.atom_v.index_select(0, atoms)
+        if indices.numel() and (int(indices.min()) < 0 or int(indices.max()) >= self.num_atoms):
+            raise ValueError(f"atom index outside [0,{self.num_atoms})")
+        q = self.atom_q.index_select(0, indices)
+        v = self.atom_v.index_select(0, indices)
         cols = torch.empty(self.n, indices.numel(), dtype=self.C.dtype, device=self.C.device)
         for q_value in torch.unique(q, sorted=True).tolist():
             mask = q == int(q_value)
@@ -168,19 +170,21 @@ class ProductComponent(nn.Module):
             cols[:, mask] = placed
         return cols
 
-    def explicit_matrix(self) -> torch.Tensor:
-        """Column m of B_l U_l T_l: R_{l, q(i_l(m))} c_{l, v(i_l(m))}."""
-        return self.message_columns(torch.arange(self.num_codewords, device=self.R.device))
+    def explicit_local_matrix(self) -> torch.Tensor:
+        """Materialise F_l in C^{n x N_l}; intended only for diagnostics and small tests."""
+        return self.atom_columns(torch.arange(self.num_atoms, device=self.R.device))
 
-    def matvec(self, a: torch.Tensor) -> torch.Tensor:
-        pair = self._messages_to_pairs(a)
+    def local_matvec(self, atom_counts: torch.Tensor) -> torch.Tensor:
+        """Apply F_l to local atom counts shaped (N_l,) or (B,N_l)."""
+        pair = self._atoms_to_pairs(atom_counts)
         local = torch.einsum("...qv,dv->...qd", pair.to(self.C.dtype), self.C)
         return self.apply_operators(local)
 
-    def rmatvec(self, r: torch.Tensor) -> torch.Tensor:
+    def local_rmatvec(self, r: torch.Tensor) -> torch.Tensor:
+        """Apply F_l^H to a resource residual without constructing global-message scores."""
         local = self.adjoint_operators(r.to(self.R.dtype))
         pair = torch.einsum("...qd,dv->...qv", local, self.C.conj())
-        return self._pairs_to_messages(pair)
+        return self._pairs_to_atoms(pair)
 
     def constraint_items(self) -> list[tuple[str, torch.Tensor, str]]:
         out: list[tuple[str, torch.Tensor, str]] = []
@@ -189,6 +193,62 @@ class ProductComponent(nn.Module):
         if isinstance(self.C, nn.Parameter):
             out.append(("C", self.C.data, self.constraints.C))
         return out
+
+
+class ProductComponent(LocalAtomBank):
+    """One explicit factor ``B_l U_l T_l`` used by the small-B global backend.
+
+    Buffers:
+        atom_q     (N,)   operator index of each valid atom
+        atom_v     (N,)   local-codeword index of each valid atom
+        msg_to_atom (M,)  global-message -> atom index
+
+    The physical ``R/C/U`` operations live in :class:`LocalAtomBank`. This
+    wrapper adds only the length-M ``T`` lookup required by legacy global
+    count-vector decoders and exact small-system certification.
+    """
+
+    def __init__(self, R: torch.Tensor, C: torch.Tensor, atom_q: torch.Tensor,
+                 atom_v: torch.Tensor, msg_to_atom: torch.Tensor,
+                 learn_R: bool = False, learn_C: bool = False,
+                 constraints: ComponentConstraints | None = None) -> None:
+        super().__init__(R, C, atom_q, atom_v, learn_R=learn_R, learn_C=learn_C, constraints=constraints)
+        if msg_to_atom.ndim != 1:
+            raise ValueError(f"msg_to_atom must be 1-D, got shape {tuple(msg_to_atom.shape)}")
+        if int(msg_to_atom.min()) < 0 or int(msg_to_atom.max()) >= self.num_atoms:
+            raise ValueError("msg_to_atom contains an out-of-range atom index")
+        self.register_buffer("msg_to_atom", msg_to_atom.long().clone())
+
+    @property
+    def num_codewords(self) -> int: return int(self.msg_to_atom.numel())
+
+    def _messages_to_atoms(self, a: torch.Tensor) -> torch.Tensor:
+        """Apply T, returning coefficients over the N valid local atoms."""
+        a, squeezed = self._as_batch(a, self.num_codewords, "a")
+        atom = torch.zeros(a.shape[0], self.num_atoms, dtype=a.dtype, device=a.device)
+        atom.scatter_add_(1, self.msg_to_atom.unsqueeze(0).expand(a.shape[0], -1), a)
+        return atom.squeeze(0) if squeezed else atom
+
+    def _atoms_to_messages(self, atom: torch.Tensor) -> torch.Tensor:
+        """Apply T^H, broadcasting local-atom scores back to global messages."""
+        atom, squeezed = self._as_batch(atom, self.num_atoms, "atom")
+        msg = atom[:, self.msg_to_atom]
+        return msg.squeeze(0) if squeezed else msg
+
+    def message_columns(self, indices: torch.Tensor) -> torch.Tensor:
+        """Materialise selected component columns without an (M,n,d) intermediate."""
+        indices = torch.as_tensor(indices, dtype=torch.long, device=self.R.device).reshape(-1)
+        return self.atom_columns(self.msg_to_atom.index_select(0, indices))
+
+    def explicit_matrix(self) -> torch.Tensor:
+        """Column m of B_l U_l T_l: R_{l, q(i_l(m))} c_{l, v(i_l(m))}."""
+        return self.message_columns(torch.arange(self.num_codewords, device=self.R.device))
+
+    def matvec(self, a: torch.Tensor) -> torch.Tensor:
+        return self.local_matvec(self._messages_to_atoms(a))
+
+    def rmatvec(self, r: torch.Tensor) -> torch.Tensor:
+        return self._atoms_to_messages(self.local_rmatvec(r))
 
 
 def matvec_with_matrix(Phi: torch.Tensor, a: torch.Tensor) -> torch.Tensor:

@@ -62,6 +62,40 @@ def support_count_loss(output, counts_true: torch.Tensor, lambda_count: float = 
     return total, {"support": support, "count": count, "symmetry": symmetry, "total": total}
 
 
+def section_support_count_loss(output, section_counts_true: tuple[torch.Tensor, ...],
+                               lambda_count: float = 0.1, deep_supervision: bool = True
+                               ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """Balanced support/count supervision over local sections without an M-axis target."""
+    logits_by_layer = output.meta["section_layer_logits"]
+    if not deep_supervision:
+        logits_by_layer = logits_by_layer[-1:]
+    if not logits_by_layer or len(logits_by_layer[-1]) != len(section_counts_true):
+        raise ValueError("section logits and targets disagree")
+    section_support: list[torch.Tensor] = []
+    section_count: list[torch.Tensor] = []
+    for ell, target_counts in enumerate(section_counts_true):
+        target_counts = target_counts.real
+        target = (target_counts > 0).to(logits_by_layer[-1][ell].dtype)
+        active = target.sum(dim=1).clamp_min(1.0)
+        inactive = (target.shape[1] - target.sum(dim=1)).clamp_min(1.0)
+        layer_losses = []
+        for layer in logits_by_layer:
+            per_entry = torch.nn.functional.binary_cross_entropy_with_logits(layer[ell], target, reduction="none")
+            positive = (per_entry * target).sum(dim=1) / active
+            negative = (per_entry * (1.0 - target)).sum(dim=1) / inactive
+            layer_losses.append(0.5 * (positive + negative).mean())
+        weights = torch.arange(1, len(layer_losses) + 1, dtype=target.dtype, device=target.device)
+        section_support.append(torch.sum(weights * torch.stack(layer_losses)) / weights.sum())
+        soft = output.meta["soft_section_counts"][ell]
+        K = target_counts.sum(dim=1).clamp_min(1.0)
+        count = torch.nn.functional.smooth_l1_loss(soft, target_counts.to(soft.dtype), reduction="none").sum(dim=1)
+        section_count.append((count / K.to(count.dtype)).mean())
+    support = torch.stack(section_support).mean()
+    count = torch.stack(section_count).mean()
+    total = support + float(lambda_count) * count
+    return total, {"support": support, "count": count, "total": total}
+
+
 def power_penalty(encoder: Encoder, target_per_codeword: float = 1.0) -> torch.Tensor:
     """Sum_m (||phi_m||^2 - E_target)^2 over codewords."""
     Phi = encoder.explicit_matrix()

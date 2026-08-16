@@ -39,6 +39,34 @@ class URASpec:
             raise ValueError(f"payload_bits must be positive, got {self.payload_bits}")
 
 
+@dataclass(frozen=True)
+class SectionedURASpec:
+    """Scalar configuration for the scalable section-domain backend.
+
+    Unlike :class:`URASpec`, this type intentionally has no ``num_codewords``
+    field. A payload may describe ``2^B`` messages, but the executable state is
+    carried by bounded local section alphabets instead of a global message axis.
+    """
+
+    n: int
+    payload_bits: int
+    num_active: int
+    num_antennas: int = 1
+    energy_per_codeword: float = 1.0
+
+    def __post_init__(self) -> None:
+        if self.n <= 0:
+            raise ValueError(f"n must be positive, got {self.n}")
+        if self.payload_bits <= 0:
+            raise ValueError(f"payload_bits must be positive, got {self.payload_bits}")
+        if self.num_active <= 0:
+            raise ValueError(f"num_active must be positive, got {self.num_active}")
+        if self.num_antennas <= 0:
+            raise ValueError(f"num_antennas must be positive, got {self.num_antennas}")
+        if self.energy_per_codeword <= 0.0:
+            raise ValueError(f"energy_per_codeword must be positive, got {self.energy_per_codeword}")
+
+
 @dataclass
 class ComponentSpec:
     """Configuration of one product component B_l U_l T_l.
@@ -89,8 +117,37 @@ class URABatch:
 
 
 @dataclass
+class SectionedURABatch:
+    """A batch whose targets live on local section alphabets, never on ``M``.
+
+    ``active_paths`` has shape ``(batch, K_max, L)`` and stores one local-atom
+    index per section. ``section_counts[l]`` has shape ``(batch, N_l)``.
+    A procedural outer code constrains which paths are legal without changing
+    this physical-channel representation.
+    """
+
+    section_counts: tuple[torch.Tensor, ...]
+    active_paths: torch.Tensor
+    y_clean: torch.Tensor
+    Y_clean: torch.Tensor
+    Y: torch.Tensor
+    H: torch.Tensor
+    noise_var: float
+    num_active: torch.Tensor
+    ebn0_db: float
+
+
+@dataclass
 class DecoderOutput:
     """Result of a global decoder over message counts."""
 
     counts: torch.Tensor                # (B, M) or (M,)
+    meta: dict = field(default_factory=dict)
+
+
+@dataclass
+class SectionedDecoderOutput:
+    """Local section-count output; complete message association is deliberately separate."""
+
+    section_counts: tuple[torch.Tensor, ...]
     meta: dict = field(default_factory=dict)

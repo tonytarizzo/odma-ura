@@ -52,6 +52,27 @@ Default outputs go under `results/framework_equivalence_ccs/`; the dense baselin
 same `(B, n, K, Eb/N0, seeds)` grid. The required-Eb/N0 output is grid-threshold based, so use a fine enough
 `--ebn0-grid` for meaningful curves.
 
+## `framework_sectioned_refactor_test.py`
+
+Certifies the scalable section-domain backend against the explicit global-message backend. It checks exact `L>1`
+signal synthesis and adjoint reconstruction, then proves at `K_a=1` that the one-section Binomial D0 decoder has the same
+layer logits, soft/hard counts, balanced loss, and parameter gradients as global Bernoulli D0. The sectioned D0 always
+uses the exact `Binomial(K_a,1/N_l)` marginal count prior, so local collisions need no separate decoder branch. A
+multi-section learning check verifies that this count-aware loss reaches every learned `C_l` and the decoder.
+A separate `B=100,L=10,N_l=1024` construction
+runs channel generation and one decoder layer with 10,240 local states and asserts that no `num_codewords`,
+`msg_to_atom`, global count vector, or global codebook is present. This is an execution/scaling certification only: the
+current local decoder does not yet contain an outer parity graph or return associated full-message paths for `L>1`.
+
+## `framework_outer_code_test.py`
+
+Certifies the procedural payload-to-path layer without an `M=2^B` table. It covers unrestricted identity splitting,
+generic systematic sparse-linear checks over `GF(2^J)`, and cyclic triadic CCS-style checks; verifies finite-field
+arithmetic, `Hx=0`, exact bit/path round trips, and corrupted-parity rejection; and proves exact signal equivalence to a
+small explicit `M=256` framework encoder. A `B=100,J=10` case encodes batched messages into 14 bounded sections while
+explicitly refusing global enumeration. The factor graph is exposed for a later BP decoder, but BP/path association is
+not part of this test.
+
 ## `ccs_bound_curve.py`
 
 Runs an implicit paper-scale NNLS/tree CCS experiment without forming the `2^B` global dictionary. Its defaults match the

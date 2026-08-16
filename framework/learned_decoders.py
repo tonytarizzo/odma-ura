@@ -13,9 +13,10 @@ import torch
 from torch import nn
 
 from .channel import matched_filter_collapse
-from .core import DecoderOutput
+from .core import DecoderOutput, SectionedDecoderOutput
 from .decoders import active_count_vector, project_nonneg_integer_total
 from .encoder import Encoder
+from .sectioned import SectionedEncoder
 
 
 def _inv_softplus(x: float) -> float:
@@ -161,6 +162,86 @@ class UnrolledBernoulliPGD(nn.Module):
         return DecoderOutput(counts=hard, meta={"soft_counts": a, "support_logits": layer_logits[-1],
                              "layer_logits": layer_logits, "decoder": "unrolled_bernoulli_pgd",
                              "noise_effective": noise_eff.detach()})
+
+
+class UnrolledSectionedCountPGD(UnrolledBernoulliPGD):
+    """D0 in local-section coordinates, with state size ``sum_l N_l``.
+
+    Every section is constrained to carry total mass ``K_a`` because every
+    active message selects one atom in every section. No outer association or
+    parity update is applied here; that will be a separate factor-graph step.
+    Every coordinate uses its exact Binomial(K_a, 1/N_l) marginal prior, so
+    local collisions require no separate decoder branch. At K_a=1 this reduces
+    algebraically to the original Bernoulli denoiser.
+    """
+
+    @staticmethod
+    def _binomial_count_proposal(u: torch.Tensor, K: torch.Tensor, size: int, tau: torch.Tensor,
+                                 evidence_gain: torch.Tensor, prior_gain: torch.Tensor,
+                                 bias: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Posterior mean and support log-odds under Binomial(K, 1/N) counts."""
+        if size == 1:
+            proposal = K.to(u.dtype).unsqueeze(1).expand_as(u)
+            return proposal, torch.full_like(u, 30.0)
+        max_count = int(K.max().item())
+        values = torch.arange(max_count + 1, dtype=u.dtype, device=u.device).view(1, 1, -1)
+        K_float = K.to(u.dtype).view(-1, 1, 1)
+        valid = values <= K_float
+        log_prior = (torch.lgamma(K_float + 1.0) - torch.lgamma(values + 1.0)
+                     - torch.lgamma(K_float - values + 1.0)
+                     + values * math.log(1.0 / float(size))
+                     + (K_float - values) * math.log1p(-1.0 / float(size)))
+        log_likelihood = -evidence_gain * (u.unsqueeze(-1) - values) ** 2 / (2.0 * tau.view(-1, 1, 1))
+        log_weights = prior_gain * log_prior + log_likelihood + bias * values
+        log_weights = log_weights.masked_fill(~valid, float("-inf"))
+        probabilities = torch.softmax(log_weights, dim=-1)
+        proposal = torch.sum(probabilities * values, dim=-1)
+        support_logits = torch.logsumexp(log_weights[..., 1:], dim=-1) - log_weights[..., 0]
+        return proposal, support_logits.clamp(-30.0, 30.0)
+
+    def forward(self, encoder: SectionedEncoder, Y: torch.Tensor, H: torch.Tensor,
+                num_active: int | torch.Tensor,
+                noise_var: float | torch.Tensor | None = None) -> SectionedDecoderOutput:
+        y = matched_filter_collapse(Y, H)
+        dtype = y.real.dtype
+        K = active_count_vector(num_active, y.shape[0], y.device)
+        noise_eff = _effective_noise(noise_var, H, dtype)
+        lipschitz = encoder.spectral_norm_squared(self.power_iters).to(dtype)
+        state = tuple(torch.zeros(y.shape[0], size, dtype=dtype, device=y.device) for size in encoder.section_sizes)
+        layer_logits: list[tuple[torch.Tensor, ...]] = []
+        for t in range(self.num_layers):
+            residual = y - encoder.synthesize(state)
+            gradients = tuple(g.real.to(dtype) for g in encoder.local_adjoint(residual))
+            eta = torch.nn.functional.softplus(self.raw_step[t]) / lipschitz
+            residual_scale = torch.mean(torch.abs(residual) ** 2, dim=1).real.to(dtype)
+            noise_mix = torch.sigmoid(self.raw_noise_mix[t])
+            variance_proxy = (1.0 - noise_mix) * residual_scale + noise_mix * noise_eff
+            tau = torch.nn.functional.softplus(self.raw_tau_scale[t]) * variance_proxy.clamp_min(1e-6)
+            evidence_gain = torch.nn.functional.softplus(self.raw_evidence_gain[t])
+            prior_gain = torch.nn.functional.softplus(self.raw_prior_gain[t])
+            damping = torch.sigmoid(self.raw_damping[t])
+            next_state: list[torch.Tensor] = []
+            logits_this_layer: list[torch.Tensor] = []
+            for local, gradient, size in zip(state, gradients, encoder.section_sizes):
+                u = local + eta * gradient
+                proposal, logits = self._binomial_count_proposal(
+                    u, K, size, tau, evidence_gain, prior_gain, self.bias[t])
+                proposal = _mass_normalize(proposal.clamp_min(1e-12), K)
+                updated = _mass_normalize((damping * local + (1.0 - damping) * proposal).clamp_min(1e-12), K)
+                next_state.append(updated); logits_this_layer.append(logits)
+            state = tuple(next_state)
+            layer_logits.append(tuple(logits_this_layer))
+        hard = tuple(hard_project_batch(local.detach(), K).to(device=y.device) for local in state)
+        return SectionedDecoderOutput(section_counts=hard, meta={"soft_section_counts": state,
+                                      "section_support_logits": layer_logits[-1],
+                                      "section_layer_logits": layer_logits,
+                                      "decoder": "unrolled_sectioned_count_pgd",
+                                      "section_denoiser": "binomial_count",
+                                      "noise_effective": noise_eff.detach()})
+
+
+# Compatibility for existing experiment scripts written during the sectioned refactor.
+UnrolledSectionedBernoulliPGD = UnrolledSectionedCountPGD
 
 
 class FactorAttentionProx(nn.Module):
