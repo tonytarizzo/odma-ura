@@ -16,7 +16,7 @@ if [[ "$LEARN" == 1 ]]; then
 fi
 
 OUT_DIR="$RESULT_ROOT/$NAME"
-uv run python -m tests.framework_sectioned_bridge \
+uv run --no-sync python -m tests.framework_sectioned_bridge \
   --bridge lgt --outer-code "$OUTER" "${LEARN_ARGS[@]}" -B "$B" -J "$J" --n "$N" \
   --k-min 9 --k-max 26 --eval-k 9,17,26,30 \
   --encoder-steps 4000 --steps 8000 --batch-size 8 --eval-batches 4 \

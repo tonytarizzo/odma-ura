@@ -13,6 +13,7 @@ export OPENBLAS_NUM_THREADS=8
 export MKL_NUM_THREADS=8
 export NUMEXPR_NUM_THREADS=8
 export MPLCONFIGDIR="${TMPDIR:-/tmp}/odma-mpl-${PBS_JOBID:-local}"
+export UV_NO_SYNC=1
 
 module load miniforge/3
 cd "${PBS_O_WORKDIR:-$HOME/odma-ura}"

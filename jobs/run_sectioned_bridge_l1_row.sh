@@ -12,7 +12,7 @@ fi
 IFS=$'\t' read -r NAME ENCODER B N SEED <<< "$ROW"
 
 OUT_DIR="$RESULT_ROOT/$NAME"
-uv run python -m tests.framework_sectioned_bridge \
+uv run --no-sync python -m tests.framework_sectioned_bridge \
   --bridge l1 --encoder "$ENCODER" -B "$B" --n "$N" \
   --k-min 9 --k-max 26 --eval-k 9,17,26,30 \
   --steps 8000 --batch-size 8 --eval-batches 4 \

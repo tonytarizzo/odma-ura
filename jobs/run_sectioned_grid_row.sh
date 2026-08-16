@@ -30,4 +30,4 @@ if [[ "$CANDIDATE" != none ]]; then
 fi
 
 OUT_DIR="$RESULT_ROOT/$NAME"
-uv run python -m tests.framework_sectioned_learning "${ARGS[@]}" --out-dir "$OUT_DIR"
+uv run --no-sync python -m tests.framework_sectioned_learning "${ARGS[@]}" --out-dir "$OUT_DIR"
