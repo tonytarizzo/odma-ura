@@ -91,16 +91,17 @@ class SectionedEncoder(nn.Module):
         if orthogonal_mixer is None:
             if any(bank.n != spec.n for bank in banks):
                 raise ValueError("overlapping local atom banks must use the full SectionedURASpec resource length")
-            if section_energies is not None:
-                raise ValueError("section_energies are only defined for the orthogonal direct-sum mode")
-            energies = (1.0,) * len(banks)
+            energies = ((1.0,) * len(banks) if section_energies is None
+                        else tuple(float(value) for value in section_energies))
         else:
             if orthogonal_mixer.n != spec.n or sum(bank.n for bank in banks) > spec.n:
                 raise ValueError("orthogonal local dimensions must fit inside the mixer resource length")
             energies = ((1.0 / len(banks),) * len(banks) if section_energies is None
                         else tuple(float(value) for value in section_energies))
-            if len(energies) != len(banks) or any(value <= 0.0 for value in energies) or abs(sum(energies) - 1.0) > 1e-10:
-                raise ValueError("positive section energies must have one entry per bank and sum to one")
+        if len(energies) != len(banks) or any(value <= 0.0 for value in energies):
+            raise ValueError("positive section energies must have one entry per bank")
+        if section_energies is not None and abs(sum(energies) - 1.0) > 1e-10:
+            raise ValueError("explicit section energies must sum to one")
         self.banks = nn.ModuleList(banks)
         self.orthogonal_mixer = orthogonal_mixer
         real_dtype = torch.float32 if dtype in (torch.float32, torch.complex64) else torch.float64
@@ -125,7 +126,10 @@ class SectionedEncoder(nn.Module):
     def state_size(self) -> int: return sum(self.section_sizes)
 
     @property
-    def energy_mode(self) -> str: return "orthogonal_exact" if self.orthogonal_mixer is not None else "overlapping"
+    def energy_mode(self) -> str:
+        if self.orthogonal_mixer is not None:
+            return "orthogonal_exact"
+        return "overlapping_sampled" if abs(float(self.section_scales.square().sum()) - 1.0) <= 1e-6 else "overlapping_unscaled"
 
     @property
     def dtype(self) -> torch.dtype: return self.banks[0].dtype
@@ -151,9 +155,9 @@ class SectionedEncoder(nn.Module):
         """Compute ``sum_l F_l s_l`` from local count tensors only."""
         counts = self._validate_section_counts(section_counts)
         if self.orthogonal_mixer is None:
-            out = self.banks[0].local_matvec(counts[0].to(self.dtype))
-            for bank, local in zip(self.banks[1:], counts[1:]):
-                out = out + bank.local_matvec(local.to(self.dtype))
+            out = self.section_scales[0].to(self.dtype) * self.banks[0].local_matvec(counts[0].to(self.dtype))
+            for scale, bank, local in zip(self.section_scales[1:], self.banks[1:], counts[1:]):
+                out = out + scale.to(self.dtype) * bank.local_matvec(local.to(self.dtype))
             return out
         pieces = [scale.to(self.dtype) * bank.local_matvec(local.to(self.dtype))
                   for scale, bank, local in zip(self.section_scales, self.banks, counts)]
@@ -165,7 +169,8 @@ class SectionedEncoder(nn.Module):
     def local_adjoint(self, residual: torch.Tensor) -> tuple[torch.Tensor, ...]:
         """Return ``(F_l^H residual)_l`` without broadcasting to global messages."""
         if self.orthogonal_mixer is None:
-            return tuple(bank.local_rmatvec(residual) for bank in self.banks)
+            return tuple(scale.to(self.dtype) * bank.local_rmatvec(residual)
+                         for scale, bank in zip(self.section_scales, self.banks))
         latent = self.orthogonal_mixer.adjoint(residual)
         return tuple(scale.to(self.dtype) * bank.local_rmatvec(latent[..., resource_slice])
                      for scale, bank, resource_slice in zip(self.section_scales, self.banks, self._resource_slices))
@@ -230,7 +235,8 @@ class SectionedEncoder(nn.Module):
         leading = paths.shape[:-1]
         flat = paths.reshape(-1, self.num_sections)
         if self.orthogonal_mixer is None:
-            columns = sum(bank.atom_columns(flat[:, ell]) for ell, bank in enumerate(self.banks)).transpose(0, 1)
+            columns = sum(scale.to(self.dtype) * bank.atom_columns(flat[:, ell])
+                          for ell, (scale, bank) in enumerate(zip(self.section_scales, self.banks))).transpose(0, 1)
         else:
             pieces = [scale.to(self.dtype) * bank.atom_columns(flat[:, ell])
                       for ell, (scale, bank) in enumerate(zip(self.section_scales, self.banks))]
@@ -247,7 +253,7 @@ class SectionedEncoder(nn.Module):
     def certify_exact_energy(self, tolerance: float = 1e-6) -> dict[str, float | bool | str]:
         """Certify the structural unit-energy guarantee without enumerating complete paths."""
         if self.orthogonal_mixer is None:
-            return {"guaranteed": False, "mode": "overlapping"}
+            return {"guaranteed": False, "mode": self.energy_mode}
         deviations = []
         for bank in self.banks:
             deviations.append(bank.max_unit_energy_deviation())
@@ -295,6 +301,7 @@ class SectionedEncoder(nn.Module):
 
 def build_sectioned_encoder(spec: SectionedURASpec, component_specs: Sequence[ComponentSpec],
                             constraints: Sequence[ComponentConstraints] | None = None,
+                            section_energies: Sequence[float] | None = None,
                             dtype: torch.dtype = torch.float32,
                             generator: torch.Generator | None = None) -> SectionedEncoder:
     """Build only ``R/C/U``; all ``T`` fields in ComponentSpec are ignored."""
@@ -310,7 +317,7 @@ def build_sectioned_encoder(spec: SectionedURASpec, component_specs: Sequence[Co
         bank_constraints = constraints[ell] if constraints is not None else ComponentConstraints()
         banks.append(LocalAtomBank(R, C, atom_q, atom_v, learn_R=cs.learn_R, learn_C=cs.learn_C,
                                    constraints=bank_constraints))
-    return SectionedEncoder(banks, spec)
+    return SectionedEncoder(banks, spec, section_energies=section_energies)
 
 
 def build_orthogonal_sectioned_encoder(spec: SectionedURASpec, outer_code: OuterCode,

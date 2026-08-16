@@ -91,6 +91,19 @@ association. Complete-path multiplicities are fitted for `B<=20`; the negligible
 paths above that threshold while retaining local counts. A `B=128,J=16,L=16` test executes BP directly over all 65,536
 symbols per section without top-list pruning.
 
+## `framework_sectioned_learning.py`
+
+Runs the complete scalable `L>1` learning path: procedural outer encoding, local physical synthesis, structured D0,
+full-alphabet modular BP, and valid-path beam extraction. `--preset scale_smoke` executes the `B=128,J=16` dimensions
+without an `M=2^B` object. `--preset laptop` is the longer CPU sanity run; it trains D0 and the exact-power local banks
+first, freezes the encoder, then ramps in the outer marginal/path losses. Summaries report BP-assisted and D0-only PUPE
+separately so outer BP is credited only when it helps.
+
+## `framework_sectioned_merge.py`
+
+Merges a completed sectioned manifest result tree across seeds and writes a compact JSON/TSV table plus a paired-dot
+plot comparing D0-only versus BP-assisted PUPE and initial versus trained performance.
+
 ## `ccs_bound_curve.py`
 
 Runs an implicit paper-scale NNLS/tree CCS experiment without forming the `2^B` global dictionary. Its defaults match the

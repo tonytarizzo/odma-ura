@@ -54,8 +54,15 @@ def test_overlapping_sampled_penalty() -> None:
     spec = SectionedURASpec(n=12, payload_bits=4, num_active=2)
     components = [ComponentSpec(Q=1, d=12, V=2, N=2, R_init="identity", C_init="random_gaussian",
                                 U_init="all_pairs", learn_C=True) for _ in range(code.num_sections)]
-    encoder = build_sectioned_encoder(spec, components, dtype=torch.float64, generator=gen)
+    section_energies = [1.0 / code.num_sections] * code.num_sections
+    encoder = build_sectioned_encoder(spec, components, section_energies=section_energies,
+                                      dtype=torch.float64, generator=gen)
     paths = code.encode_bits(torch.randint(2, (24, 4), generator=gen))
+    counts = encoder.counts_from_paths(paths.reshape(3, 8, code.num_sections))
+    residual = torch.randn(3, spec.n, dtype=torch.float64, generator=gen)
+    lhs = torch.sum(encoder.synthesize(counts) * residual)
+    rhs = sum(torch.sum(local * adjoint) for local, adjoint in zip(counts, encoder.local_adjoint(residual)))
+    check_close("scaled overlapping forward/adjoint", lhs, rhs)
     penalty = sectioned_power_penalty(encoder, paths)
     penalty.backward()
     if not torch.isfinite(penalty) or not all(bank.C.grad is not None and torch.isfinite(bank.C.grad).all()
@@ -63,6 +70,21 @@ def test_overlapping_sampled_penalty() -> None:
         raise AssertionError("sampled power penalty did not provide finite gradients to every overlapping bank")
     if encoder.certify_exact_energy()["guaranteed"]:
         raise AssertionError("overlapping sampled-power mode incorrectly claimed a structural guarantee")
+    if encoder.energy_mode != "overlapping_sampled":
+        raise AssertionError(f"unexpected scaled-overlap mode {encoder.energy_mode}")
+
+
+def test_complex_channel_symbols() -> None:
+    gen = torch.Generator().manual_seed(54)
+    code = triadic_outer_code(payload_bits=4, section_bits=1)
+    spec = SectionedURASpec(n=32, payload_bits=4, num_active=2)
+    encoder = build_orthogonal_sectioned_encoder(spec, code, dtype=torch.complex128, generator=gen)
+    bits = torch.randint(2, (2, 2, 4), generator=gen)
+    signal, _, paths = encoder.encode_bits(bits, code)
+    if not signal.is_complex() or torch.all((signal.real == 0) | (signal.real == 1)):
+        raise AssertionError("payload bits were incorrectly treated as binary channel symbols")
+    check_close("complex procedural codeword energy", encoder.path_energies(paths),
+                torch.ones(2, 2, dtype=torch.float64))
 
 
 def test_implicit_hadamard_bank_and_b128_energy() -> None:
@@ -90,8 +112,9 @@ def test_implicit_hadamard_bank_and_b128_energy() -> None:
 def main() -> None:
     test_exact_orthogonal_energy()
     test_overlapping_sampled_penalty()
+    test_complex_channel_symbols()
     test_implicit_hadamard_bank_and_b128_energy()
-    print("sectioned energy: exact orthogonal guarantee, projection, adjoint, and sampled penalty passed")
+    print("sectioned energy: exact guarantee, scaled overlap, complex symbols, adjoints, and sampled penalty passed")
 
 
 if __name__ == "__main__":
