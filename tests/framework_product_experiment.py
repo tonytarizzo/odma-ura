@@ -28,6 +28,7 @@ from framework.losses import support_count_loss  # noqa: E402
 from framework.metrics import aggregate_metrics, batch_evaluate  # noqa: E402
 from framework.pipeline import (dense_component_specs, odma_component_specs,
                                 product_all_pairs_component_specs, sparse_global_component_specs)  # noqa: E402
+from tests.framework_sparsity_diagnostics import analyse_encoder_sparsity  # noqa: E402
 
 
 def parse_float_grid(text: str) -> list[float]:
@@ -48,6 +49,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--Q", type=int, default=4)
     p.add_argument("--odma-d", type=int, default=None)
     p.add_argument("--sparse-support", type=int, default=None)
+    p.add_argument("--sparse-nested", action="store_true",
+                   help="pair sparse-global codebooks across support sizes when the seed is reused")
     p.add_argument("--num-antennas", type=int, default=1)
     p.add_argument("--num-layers", type=int, default=8)
     p.add_argument("--hidden-dim", type=int, default=32)
@@ -72,7 +75,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--grad-clip", type=float, default=5.0)
     p.add_argument("--lambda-count", type=float, default=0.1)
     p.add_argument("--lambda-symmetry", type=float, default=0.01)
+    p.add_argument("--diagnostic-pairs", type=int, default=0,
+                   help="sampled column pairs for bounded-memory post-training geometry diagnostics")
+    p.add_argument("--diagnostic-active-samples", type=int, default=0,
+                   help="sampled distinct-message active sets for row-occupancy diagnostics")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--train-seed", type=int, default=None, help="optional data-stream seed, separate from codebook/init")
+    p.add_argument("--eval-seed", type=int, default=None, help="optional common evaluation-data seed")
     p.add_argument("--out-dir", default="results/framework_product_experiment")
     return p.parse_args(argv)
 
@@ -106,7 +115,8 @@ def build_experiment_encoder(args: argparse.Namespace, gen: torch.Generator):
         components = odma_component_specs(spec, d, int(args.Q), False, False)
     elif args.encoder == "sparse_global_fixed":
         support = int(args.sparse_support) if args.sparse_support is not None else max(spec.n // int(args.Q), 1)
-        components = sparse_global_component_specs(spec, support, gen)
+        nested = bool(getattr(args, "sparse_nested", False))
+        components = sparse_global_component_specs(spec, support, gen, nested_by_support=nested)
     else:
         raise ValueError(args.encoder)
     constraints = [ComponentConstraints(C="unit_norm_columns" if c.learn_C else "none") for c in components]
@@ -189,12 +199,16 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit("--num-antennas must be positive")
     if args.train_ebn0_max < args.train_ebn0_min:
         raise SystemExit("--train-ebn0-max must be >= --train-ebn0-min")
+    if args.diagnostic_pairs < 0 or args.diagnostic_active_samples < 0:
+        raise SystemExit("diagnostic sample counts must be nonnegative")
     torch.manual_seed(int(args.seed))
     gen = torch.Generator().manual_seed(int(args.seed))
     out_dir = Path(args.out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     encoder, k_min, k_max = build_experiment_encoder(args, gen)
     _, _, eval_k = load_range(args)
-    train_sampler = uniform_count_range_generator(k_min, k_max, encoder.num_codewords, gen, encoder.device)
+    train_gen = gen if args.train_seed is None else torch.Generator().manual_seed(int(args.train_seed))
+    eval_gen = train_gen if args.eval_seed is None else torch.Generator().manual_seed(int(args.eval_seed))
+    train_sampler = uniform_count_range_generator(k_min, k_max, encoder.num_codewords, train_gen, encoder.device)
     fading_sampler = constant_fading(encoder.spec.num_antennas, encoder.dtype, encoder.device)
     progress, t0 = [], time.time()
 
@@ -204,7 +218,7 @@ def main(argv: list[str] | None = None) -> None:
         surrogate = UnrolledBernoulliPGD(num_layers=int(args.num_layers), power_iters=int(args.power_iters))
         params = list(surrogate.parameters()) + [p for p in encoder.parameters() if p.requires_grad]
         progress += train_phase("encoder_d0", encoder, surrogate, params, train_sampler, fading_sampler,
-                                args, gen, int(args.encoder_epochs))
+                                args, train_gen, int(args.encoder_epochs))
         for p in encoder.parameters():
             p.requires_grad_(False)
         if args.decoder == "d0":
@@ -212,16 +226,21 @@ def main(argv: list[str] | None = None) -> None:
     if decoder is None:
         decoder = make_decoder(args)
     progress += train_phase("decoder", encoder, decoder, list(decoder.parameters()), train_sampler, fading_sampler,
-                            args, gen, int(args.decoder_epochs))
+                            args, train_gen, int(args.decoder_epochs))
 
     learned_results, matched_results = [], []
     for K in eval_k:
         for ebn0_db in args.eval_ebn0:
-            learned, matched = evaluate_one(encoder, decoder, int(K), float(ebn0_db), args, gen, fading_sampler)
+            learned, matched = evaluate_one(encoder, decoder, int(K), float(ebn0_db), args, eval_gen, fading_sampler)
             learned_results.append(learned); matched_results.append(matched)
             print(f"eval K={K:3d} Eb/N0={ebn0_db:5.1f} learned PUPE={learned['pupe']:.4f} "
                   f"matched PUPE={matched['pupe']:.4f} collision={learned['empirical_any_collision']:.3f}", flush=True)
 
+    sparsity_diagnostics = None
+    if args.diagnostic_pairs or args.diagnostic_active_samples:
+        sparsity_diagnostics = analyse_encoder_sparsity(encoder, num_pairs=int(args.diagnostic_pairs),
+                                                        active_samples=int(args.diagnostic_active_samples),
+                                                        active_k=max(eval_k), seed=int(args.seed) + 7919)
     component = encoder.components[0]
     metadata = {"args": vars(args), "K_train": [k_min, k_max], "K_eval": eval_k,
                 "M": encoder.num_codewords, "V": component.V, "d": component.d,
@@ -229,6 +248,8 @@ def main(argv: list[str] | None = None) -> None:
                 "decoder_knows_K": True, "decoder_knows_noise_variance": True,
                 "receiver_knows_fading": True, "single_antenna_default": True,
                 "wall_s": time.time() - t0}
+    if sparsity_diagnostics is not None:
+        metadata["codebook_sparsity"] = sparsity_diagnostics
     checkpoint = {"metadata": metadata, "encoder": encoder.state_dict(), "decoder": decoder.state_dict()}
     torch.save(checkpoint, out_dir / "checkpoint.pt")
     (out_dir / "summary.json").write_text(json.dumps({"metadata": metadata, "progress": progress,

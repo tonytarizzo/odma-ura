@@ -73,16 +73,25 @@ def product_all_pairs_component_specs(spec: URASpec, num_operators: int, learn_C
                           learn_R=False, learn_C=learn_C)]
 
 
-def sparse_global_component_specs(spec: URASpec, support_size: int,
-                                  generator: torch.Generator | None = None) -> list[ComponentSpec]:
-    """Fixed sparse global-codebook control without product sharing."""
+def sparse_global_component_specs(spec: URASpec, support_size: int, generator: torch.Generator | None = None,
+                                  nested_by_support: bool = False) -> list[ComponentSpec]:
+    """Fixed sparse global-codebook control without product sharing.
+
+    ``nested_by_support`` consumes the same random numbers for every support size. Reusing a seed then couples density
+    sweeps so the size-s support is a prefix of the same per-message resource ordering, without changing its marginal
+    random-support/Gaussian-amplitude distribution.
+    """
     s = int(support_size)
     if s <= 0 or s > spec.n:
         raise ValueError(f"support_size must satisfy 0 < s <= n={spec.n}, got {s}")
     C = torch.zeros(spec.n, spec.num_codewords)
     for m in range(spec.num_codewords):
         rows = torch.randperm(spec.n, generator=generator)[:s]
-        C[rows, m] = torch.randn(s, generator=generator)
+        if nested_by_support:
+            values = torch.randn(spec.n, generator=generator)
+            C[rows, m] = values[rows]
+        else:
+            C[rows, m] = torch.randn(s, generator=generator)
     C = C / C.norm(dim=0, keepdim=True).clamp_min(1e-12)
     return [ComponentSpec(Q=1, d=spec.n, V=spec.num_codewords, N=spec.num_codewords,
                           R_init="identity", C_init="explicit", U_init="all_pairs", T_init="identity",

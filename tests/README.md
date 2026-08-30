@@ -115,6 +115,24 @@ is not a one-factor BP ablation. Jobs `025` and `026` use this driver.
 Combines returned job-`025/026` summaries across seeds, writes JSON/TSV tables including the exact `L=1` equivalence
 errors, and plots all bridge routes on common `B=12,n=256` PUPE-versus-`Eb/N0` panels for each evaluated load.
 
+## `framework_product_experiment.py`
+
+Trains and evaluates the job-`021/022` L=1 dense, product, sparse-global, and ODMA families with D0 or D1. Optional
+bounded-memory sparsity diagnostics materialise `Phi` after evaluation but never its Gram matrix. `--sparse-nested`
+couples otherwise identically distributed sparse-global codebooks across support sizes for controlled density sweeps.
+
+## `framework_sparsity_diagnostics.py` and `framework_sparsity_diagnostics_test.py`
+
+Measure exact support size, support/sign-pattern repetition, unit energy, row balance, sampled pair correlations, and
+sampled active-set row occupancy. The deterministic test checks the `s=1` real-unit-direction limit and nesting across
+support sizes.
+
+## `framework_sparsity_sweep_merge.py`
+
+Validates density-sweep manifest completion, averages the old high-SNR PUPE summary across seeds, and writes run,
+aggregate, and codebook-diagnostic JSON/TSV outputs. Its performance plot uses the nonzero fraction `p=s/n` on a reversed
+base-two log axis and overlays dense and ODMA controls. Job `027` uses this merger.
+
 ## `framework_sectioned_merge.py`
 
 Merges a completed sectioned manifest result tree across seeds and writes a compact JSON/TSV table plus a paired-dot
