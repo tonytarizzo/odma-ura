@@ -1,62 +1,57 @@
 # ODMA-URA
 
-Research testbed for decoding **unsourced random access (URA)** signals with **on-off division multiple access (ODMA)** structure.
+Research testbed for unsourced random access (URA), structured codebooks, support recovery, and scalable section-domain
+encoding/decoding.
 
-The current model uses a shared codebook of unit-norm message codewords. Each message is assigned to an ODMA block, each block embeds a length-`d` codeword into a sparse subset of `n` resources, and the receiver observes a noisy multi-antenna superposition. The decoding target is the global message-count vector: which messages were sent, and how many times, without recovering device identities.
+The repository now separates two execution regimes:
 
-The main research question is whether a decoder that uses both structures jointly can outperform generic sparse-recovery baselines such as OMP/SIC or standard per-block variants.
+- `framework.Encoder`: a small-`B` global-message backend with an implicit factorisation of
+  `Phi in C^(n x M)`, where `M=2^B`. It avoids materialising `Phi` during normal computation but still keeps
+  `M`-length message states.
+- `framework.SectionedEncoder`: a scalable backend with local states of total size `sum_l N_l`, a procedural outer
+  encoder, exact unit-energy construction, local D0 evidence, optional outer BP, and complete-path list extraction.
+
+The current research conclusion is deliberately narrower than “sectioning works” or “sectioning fails.” Small-`B`
+tests show that independently distributed sparse-global supports retain near-dense performance over a broad density
+range, while a small reused ODMA support bank performs much worse even at equal density. The scalable backend is exactly
+compatible with the global backend at `L=1`, but the current `L>1` route loses complete-message association as local
+occupancy rises. The `B=128` implementation executes without a `2^B` object and satisfies unit energy, but its current
+local decoder saturates and does not learn useful recovery.
+
+## Start Here
+
+- [`docs/README.md`](docs/README.md): chronological research narrative and document map.
+- [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md): neutral handoff for a new conversation or supervisor meeting.
+- [`docs/EXPERIMENT_BANK.md`](docs/EXPERIMENT_BANK.md): concise operational record of the latest experiment banks.
+- [`results/03_results.md`](results/03_results.md): explicit dense-versus-ODMA and oracle-support evidence.
+- [`results/04_results.md`](results/04_results.md): detailed framework, decoder, and sectioned-experiment evidence.
+- [`jobs/README.md`](jobs/README.md): private HPC workflow and job commands.
 
 ## Repository Layout
 
-- `src/scenario.py` builds one reproducible ODMA+URA trial.
-- `src/decoders/` contains comparable decoder implementations registered in `src/decoders/registry.py`.
-- `src/sweep.py`, `src/cache.py`, and `src/plotting.py` run cached experiments and generate plots.
-- `tests/single_test.py` runs a single scenario and writes plots/summary files.
-- `tests/sweep_test.py` runs or replots parameter sweeps.
-
-Generated outputs are written under `results/`, which is ignored by git.
+- `src/`: original ODMA scenario, classical/model-based decoders, sweeps, metrics, and bounds.
+- `framework/`: factorised encoders, section-domain backend, learned D0/D1 decoders, outer code/BP, training, and analysis.
+- `tests/`: executable experiments, merge/plot scripts, smoke tests, and algebraic regression tests.
+- `jobs/`: numbered HPC manifests, scripts, logs, checkpoints, and returned outputs.
+- `results/`: detailed result ledgers and generated local outputs.
+- `docs/reports/`: four supervisor-facing chronological LaTeX reports and their verified PDFs.
 
 ## Setup
-
-This repo is configured for `uv`:
 
 ```bash
 uv sync
 ```
 
-If `uv` is not installed:
+## Core Verification
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-## Run
-
-Single scenario:
-
-```bash
-uv run python -m tests.single_test --decoders Graph-BP ADMM-Poisson ADMM-Multinom Residual-MAP NNOMP \
-  --num-devices-active 20 --esn0-db 0 --seed 42
-```
-
-Sweep:
-
-```bash
-uv run python -m tests.sweep_test --sweeps K SNR \
-  --decoders ADMM-Poisson ADMM-Multinom Residual-MAP NNOMP --num-seeds 3
-```
-
-Common parameters include `--n`, `--d`, `--num-blocks`, `--num-codewords`, `--num-devices-active`, `--num-antennas`, and `--esn0-db`.
-
-## Quick Check
-
-```bash
-uv run python -m compileall src tests
+uv run python -m compileall src framework tests
+uv run python -m tests.framework_sectioned_refactor_test
+uv run python -m tests.framework_sectioned_energy_test
 uv run python -m tests.single_test --decoders NNOMP SIC BlockMAP \
   --n 32 --d 8 --num-blocks 4 --num-codewords 16 \
   --num-devices-active 4 --num-antennas 2 --esn0-db 5
 ```
 
-## Decoders
-
-The registry currently includes structure-aware candidates (`Graph-BP`, `ADMM-Poisson`, `ADMM-Multinom`, `Residual-MAP`, `BlockMAP`), global sparse-recovery baselines (`NNOMP`, `SIC`), AMP/VAMP variants, and oracle LMMSE diagnostics. Add new decoders by implementing `run(scenario, **params) -> (counts, meta)` under `src/decoders/` and registering it in `src/decoders/registry.py`.
+Generated outputs under `jobs/`, `results/`, and most of `docs/` are intentionally ignored by git. Do not interpret a
+submitted job as a result: inspect summaries, logs, completion, numerical diagnostics, and merged plots first.

@@ -10,6 +10,17 @@ import math
 import torch
 
 
+def nonzero_gaussian(shape: tuple[int, ...], dtype: torch.dtype,
+                     generator: torch.Generator | None = None) -> torch.Tensor:
+    """Draw Gaussian values while preserving an intended exact nonzero support."""
+    values = torch.randn(shape, dtype=dtype, generator=generator)
+    zeros = values == 0
+    while bool(zeros.any()):
+        values[zeros] = torch.randn((int(zeros.sum()),), dtype=dtype, generator=generator)
+        zeros = values == 0
+    return values
+
+
 # --- R: operator/resource bank ----------------------------------------------
 
 
@@ -64,7 +75,7 @@ def init_C(strategy: str, d: int, V: int, dtype: torch.dtype,
     if d <= 0 or V <= 0:
         raise ValueError(f"C requires d,V > 0; got d={d}, V={V}")
     if strategy == "random_gaussian":
-        C = torch.randn(d, V, dtype=dtype, generator=generator)
+        C = nonzero_gaussian((d, V), dtype, generator)
         C = C / C.norm(dim=0, keepdim=True).clamp_min(1e-12)
     elif strategy == "explicit":
         if value is None:

@@ -2,7 +2,7 @@
 
 The framework is organised around the factorisation
     Phi = sum_l B_l U_l T_l,  B_l = [R_{l,1} C_l | ... | R_{l,Q_l} C_l]
-described in docs/reports/04_ura_framework.tex. One *experiment* corresponds to
+described in docs/reports/03_factorised_encoder_framework.tex. One *experiment* corresponds to
 one Encoder instance that holds the (R, C, U, T) factors for every component.
 """
 

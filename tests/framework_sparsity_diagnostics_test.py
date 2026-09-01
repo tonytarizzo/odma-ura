@@ -17,6 +17,13 @@ def build_sparse(n: int, B: int, support: int, seed: int, nested: bool = False):
     return build_experiment_encoder(args, torch.Generator().manual_seed(seed))[0]
 
 
+def build_dense(n: int, B: int, seed: int):
+    args = Namespace(encoder="dense_fixed", payload_bits=B, n=n, num_antennas=1,
+                     Q=1, odma_d=None, sparse_support=None, sparse_nested=False,
+                     k_min=2, k_max=4, eval_k=None, extrapolate_k=False)
+    return build_experiment_encoder(args, torch.Generator().manual_seed(seed))[0]
+
+
 def main() -> None:
     n, B = 16, 6
     sparse_one = analyse_encoder_sparsity(build_sparse(n, B, 1, 3), num_pairs=400, active_samples=20, active_k=4, seed=4)
@@ -39,6 +46,12 @@ def main() -> None:
     assert torch.all((nested_one != 0) <= (nested_four != 0))
     shared = nested_one != 0
     assert torch.all(torch.sign(nested_one[shared]) == torch.sign(nested_four[shared]))
+
+    # This seed previously produced one exact float32 zero in a 256 x 4096 Gaussian draw.
+    for encoder in (build_sparse(256, 12, 256, 2702, nested=True), build_dense(256, 12, 2702)):
+        full = analyse_encoder_sparsity(encoder)
+        assert full["support_size"] == 256
+        assert full["nonzero_fraction"] == 1.0
     print("framework sparsity diagnostics test passed")
 
 

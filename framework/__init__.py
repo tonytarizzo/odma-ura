@@ -1,7 +1,7 @@
 """URA factor framework with explicit-global and scalable section backends.
 
 Mirrors the factorisation Phi = sum_l B_l U_l T_l from
-docs/reports/04_ura_framework.tex. The legacy ODMA code in `src/` is left
+docs/reports/03_factorised_encoder_framework.tex. The legacy ODMA code in `src/` is left
 untouched. The explicit backend retains M-shaped objects for small-system
 certification; `framework.sectioned` executes from local section counts only.
 """

@@ -31,6 +31,7 @@ from .core import ComponentSpec, URASpec
 from .datasets import DatasetConfig, generate_uniform_count_dataset, load_count_dataset, make_dataset_sampler
 from .decoders import get_decoder
 from .encoder import ComponentConstraints, build_encoder
+from .initializers import nonzero_gaussian
 from .metrics import batch_evaluate
 from .plotting import plot_count_estimate, plot_training_curves
 from .training import TrainConfig, evaluate, train
@@ -88,10 +89,10 @@ def sparse_global_component_specs(spec: URASpec, support_size: int, generator: t
     for m in range(spec.num_codewords):
         rows = torch.randperm(spec.n, generator=generator)[:s]
         if nested_by_support:
-            values = torch.randn(spec.n, generator=generator)
+            values = nonzero_gaussian((spec.n,), C.dtype, generator)
             C[rows, m] = values[rows]
         else:
-            C[rows, m] = torch.randn(s, generator=generator)
+            C[rows, m] = nonzero_gaussian((s,), C.dtype, generator)
     C = C / C.norm(dim=0, keepdim=True).clamp_min(1e-12)
     return [ComponentSpec(Q=1, d=spec.n, V=spec.num_codewords, N=spec.num_codewords,
                           R_init="identity", C_init="explicit", U_init="all_pairs", T_init="identity",

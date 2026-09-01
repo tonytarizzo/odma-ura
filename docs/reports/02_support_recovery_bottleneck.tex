@@ -1,0 +1,123 @@
+\documentclass[11pt]{article}
+\newcommand{\ReportShortTitle}{Support-recovery bottleneck}
+\input{report_style}
+
+\begin{document}
+\ProjectReport{The support-recovery bottleneck}{A common global model, decoder controls, and explicit ODMA gap}{2 of 4}
+{Jobs 001--017 complete; conclusions limited to tested algorithms and regimes}
+
+\section{Why a common global model was needed}
+
+The first-stage decoder comparison mixed codebook structure and inference approximations. This stage held the recovery
+target fixed: every construction was represented by a unit-column matrix $\Phi\in\C^{n\times M}$ and the decoder
+estimated the same integer count vector $a\in\Z_+^M$ from
+\[
+ y=\Phi a+z,\qquad \one^Ta=K_a,\qquad M=2^B.
+\]
+Dense and ODMA codebooks could therefore be compared through identical metrics and decoder interfaces.
+
+\section{The ideal and practical recovery problems}
+
+With known noise variance and load, exact maximum likelihood is
+\[
+ \widehat a_{\rm ML}=\arg\min_{a\in\Z_+^M,\,\one^Ta=K_a}\|y-\Phi a\|_2^2.
+\]
+The number of count multisets is $\binom{M+K_a-1}{K_a}$, so exact enumeration is only a tiny-system certificate.
+
+The principal scalable baseline was nonnegative OMP with oracle $K_a$ (NNOMP-OracleK). At iteration $t$, it selects a
+column using the residual correlation,
+\[
+ j_t=\arg\max_{j\notin S_t}\Re\{\phi_j^Hr_t\},
+\]
+then solves nonnegative least squares on $S_{t+1}$ and updates $r_{t+1}=y-\Phi_{S_{t+1}}\widehat a_{S_{t+1}}$. Its
+advantages are a transparent support-search mechanism and a matched interface across codebooks. Its oracle load and
+greedy selection mean that it is a practical baseline, not Bayes-optimal URA decoding.
+
+Other explored routes---MAP-ADMM, block coordinate descent, AMP/VAMP variants, residual MAP, SIC, and BlockMAP---can be
+understood as different approximations to the same constrained objective. They were useful diagnostics, but none changed
+the central causal experiment: remove support search and measure what remains.
+
+\section{Metric and collisions}
+
+For true and estimated count vectors with equal total mass $K_a$, multiplicity-aware PUPE is
+\[
+ \mathrm{PUPE}(a,\widehat a)=1-\frac{1}{K_a}\sum_{m=0}^{M-1}\min(a_m,\widehat a_m).
+\]
+This reduces to missed-set fraction when every count is zero or one. At small $B$, repeated messages are not negligible,
+so a support-only metric would incorrectly penalise or ignore multiplicity. The project therefore distinguishes:
+
+\begin{itemize}
+ \item a canonical count-aware experiment, where repeated messages are legitimate;
+ \item low-collision large-alphabet comparisons, where set recovery is a close approximation;
+ \item oracle-support tests, where the active indices are given but their counts still need estimation.
+\end{itemize}
+
+Bound overlays and empirical decoders answer different questions. A Polyanskiy-style achievability curve is a coding
+benchmark under its own collision convention; it is not an expected NNOMP curve and must not be used to certify an
+implementation merely because the numbers are close.
+
+\section{Explicit dense versus ODMA experiments}
+
+Jobs 001--008 and 013--014 used 50 seeds, NNOMP-OracleK, target PUPE $\le0.05$, and matched $(B,n,K_a)$ for dense and
+ODMA codebooks. The gap was small in easy regimes and grew sharply as support recovery became compressed.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Geometry and load & Dense & ODMA 1 & ODMA 2 & ODMA 3 \\
+\midrule
+$B=12,n=2048,K_a=333$ & $1.00$ & $3.69$ & $3.25$ & $>4$ \\
+$B=12,n=512,K_a=52$ & $2.19$ & $11.56$ & $6.44$ & unbracketed \\
+$B=12,n=256,K_a=17$ & $2.19$ & $9.12$ & $5.75$ & $5.56$ \\
+\bottomrule
+\end{tabular}
+\caption{Required $E_b/N_0$ in dB for PUPE $\le0.05$. ODMA arrangements use different local lengths/placement counts;
+the purpose is to show the practical gap, not to rank a universal ODMA parameter.}
+\end{table}
+
+Increasing $B$ at fixed $n$ reduced repeated-message ambiguity while preserving the dense--ODMA separation. Reducing
+$n$ at $B=12$ amplified the gap. Thus the effect was not explained by the collision-heavy behaviour of very small
+alphabets.
+
+\section{Oracle-support decomposition}
+
+The decisive control supplies the active support $S=\{m:a_m>0\}$ and solves
+\[
+ \widehat a_S=\arg\min_{x\ge0}\|y-\Phi_Sx\|_2^2,
+\]
+followed by integer projection. This removes the combinatorial search while retaining active-column conditioning,
+interference, noise, and multiplicity fitting.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}lYY@{}}
+\toprule
+Geometry & Mean oracle ODMA-minus-dense gap & Contrast with practical decoder \\
+\midrule
+$B=12,n=2048$ & $0.05$--$0.11$ dB & Practical gap reaches $2+$ dB at high load \\
+$B=12,n=512$ & $0.10$, $0.12$, $0.28$ dB & NNOMP support loss is about $5$--$6$ dB \\
+$B=12,n=256$ & $0.08$, $-0.01$, $0.03$ dB & NNOMP support loss is about $6$--$7$ dB \\
+\bottomrule
+\end{tabularx}
+\caption{Jobs 012, 016, and 017. Each range/list spans the tested ODMA arrangements.}
+\end{table}
+
+\evidence{Measured result. The true support is an explicit oracle; this is not an achievable receiver.}
+
+The active ODMA columns were not substantially worse than active dense columns once their identities were known. The
+large observed penalty under NNOMP therefore arose mainly during support selection. This conclusion is robust across the
+tested $n$, but it is neither an information-theoretic converse nor proof that every ODMA-aware decoder must suffer the
+same gap.
+
+\section{What this changed}
+
+The experiment redirected the project from adding ODMA message updates to asking which codebook structures are easy to
+search. The resulting requirements were: retain many distinguishable global supports; distribute row energy and overlap
+rather than reuse a tiny mask bank; and expose forward/adjoint operations without storing a dense $n\times2^B$ matrix.
+The next stage introduced one factorised algebra for dense, ODMA, product, and sectioned constructions, with exact
+gradients through its continuous factors.
+
+\end{document}

@@ -43,3 +43,19 @@ uv run python -m tests.framework_sparsity_sweep_merge \
 
 The x-axis is the nonzero fraction `p=s/n`, reversed on a base-two log scale. Zero is deliberately absent: it cannot be
 shown on a log axis and a zero-support codeword cannot satisfy unit energy. The smallest physical point is `p=1/n`.
+
+## Returned-artifact audit (31 August 2026)
+
+All 72 task logs were returned. Sixty-eight tasks wrote both `summary.json` and `checkpoint.pt`; array indices
+`3,4,67,68` completed evaluation and then failed in the sparsity diagnostic. Seed 2702 generated one exactly zero
+float32 Gaussian entry in each full-density construction, so one column had numerical support 255 while all others had
+support 256. Gaussian initialisation now resamples exact zeros to preserve the intended exact-support contract.
+
+After pushing/pulling that fix, rerun only the failed indices:
+
+```bash
+qsub -J 3-4,67-68 jobs/027_sparse_density_frontier/027_sparse_density_frontier.sh
+```
+
+Until those artifacts return, the strict merger correctly refuses the manifest. A provisional audit plot can be made
+with `--allow-incomplete`; do not relabel it as a complete 72-run aggregate.

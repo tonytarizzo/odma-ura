@@ -29,7 +29,19 @@ jobs/README.md
 jobs/*/results/
 jobs/*/results_*/
 .cache/
-docs/
-results/
+# Curated research documentation is versioned; generated artifacts remain local.
+docs/*
+!docs/README.md
+!docs/CURRENT_STATE.md
+!docs/EXPERIMENT_BANK.md
+!docs/reports/
+docs/reports/*
+!docs/reports/report_style.tex
+!docs/reports/*.tex
+!docs/reports/*.pdf
+
+results/*
+!results/03_results.md
+!results/04_results.md
 results_compare/
 results_sweep/

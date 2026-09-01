@@ -1,0 +1,56 @@
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[a4paper,margin=24mm,headheight=14pt]{geometry}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{booktabs,tabularx,array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{ink}{HTML}{18212B}
+\definecolor{accent}{HTML}{135F73}
+\definecolor{muted}{HTML}{5E6A73}
+\definecolor{pale}{HTML}{EEF5F7}
+\color{ink}
+\hypersetup{colorlinks=true,linkcolor=accent,urlcolor=accent}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\setlist{nosep,leftmargin=1.55em}
+\setcounter{secnumdepth}{2}
+\titleformat{\section}{\Large\bfseries\color{accent}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\large\bfseries\color{ink}}{\thesubsection}{0.55em}{}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small ODMA--URA research record}
+\fancyhead[R]{\small\color{muted}\ReportShortTitle}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\one}{\mathbf{1}}
+\newcommand{\given}{\,|\,}
+\newcommand{\evidence}[1]{\textcolor{accent}{\textbf{Evidence status:}} #1}
+\newcommand{\ProjectReport}[4]{%
+  \pagenumbering{roman}
+  \begin{titlepage}
+    \vspace*{18mm}
+    {\large\color{accent}\textbf{ODMA--URA research record}}\\[12mm]
+    {\huge\bfseries #1}\\[5mm]
+    {\Large\color{muted}#2}\\[18mm]
+    \begin{tabular}{@{}ll@{}}
+      Stage & #3\\
+      Updated & 30 August 2026\\
+      Status & #4
+    \end{tabular}
+    \vfill
+    \textcolor{muted}{This report is a chronological research record. Measured results, interpretations, and open
+    hypotheses are labelled separately. Detailed numerical ledgers remain in \texttt{results/}.}
+  \end{titlepage}
+  \pagenumbering{arabic}
+}
