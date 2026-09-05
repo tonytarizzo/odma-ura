@@ -16,7 +16,9 @@ tests show that independently distributed sparse-global supports retain near-den
 range, while a small reused ODMA support bank performs much worse even at equal density. The scalable backend is exactly
 compatible with the global backend at `L=1`, but the current `L>1` route loses complete-message association as local
 occupancy rises. The `B=128` implementation executes without a `2^B` object and satisfies unit energy, but its current
-local decoder saturates and does not learn useful recovery.
+local decoder saturates and does not learn useful recovery. The active next branch therefore keeps `L=1` and tests
+whether arbitrary sparse supports can be replaced by a compact affine-hash skeleton, first with fixed amplitudes and
+then with the permitted amplitudes and decoder learned jointly.
 
 ## Start Here
 
@@ -30,11 +32,12 @@ local decoder saturates and does not learn useful recovery.
 ## Repository Layout
 
 - `src/`: original ODMA scenario, classical/model-based decoders, sweeps, metrics, and bounds.
-- `framework/`: factorised encoders, section-domain backend, learned D0/D1 decoders, outer code/BP, training, and analysis.
+- `framework/`: factorised encoders, hash-skeleton generators, section-domain backend, learned D0/D1 decoders, outer
+  code/BP, training, and analysis.
 - `tests/`: executable experiments, merge/plot scripts, smoke tests, and algebraic regression tests.
 - `jobs/`: numbered HPC manifests, scripts, logs, checkpoints, and returned outputs.
 - `results/`: detailed result ledgers and generated local outputs.
-- `docs/reports/`: four supervisor-facing chronological LaTeX reports and their verified PDFs.
+- `docs/reports/`: five supervisor-facing chronological LaTeX reports and their verified PDFs.
 
 ## Setup
 
@@ -48,6 +51,7 @@ uv sync
 uv run python -m compileall src framework tests
 uv run python -m tests.framework_sectioned_refactor_test
 uv run python -m tests.framework_sectioned_energy_test
+uv run python -m tests.framework_hash_skeleton_test
 uv run python -m tests.single_test --decoders NNOMP SIC BlockMAP \
   --n 32 --d 8 --num-blocks 4 --num-codewords 16 \
   --num-devices-active 4 --num-antennas 2 --esn0-db 5

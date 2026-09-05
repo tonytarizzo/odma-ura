@@ -118,14 +118,37 @@ errors, and plots all bridge routes on common `B=12,n=256` PUPE-versus-`Eb/N0` p
 ## `framework_product_experiment.py`
 
 Trains and evaluates the job-`021/022` L=1 dense, product, sparse-global, and ODMA families with D0 or D1. Optional
-bounded-memory sparsity diagnostics materialise `Phi` after evaluation but never its Gram matrix. `--sparse-nested`
+bounded-memory sparsity diagnostics materialise `Phi` after evaluation but never its full Gram matrix. `--sparse-nested`
 couples otherwise identically distributed sparse-global codebooks across support sizes for controlled density sweeps.
+The same runner now accepts the four job-`028` support families. Their compact rule is generated separately, then
+materialised only for the `B=14` common-decoder certification. `--learn-encoder --joint-train` jointly optimizes the
+selected decoder and codeword amplitudes; generated sparse supports remain fixed and every column is re-normalized.
 
 ## `framework_sparsity_diagnostics.py` and `framework_sparsity_diagnostics_test.py`
 
 Measure exact support size, support/sign-pattern repetition, unit energy, row balance, sampled pair correlations, and
-sampled active-set row occupancy. The deterministic test checks the `s=1` real-unit-direction limit and nesting across
-support sizes.
+sampled active-set row occupancy. Optional bounded-size diagnostics add active Gram spectra and disjoint `K`-sum
+separation without forming an `M x M` Gram matrix. The deterministic test checks the `s=1` real-unit-direction limit and
+nesting across support sizes.
+
+## `framework_hash_skeleton_test.py`
+
+Certifies the job-`028` construction at small dimensions: exact support and energy, one row per table, GF(2) block and
+stacked ranks, injective support tuples, shared amplitude draws, deterministic offline selection, procedural versus
+materialised support equality, and encoder forward equality. It also checks that learning changes only allowed support
+entries and that projection restores exact unit-column energy.
+
+## `framework_hash_skeleton_merge.py`
+
+Enforces the 36-row job-`028` manifest, paired D0/D1 construction and diagnostic equality, and required high-SNR cells.
+It writes run/aggregate/construction tables and separate PUPE and geometry plots. An incomplete tree is rejected unless
+explicitly marked diagnostic-only.
+
+## `framework_joint_learning_merge.py`
+
+Enforces the 20-row job-`029` manifest, optionally loads the matching job-`028` controls, and writes direct
+fixed-versus-joint PUPE and training-curve plots. Per-run tables retain tail loss change and initial/final geometry so a
+performance difference is not reported without checking optimization behaviour.
 
 ## `framework_sparsity_sweep_merge.py`
 

@@ -90,6 +90,7 @@ class ComponentSpec:
     explicit_atom_q: torch.Tensor | None = None
     explicit_atom_v: torch.Tensor | None = None
     explicit_msg_to_atom: torch.Tensor | None = None
+    fixed_C_support: torch.Tensor | None = None
 
 
 @dataclass

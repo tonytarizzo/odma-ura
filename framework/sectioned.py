@@ -269,6 +269,10 @@ class SectionedEncoder(nn.Module):
             for name, tensor, kind in bank.constraint_items():
                 items.append((f"section{ell}.{name}", tensor, kind))
         apply_constraints(items)
+        for bank in self.banks:
+            apply_fixed_support = getattr(bank, "apply_fixed_support_constraint", None)
+            if apply_fixed_support is not None:
+                apply_fixed_support()
         self._spectral_cache.clear()
 
     @staticmethod
@@ -316,7 +320,7 @@ def build_sectioned_encoder(spec: SectionedURASpec, component_specs: Sequence[Co
         atom_q, atom_v = init_U(cs.U_init, Q, V, N, generator, cs.explicit_atom_q, cs.explicit_atom_v)
         bank_constraints = constraints[ell] if constraints is not None else ComponentConstraints()
         banks.append(LocalAtomBank(R, C, atom_q, atom_v, learn_R=cs.learn_R, learn_C=cs.learn_C,
-                                   constraints=bank_constraints))
+                                   constraints=bank_constraints, fixed_C_support=cs.fixed_C_support))
     return SectionedEncoder(banks, spec, section_energies=section_energies)
 
 

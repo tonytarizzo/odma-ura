@@ -18,7 +18,7 @@ import math
 import torch
 from torch import nn
 
-from .constraints import apply_constraints
+from .constraints import apply_constraints, project_unit_norm_columns
 from .core import ComponentSpec, URASpec
 from .initializers import init_C, init_R, init_T, init_U
 
@@ -47,7 +47,8 @@ class LocalAtomBank(nn.Module):
 
     def __init__(self, R: torch.Tensor, C: torch.Tensor, atom_q: torch.Tensor,
                  atom_v: torch.Tensor, learn_R: bool = False, learn_C: bool = False,
-                 constraints: ComponentConstraints | None = None) -> None:
+                 constraints: ComponentConstraints | None = None,
+                 fixed_C_support: torch.Tensor | None = None) -> None:
         super().__init__()
         if R.ndim not in (2, 3):
             raise ValueError(f"R must have shape (Q, n, d) or diagonal shape (Q, n), got {tuple(R.shape)}")
@@ -67,6 +68,14 @@ class LocalAtomBank(nn.Module):
             raise ValueError("atom_q or atom_v contains an out-of-range index")
 
         R = R.clone(); C = C.clone().to(dtype=R.dtype, device=R.device)
+        support = None if fixed_C_support is None else torch.as_tensor(fixed_C_support, dtype=torch.bool, device=R.device)
+        if support is not None:
+            if support.shape != C.shape:
+                raise ValueError(f"fixed_C_support must have shape {tuple(C.shape)}, got {tuple(support.shape)}")
+            if bool((~support.any(dim=0)).any()):
+                raise ValueError("fixed_C_support must retain at least one entry in every column")
+            if bool((C.masked_select(~support) != 0).any()):
+                raise ValueError("C must be zero outside fixed_C_support")
         if learn_R:
             self.R = nn.Parameter(R)
         else:
@@ -75,6 +84,9 @@ class LocalAtomBank(nn.Module):
             self.C = nn.Parameter(C)
         else:
             self.register_buffer("C", C)
+        self.register_buffer("fixed_C_support", support)
+        if learn_C and support is not None:
+            self.C.register_hook(lambda grad: grad.masked_fill(~self.fixed_C_support, 0))
         self.register_buffer("atom_q", atom_q.long().clone())
         self.register_buffer("atom_v", atom_v.long().clone())
         self.constraints = constraints or ComponentConstraints()
@@ -201,6 +213,14 @@ class LocalAtomBank(nn.Module):
             out.append(("C", self.C.data, self.constraints.C))
         return out
 
+    def apply_fixed_support_constraint(self) -> None:
+        """Keep a learned sparse dictionary on its prescribed support with unit-energy columns."""
+        if self.fixed_C_support is None or not isinstance(self.C, nn.Parameter):
+            return
+        with torch.no_grad():
+            self.C.masked_fill_(~self.fixed_C_support, 0)
+            project_unit_norm_columns(self.C)
+
     def max_unit_energy_deviation(self) -> torch.Tensor:
         energies = torch.sum(torch.abs(self.explicit_local_matrix()) ** 2, dim=0).real
         return torch.max(torch.abs(energies - 1.0))
@@ -313,8 +333,10 @@ class ProductComponent(LocalAtomBank):
     def __init__(self, R: torch.Tensor, C: torch.Tensor, atom_q: torch.Tensor,
                  atom_v: torch.Tensor, msg_to_atom: torch.Tensor,
                  learn_R: bool = False, learn_C: bool = False,
-                 constraints: ComponentConstraints | None = None) -> None:
-        super().__init__(R, C, atom_q, atom_v, learn_R=learn_R, learn_C=learn_C, constraints=constraints)
+                 constraints: ComponentConstraints | None = None,
+                 fixed_C_support: torch.Tensor | None = None) -> None:
+        super().__init__(R, C, atom_q, atom_v, learn_R=learn_R, learn_C=learn_C, constraints=constraints,
+                         fixed_C_support=fixed_C_support)
         if msg_to_atom.ndim != 1:
             raise ValueError(f"msg_to_atom must be 1-D, got shape {tuple(msg_to_atom.shape)}")
         if int(msg_to_atom.min()) < 0 or int(msg_to_atom.max()) >= self.num_atoms:
@@ -433,6 +455,8 @@ class Encoder(nn.Module):
             for name, t, kind in c.constraint_items():
                 items.append((f"comp{i}.{name}", t, kind))
         apply_constraints(items)
+        for component in self.components:
+            component.apply_fixed_support_constraint()
         self._mean_energy_cache = None
         self._spectral_cache.clear()
 
@@ -493,5 +517,5 @@ def build_encoder(spec: URASpec, component_specs: list[ComponentSpec],
         comp_c = constraints[i] if constraints is not None else ComponentConstraints()
         components.append(ProductComponent(R, C, atom_q, atom_v, msg_to_atom,
                                             learn_R=cs.learn_R, learn_C=cs.learn_C,
-                                            constraints=comp_c))
+                                            constraints=comp_c, fixed_C_support=cs.fixed_C_support))
     return Encoder(components, spec)

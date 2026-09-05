@@ -115,45 +115,67 @@ constructs their parity symbols procedurally, and optionally fits multiplicities
   system.
 - D1 has not yet been rebuilt for the scalable section-domain model.
 
-## Latest experiment and open directions
+## Latest completed evidence: sparse-global frontier
 
-Job `027_sparse_density_frontier` returned all 72 array logs but only 68 summaries/checkpoints. Four full-density
-seed-2702 rows completed training and evaluation, then failed in posthoc support diagnostics because a finite-precision
-Gaussian draw contained one exact zero. The generator now resamples exact zeros, but those four rows must be rerun before
-the strict merger passes. The other 68 artifacts have the expected histories/evaluation cells, finite values, paired
-D0/D1 codebooks, nested supports, and unit-energy error below `9.54e-7`.
+Job `027_sparse_density_frontier` is now complete: all 72 rows contain summaries and checkpoints and the strict merger
+passes with no completeness notes. The four repaired full-density rows resample exact-zero Gaussian entries and satisfy
+the intended support invariant. The seed-2702 full-density reruns are not a clean nested paired endpoint because fixing
+the draw changed random-number consumption; the intermediate-support comparisons remain the reliable frontier.
 
-The partial evidence gives a clear qualitative frontier at `B=12,n=256`:
+At `B=12,n=256`, D0 remains essentially flat through `s≈48`, while D1's transition occurs at smaller support but is
+less precisely located under its shorter training budget. In the final strict aggregate D1 at `s=16` is about `0.0293`
+PUPE above dense. At equal density `s=64`, arbitrary sparse global still beats four-mask ODMA by about `0.243` PUPE for
+D0 and `0.263` for D1. Mask availability is not the observed bottleneck: support/sign patterns remain distinct well into
+the degradation region, while correlation tails rise and active users occupy fewer rows.
 
-- after including the completed log-only full-density evaluations for context, dense and full sparse-global codebooks
-  agree within about `0.0044` PUPE for D0 and `0.0014` for D1;
-- D0 is essentially flat through `s=48` (81.25% zeros) and only about `0.012` above dense at `s=32`;
-- D1 is within about `0.008` of dense at `s=16` (93.75% zeros), although two-seed variation and a still-decreasing
-  20-epoch training loss make this a transition band rather than a precise optimum;
-- at equal density `s=64`, sparse global beats four-mask ODMA by `0.243` PUPE with D0 and `0.263` with D1;
-- even `s=4` is still better than ODMA, despite using only 1.56% of the resource rows per codeword;
-- mask availability is not the observed bottleneck: support/sign patterns are essentially unique through `s=3--4`,
-  while degradation begins earlier as correlation tails rise and a `K=30` active set occupies fewer rows.
+This remains an explicit `M=4096` result. Sparse columns are stored in dense tensors and normal D0/D1 score all messages.
+It identifies a forgiving model class, not a scalable implementation.
 
-This is still an explicit `M=4096` experiment. Sparse columns are stored in dense tensors, so it identifies a promising
-model class but does not itself remove the `2^B` state or storage.
+## Active next stage: generated hash skeleton
 
-Reasonable next branches, not predetermined decisions, are:
+Job `028_hash_skeleton_B14` is implemented and locally certified but has no HPC performance results yet. It tests whether
+the arbitrary size-`T` sparse support can be restricted to exactly one resource in each of `T` disjoint tables without
+losing the useful explicit-global performance. With `R=n/T=2^r`, the compact candidate is
 
-1. Rerun the four failed full-density controls, then confirm only `s=8,16,32,64` with more seeds/evaluation samples.
-2. Test those few supports at one larger explicit payload, preferably `B=14,n=256`, to distinguish an absolute-support
-   rule from a density rule before extrapolating.
-3. Research compact support generators with balanced row use, controlled intersections/coherence, and an inverse/search
-   procedure; compare their geometry and recovery against job `027`, not merely their number of possible masks.
-4. In parallel, repair large-alphabet local evidence using scale/clamp/top-`K` diagnostics before another `B=128` run.
-5. Treat complete-path association as the sectioned decoder target and retain modular BP only if it beats controlled
-   no-BP and exact-reference cases.
+```text
+h_t(w) = A_t w + b_t mod 2,
+row_t(w) = tR + integer(h_t(w)),
+A_t in GF(2)^(r x B), b_t in GF(2)^r.
+```
+
+Every `A_t` has rank `r` for exact bin balance, and the stacked matrix has rank `B` for an injective complete support
+tuple. An exact small-`B` collision score enumerates every nonzero XOR difference `d` and measures how many tables obey
+`A_t d=0`; the selected family chooses the best of 128 random full-rank banks.
+
+The injective capacity is `T log2(n/T)` bits. Thus job `028`'s `T=16/32` choices are valid for `B=14`; at `B=100,n=256`,
+one valid choice is `T=64,R=4`. A local test builds only that compact hash state, checks rank, and generates a few
+selected-message supports. It is a regression check against a hidden `2^B` encoder axis, not a decoding result.
+
+The 36-row `B=14,n=256` manifest compares, at `T=16` and `T=32`, four fixed-amplitude families: iid arbitrary sparse,
+balanced random tables, random binary linear hash, and geometry-selected binary linear hash. Dense is a contextual
+reference. D0/D1, loads, SNRs, training budgets, Gaussian amplitudes, and held-out data are paired as far as the family
+comparison permits. The sequential causal questions are table constraint, then linearity, then offline selection.
+
+Only the support rule is compact at this stage. The `B=14` adapter materialises `Phi` so the existing global D0/D1
+comparison remains valid; Gaussian amplitude decorations still have one value per message, and scalable candidate
+proposal/inversion is deliberately deferred. A favourable result would justify solving those two problems for this
+skeleton. An unfavourable balanced-table result would reject the restriction before decoder complexity is added.
+
+Local verification covers exact support and unit energy, GF(2) ranks, support injectivity, procedural/materialised
+equality, paired amplitudes, offline selection, all family/decoder paths at `B=8`, and reduced-training D0/D1 rows at the
+actual `B=14` manifest size. These are execution checks, not recovery results.
+
+Job `029_joint_encoder_decoder_B14` adds the missing co-adaptation control. It learns dense amplitudes, or amplitudes on
+a fixed iid/hash support, jointly with D0 or D1. A gradient mask keeps sparse zeros exact and post-step projection keeps
+every column at unit energy. The focused 20-row bank uses only dense, iid sparse, and selected hash at `T=16,32`, two
+seeds, and 120 epochs. Pre/post geometry and full loss curves distinguish a support limitation from under-training.
+The learned sparse amplitudes are still stored per message, so this tests the model class rather than large-`B` execution.
 
 ## Files to inspect next
 
-- Narrative: `docs/reports/01_*.pdf` through `04_*.pdf`.
+- Narrative: `docs/reports/01_*.pdf` through `05_*.pdf`.
 - Exact global evidence: `results/03_results.md`.
 - Framework/sectioned evidence: `results/04_results.md`.
 - Current jobs and commands: `docs/EXPERIMENT_BANK.md`, `jobs/README.md`.
-- Core implementation: `framework/encoder.py`, `framework/sectioned.py`, `framework/outer_code.py`,
-  `framework/learned_decoders.py`, and `framework/outer_decoder.py`.
+- Core implementation: `framework/hash_skeleton.py`, `framework/encoder.py`, `framework/learned_decoders.py`,
+  `framework/sectioned.py`, `framework/outer_code.py`, and `framework/outer_decoder.py`.

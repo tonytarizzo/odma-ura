@@ -130,10 +130,10 @@ because the induced-global comparator is D0 rather than exact MAP/ML.
 
 ### `027_sparse_density_frontier`
 
-- Status: returned but not strictly complete. All 72 array logs are present; 68 summaries/checkpoints are complete. Four
-  full-density seed-2702 rows (`3,4,67,68`) completed evaluation and then failed in posthoc diagnostics because one
-  float32 Gaussian draw was exactly zero. The generator invariant is fixed; rerun those four indices before treating the
-  strict aggregate as final.
+- Status: complete, 72/72 summaries and checkpoints; the strict merger has no completeness notes. Four full-density
+  seed-2702 rows were rerun after exact-zero Gaussian entries violated the intended support invariant. Because the fix
+  changed random-number consumption, that rerun is not a clean nested paired endpoint; intermediate supports retain the
+  intended paired construction.
 - Scope: retain the job-`022` `B=12,n=256`, load, SNR, unit-energy, D0/D1, and training contract while changing only
   sparse-global integer support `s` over `256,192,128,96,64,48,32,24,16,12,8,6,4,3,2,1`.
 - Controls: separately trained dense at `p=1` and four-mask ODMA at `p=0.25`, where `p=s/n`.
@@ -148,21 +148,21 @@ because the induced-global comparator is D0 rather than exact MAP/ML.
 - Primary output: high-SNR mean PUPE versus nonzero fraction on a reversed log axis. Zero is excluded; `s=1`, or
   `p=1/256`, is the physical endpoint.
 
-Audit of the 68 strict artifacts:
+Final artifact audit:
 
-- all contain the expected 80 D0 or 20 D1 epochs, 20 learned and 20 matched-filter evaluation cells, finite values, and
-  checkpoints;
-- all 34 returned D0/D1 pairs have bit-identical encoder states and identical matched-filter evaluation streams;
+- all 72 contain the expected 80 D0 or 20 D1 epochs, 20 learned and 20 matched-filter evaluation cells, finite values,
+  and checkpoints;
+- all D0/D1 pairs have bit-identical encoder states and identical matched-filter evaluation streams;
 - nested supports and shared signs are exact within both seeds over every returned density;
 - maximum codeword-energy deviation is `9.54e-7`;
-- the incomplete merger and plots are reproducible only with `--allow-incomplete` until the four rows are rerun.
+- the strict merger succeeds with no missing or unexpected runs.
 
 High-SNR mean PUPE (8/12 dB, all four loads) shows:
 
 | Family/support | Nonzero fraction | D0 | D1 | Evidence |
 |---|---:|---:|---:|---|
-| dense | 1 | 0.2935 | 0.2239 | two-seed context; second seed from 4-decimal completed logs |
-| sparse global, `s=256` | 1 | 0.2979 | 0.2226 | two-seed context; second seed from 4-decimal completed logs |
+| dense | 1 | 0.2935 | 0.2030 | two complete summaries; repaired second seed is not nested-paired |
+| sparse global, `s=256` | 1 | 0.2976 | 0.2300 | two complete summaries; repaired second seed is not nested-paired |
 | sparse global, `s=64` | 1/4 | 0.2932 | 0.2256 | two complete summaries |
 | sparse global, `s=48` | 3/16 | 0.2975 | 0.2188 | two complete summaries |
 | sparse global, `s=32` | 1/8 | 0.3051 | 0.2276 | two complete summaries |
@@ -182,6 +182,45 @@ the `K=30` occupied-row fraction falls from `0.982` to `0.613`. At `s=1`, only 2
 exist, signed-pattern repetition is about 87.5%, correlation q99.9 is 1, and PUPE collapses. A procedural generator must
 therefore target recovery geometry and searchability, not just enough combinatorial labels.
 
-Do not repeat all 16 supports over all old geometries. After repairing the four controls, confirm `s=8,16,32,64` with
-more replication and then at one larger explicit payload (preferably `B=14,n=256`). This distinguishes the transition
-and its scaling before committing to a procedural support family.
+Do not repeat all 16 supports over all old geometries. The next bank instead tests a compact generated support family at
+one larger explicit payload while retaining iid sparse controls.
+
+## Generated hash-skeleton certification
+
+### `028_hash_skeleton_B14`
+
+- Status: implemented and locally certified; HPC results pending. The manifest has 36 rows.
+- Scale: `B=14,n=256`, training `K=7--22`, evaluation `K in {7,15,22,26}`, and the established
+  `Eb/N0 in {-4,0,4,8,12}` dB grid.
+- Sparse supports: `T in {16,32}`, giving `(R,r)=(16,4)` and `(8,3)` under `n=TR`, `R=2^r`.
+- Families: iid arbitrary sparse, balanced random one-per-table, random full-rank affine binary hash, and an affine hash
+  selected from 128 candidates by exact XOR-difference collision geometry. Dense is a contextual reference.
+- Pairing: at fixed `T` and seed, all sparse families use the same Gaussian amplitude array before exact unit-energy
+  normalisation. Training and evaluation data streams are also fixed across families and D0/D1.
+- Causal comparisons: balanced tables versus iid isolates the table constraint; random linear versus balanced tables
+  isolates repeated-XOR linear structure; selected versus random linear tests offline geometry design.
+- Diagnostics: exact support/energy, support repetition, row load/energy, sampled pair overlap/correlation, active
+  occupancy/singletons, active Gram spectra, disjoint `K`-sum separation, and exact linear collision spectra.
+- Scalability boundary: `A in GF(2)^(T x r x B)` and `b in GF(2)^(T x r)` compactly generate support. The current
+  certification still materialises `Phi in R^(256 x 16384)`, stores fixed per-message amplitudes, and uses global D0/D1.
+  It therefore tests model-class damage, not yet scalable inverse search.
+- Local evidence: deterministic algebra tests pass; the `B=6` D0/D1 smoke, ten-row `B=8` family/decoder mini suite,
+  and reduced-training `B=14` D0/D1 manifest rows all completed with finite losses, metrics, diagnostics, and checkpoints.
+
+Primary decision rule: reject or revise the table skeleton if balanced tables are materially worse than iid sparse at
+matched `T`. If tables survive but linear hashes do not, retain the skeleton and change the generator family. Only after
+a compact hash matches the control should work move to procedural amplitudes and a sub-exhaustive message proposer.
+
+### `029_joint_encoder_decoder_B14`
+
+- Status: implemented; local invariant, smoke, and six-row mini tests pass; HPC results pending. The manifest has 20 rows.
+- Question: did fixed amplitudes and unequal/short decoder training understate the sparse and hash model classes?
+- Scale: the job-`028` `B=14,n=256` operating point, with dense plus iid and selected-hash supports at `T=16,32`.
+- Training: D0/D1 and their encoder amplitudes are optimized together for 120 epochs. Sparse support is immutable;
+  exact zero masking and unit-column projection are applied after every step. Dense is learned under the same budget.
+- Evidence recorded: full loss curves and codebook geometry before/after learning, alongside the common PUPE grid.
+- Boundary: the per-message learned amplitudes and global D0/D1 state still scale with `2^B`.
+
+Decision rule: compare fixed job `028` with joint job `029`, then compare selected hash with iid at matched `T`, decoder,
+and seed. Improvement from joint learning changes the fixed-amplitude conclusion; a persistent hash--iid gap identifies
+support structure rather than amplitude co-adaptation as the remaining limitation.

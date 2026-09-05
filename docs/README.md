@@ -1,7 +1,7 @@
 # Research Narrative and Evidence Map
 
 The documentation is arranged as a causal research story rather than a catalogue of every attempted decoder. Read the
-four reports in order; use the Markdown ledgers only when the exact experimental audit trail is needed.
+five reports in order; use the Markdown ledgers only when the exact experimental audit trail is needed.
 
 ## Supervisor-facing reports
 
@@ -13,6 +13,8 @@ four reports in order; use the Markdown ledgers only when the exact experimental
    factorisation, implicit global execution, D0/D1 gradients, exact representation checks, and jobs `021--022`.
 4. [`reports/04_scalable_sectioned_framework.pdf`](reports/04_scalable_sectioned_framework.pdf) — procedural outer
    encoding, local banks, exact energy, association/BP algebra, jobs `023--027`, and the sparse-global density frontier.
+5. [`reports/05_hash_skeleton_generator.pdf`](reports/05_hash_skeleton_generator.pdf) — why the explicit sparse result
+   needs a generated, searchable replacement; the table/hash algebra; and the fixed and joint-learning tests `028--029`.
 
 The `.tex` source for each report sits beside its PDF. `report_style.tex` is the shared formatting preamble.
 
@@ -20,14 +22,14 @@ The `.tex` source for each report sits beside its PDF. `report_style.tex` is the
 
 [`CURRENT_STATE.md`](CURRENT_STATE.md) is a concise, neutral context document suitable for starting a new conversation.
 It distinguishes verified observations, interpretations, limitations, and open research choices. It is the authoritative
-summary after the returned job-`027` audit, including the four rows that still require repair.
+summary after the complete job-`027` audit and implementation of the pending jobs `028--029`.
 
 ## Detailed evidence
 
 - [`../results/03_results.md`](../results/03_results.md) records jobs `001--017`, including explicit dense/ODMA sweeps
   and oracle-support controls.
-- [`../results/04_results.md`](../results/04_results.md) records jobs `018--027`, implementation checks, returned-job
-  audits, full numerical tables, and interpretation limits.
+- [`../results/04_results.md`](../results/04_results.md) records jobs `018--029`, implementation checks, returned-job
+  audits, numerical tables, and interpretation limits. Jobs `028--029` have local certification only until HPC results return.
 - [`EXPERIMENT_BANK.md`](EXPERIMENT_BANK.md) records current experiment contracts and latest job status.
 - [`../jobs/README.md`](../jobs/README.md) records private HPC operation, submission, and merge commands.
 

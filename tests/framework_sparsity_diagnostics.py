@@ -55,12 +55,13 @@ def _sample_active_geometry(support: torch.Tensor, K: int, num_samples: int,
     n, M = support.shape
     if K <= 0 or K > M:
         raise ValueError(f"active-set K must lie in [1,{M}], got {K}")
-    occupied, collided_rows, reused = [], [], []
+    occupied, collided_rows, singleton_rows, reused = [], [], [], []
     for _ in range(num_samples):
         messages = torch.randperm(M, generator=generator)[:K]
         row_multiplicity = support[:, messages].sum(dim=1)
         occupied.append(float((row_multiplicity > 0).sum()))
         collided_rows.append(float((row_multiplicity > 1).sum()))
+        singleton_rows.append(float((row_multiplicity == 1).sum()))
         reused.append(float((row_multiplicity - 1).clamp_min(0).sum()))
     placements = K * float(support.sum(dim=0).to(torch.float32).mean())
     return {
@@ -68,14 +69,65 @@ def _sample_active_geometry(support: torch.Tensor, K: int, num_samples: int,
         "active_geometry_K": int(K),
         "active_occupied_rows_mean": float(np.mean(occupied)),
         "active_occupied_fraction_mean": float(np.mean(occupied) / n),
+        "active_expansion_ratio_mean": float(np.mean(occupied) / K),
         "active_collided_rows_mean": float(np.mean(collided_rows)),
+        "active_singleton_rows_mean": float(np.mean(singleton_rows)),
+        "active_singleton_placement_fraction_mean": float(np.mean(singleton_rows) / max(placements, 1.0)),
         "active_reused_placement_fraction_mean": float(np.mean(reused) / max(placements, 1.0)),
         "active_messages_sampled_without_replacement": True,
     }
 
 
+def _sample_active_gram(Phi: torch.Tensor, K: int, num_samples: int, generator: torch.Generator) -> dict:
+    if num_samples <= 0:
+        return {}
+    M = Phi.shape[1]
+    if K <= 0 or K > M:
+        raise ValueError(f"active-set K must lie in [1,{M}], got {K}")
+    min_eigenvalues, max_eigenvalues, conditions = [], [], []
+    for _ in range(num_samples):
+        messages = torch.randperm(M, generator=generator)[:K]
+        active = Phi[:, messages]
+        gram = active.conj().transpose(0, 1) @ active
+        eigenvalues = torch.linalg.eigvalsh(gram).real.to(torch.float64).clamp_min(0.0)
+        minimum, maximum = float(eigenvalues.min()), float(eigenvalues.max())
+        min_eigenvalues.append(minimum); max_eigenvalues.append(maximum)
+        conditions.append(maximum / max(minimum, 1e-12))
+    return {
+        "active_gram_samples": int(num_samples), "active_gram_K": int(K),
+        "active_gram_min_eigenvalue_mean": float(np.mean(min_eigenvalues)),
+        "active_gram_min_eigenvalue_q05": float(np.quantile(min_eigenvalues, 0.05)),
+        "active_gram_min_eigenvalue_min": float(np.min(min_eigenvalues)),
+        "active_gram_max_eigenvalue_mean": float(np.mean(max_eigenvalues)),
+        "active_gram_condition_median": float(np.median(conditions)),
+        "active_gram_condition_q95": float(np.quantile(conditions, 0.95)),
+        "active_gram_condition_max": float(np.max(conditions)),
+    }
+
+
+def _sample_sum_separation(Phi: torch.Tensor, K: int, num_pairs: int, generator: torch.Generator) -> dict:
+    if num_pairs <= 0:
+        return {}
+    M = Phi.shape[1]
+    if K <= 0 or 2 * K > M:
+        raise ValueError(f"disjoint K-sum sampling requires 1 <= 2K <= M, got K={K}, M={M}")
+    separations = []
+    for _ in range(num_pairs):
+        messages = torch.randperm(M, generator=generator)[:2 * K]
+        difference = Phi[:, messages[:K]].sum(dim=1) - Phi[:, messages[K:]].sum(dim=1)
+        separations.append(float(torch.linalg.vector_norm(difference) / math.sqrt(2.0 * K)))
+    values = np.asarray(separations)
+    return {
+        "sum_separation_pairs": int(num_pairs), "sum_separation_K": int(K),
+        "normalised_disjoint_K_sum_distance_mean": float(values.mean()),
+        "normalised_disjoint_K_sum_distance_q05": float(np.quantile(values, 0.05)),
+        "normalised_disjoint_K_sum_distance_min": float(values.min()),
+    }
+
+
 def analyse_encoder_sparsity(encoder, num_pairs: int = 0, active_samples: int = 0,
-                             active_k: int | None = None, seed: int = 0) -> dict:
+                             active_k: int | None = None, active_gram_samples: int = 0,
+                             sum_pair_samples: int = 0, seed: int = 0) -> dict:
     """Materialise only ``Phi`` and compute support/correlation diagnostics, never its Gram matrix."""
     Phi = encoder.explicit_matrix().detach().cpu()
     support = torch.abs(Phi) > 0
@@ -117,5 +169,9 @@ def analyse_encoder_sparsity(encoder, num_pairs: int = 0, active_samples: int = 
     generator = torch.Generator().manual_seed(int(seed))
     diagnostics.update(_sample_pair_geometry(Phi, support, int(num_pairs), generator))
     diagnostics.update(_sample_active_geometry(support, int(active_k), int(active_samples), generator)
+                       if active_k is not None else {})
+    diagnostics.update(_sample_active_gram(Phi, int(active_k), int(active_gram_samples), generator)
+                       if active_k is not None else {})
+    diagnostics.update(_sample_sum_separation(Phi, int(active_k), int(sum_pair_samples), generator)
                        if active_k is not None else {})
     return diagnostics
