@@ -172,7 +172,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--save-dataset", action="store_true",
                    help="save the generated/loaded count dataset into --out-dir")
     # training
-    p.add_argument("--epochs", type=int, default=5)
+    p.add_argument("--epochs", type=int, default=120)
     p.add_argument("--batches-per-epoch", type=int, default=50)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--weight-decay", type=float, default=0.0)
@@ -182,6 +182,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--lambda-coherence", type=float, default=0.0)
     p.add_argument("--lambda-row-load", type=float, default=0.0)
     p.add_argument("--eval-batches", type=int, default=8)
+    p.add_argument("--early-stopping-patience", type=int, default=5)
+    p.add_argument("--early-stopping-min-delta", type=float, default=0.0)
     # eval / inference
     p.add_argument("--num-trials", type=int, default=16,
                    help="number of evaluation batches in --mode infer")
@@ -244,6 +246,10 @@ def main(argv: list[str] | None = None) -> None:
     out_dir = Path(args.out_dir); out_dir.mkdir(parents=True, exist_ok=True)
 
     spec, encoder, dataset, train_sampler, val_sampler, test_sampler, fading_sampler = build_for_args(args, gen)
+    validation_gen = torch.Generator().manual_seed(int(args.seed) + 300_000)
+    validation_fading = (constant_fading(spec.num_antennas, encoder.dtype, encoder.device)
+                         if args.fading == "constant" else
+                         iid_gaussian_fading(spec.num_antennas, encoder.dtype, encoder.device, validation_gen))
     print(f"[framework] preset={args.preset}  n={spec.n}  M={spec.num_codewords}  "
           f"K_a={spec.num_active}  M_ant={spec.num_antennas}  Eb/N0={args.ebn0_db} dB")
     Phi_summary = {
@@ -269,10 +275,13 @@ def main(argv: list[str] | None = None) -> None:
                             lambda_coherence=args.lambda_coherence,
                             lambda_row_load=args.lambda_row_load,
                             eval_batches=args.eval_batches,
-                            eval_max_list_size=args.max_list_size)
+                            eval_max_list_size=args.max_list_size,
+                            early_stopping_patience=args.early_stopping_patience,
+                            early_stopping_min_delta=args.early_stopping_min_delta)
         train(encoder, counts_sampler=train_sampler, validation_counts_sampler=val_sampler,
               fading_sampler=fading_sampler,
-              ebn0_db=args.ebn0_db, cfg=cfg, generator=gen)
+              ebn0_db=args.ebn0_db, cfg=cfg, generator=gen,
+              validation_generator=validation_gen, validation_fading_sampler=validation_fading)
         plot_training_curves(cfg.progress, out_dir / "training_curves.png")
         (out_dir / "training_progress.json").write_text(json.dumps(cfg.progress, indent=2))
 
@@ -300,6 +309,7 @@ def main(argv: list[str] | None = None) -> None:
         "spec": asdict(spec),
         "dataset": asdict(dataset.config),
         "phi_summary": Phi_summary,
+        "early_stopping": cfg.early_stopping if args.mode == "train" else None,
         "eval_metrics": summary,
     }, indent=2, default=str))
     analyze_encoder(encoder, out_dir / "encoding_analysis")

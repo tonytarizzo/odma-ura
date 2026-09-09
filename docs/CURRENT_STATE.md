@@ -12,6 +12,12 @@ columns use 25% of resource rows were near dense performance under the same lear
 the same density but only four reused placement masks were substantially worse. The open question is whether the useful
 independent-support behaviour can be generated and decoded without storing one support per one of `2^B` messages.
 
+The working research discipline is to preserve the broad explicit model class until a computational obstruction forces
+a restriction, then test that restriction against its parent before adding another. Compact storage, cheap forward
+generation, isolated-message injectivity, and tractable noisy multiuser inversion are separate requirements. This is why
+the current direction returns to global `L=1` sparse geometry rather than treating the unsuccessful sectioned route as
+the only scalable option.
+
 ## System model and notation
 
 - One payload is `w in {0,1}^B`; hence there are `M=2^B` possible unsourced messages.
@@ -133,7 +139,7 @@ It identifies a forgiving model class, not a scalable implementation.
 
 ## Active next stage: generated hash skeleton
 
-Job `028_hash_skeleton_B14` is implemented and locally certified but has no HPC performance results yet. It tests whether
+Job `028_hash_skeleton_B14` is implemented and locally certified; 18 of 36 HPC rows are currently present. It tests whether
 the arbitrary size-`T` sparse support can be restricted to exactly one resource in each of `T` disjoint tables without
 losing the useful explicit-global performance. With `R=n/T=2^r`, the compact candidate is
 
@@ -165,11 +171,35 @@ Local verification covers exact support and unit energy, GF(2) ranks, support in
 equality, paired amplitudes, offline selection, all family/decoder paths at `B=8`, and reduced-training D0/D1 rows at the
 actual `B=14` manifest size. These are execution checks, not recovery results.
 
-Job `029_joint_encoder_decoder_B14` adds the missing co-adaptation control. It learns dense amplitudes, or amplitudes on
+Job `029_joint_encoder_decoder_B14` is complete (20/20 summaries and checkpoints). It learns dense amplitudes, or amplitudes on
 a fixed iid/hash support, jointly with D0 or D1. A gradient mask keeps sparse zeros exact and post-step projection keeps
 every column at unit energy. The focused 20-row bank uses only dense, iid sparse, and selected hash at `T=16,32`, two
-seeds, and 120 epochs. Pre/post geometry and full loss curves distinguish a support limitation from under-training.
-The learned sparse amplitudes are still stored per message, so this tests the model class rather than large-`B` execution.
+seeds, and 120 epochs. Selected hash and iid sparse are effectively tied under joint learning: their mean high-SNR PUPE
+differs by `-0.0003` (D0) and `-0.0103` (D1) at `T=16`, and `+0.0026` (D0) and `+0.0025` (D1) at `T=32`.
+This supports the hash restriction but does not isolate the benefit of amplitude learning because the earlier fixed runs
+used different decoder budgets. The learned sparse amplitudes are still stored per message.
+
+## Active amplitude stage
+
+Job `030_prototype_amplitude_frontier_B14` replaces the remaining per-message amplitude table by
+
+```text
+u_J(w) = P_J w in GF(2)^J,
+alpha(w) = V[:,u_J(w)] / ||V[:,u_J(w)]||,
+V in R^(T x 2^J).
+```
+
+The rows of every `P_J` are prefixes of one fixed invertible binary matrix, so the amplitude classes are nested from one
+shared table profile (`J=0`) to arbitrary per-message amplitudes (`J=B`). The selected support hash `A,b` and the label
+map `P_J` remain fixed. Each Gaussian `J` has a fixed-`V` run, which trains only D0/D1, and a matched learned-`V` run,
+which jointly trains `V` and the decoder. Unit-energy normalisation is part of the forward map and is reprojected after
+updates, so it holds for every message, not just sampled training messages.
+
+The 48-row pending bank uses `B=14,n=256,T=32`, `J in {0,2,4,8,14}`, D0/D1, and two seeds, plus fixed equal and
+Rademacher controls. All epoch-based framework training now defaults to a 120-epoch ceiling, deterministic validation,
+patience five, and restoration of the best validation checkpoint. Algebraic tests include equivalence of `J=B` to the
+old unrestricted amplitude endpoint and selected-column generation at `B=100,n=256,T=64,J=8` without a global
+message tensor. Current D0/D1 still score all `2^B` messages; job `030` tests amplitude model-class loss, not inversion.
 
 ## Files to inspect next
 
@@ -177,5 +207,10 @@ The learned sparse amplitudes are still stored per message, so this tests the mo
 - Exact global evidence: `results/03_results.md`.
 - Framework/sectioned evidence: `results/04_results.md`.
 - Current jobs and commands: `docs/EXPERIMENT_BANK.md`, `jobs/README.md`.
-- Core implementation: `framework/hash_skeleton.py`, `framework/encoder.py`, `framework/learned_decoders.py`,
+- Core implementation: `framework/hash_skeleton.py`, `framework/prototype_amplitudes.py`, `framework/encoder.py`, `framework/learned_decoders.py`,
   `framework/sectioned.py`, `framework/outer_code.py`, and `framework/outer_decoder.py`.
+
+The five PDFs now form the detailed chronological record; this file is deliberately only a neutral handoff. Report 1
+retains the original BP/EP development, Report 2 the wider decoder algebra and oracle decomposition, Report 3 the full
+explicit framework, Report 4 the scalable sectioned construction and failure, and Report 5 the current generated
+sparse-global direction.

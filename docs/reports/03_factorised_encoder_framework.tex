@@ -1,171 +1,318 @@
 \documentclass[11pt]{article}
-\newcommand{\ReportShortTitle}{Factorised encoder framework}
+\newcommand{\ReportShortTitle}{Explicit factorised framework}
+\newcommand{\ReportUpdated}{5 September 2026}
 \input{report_style}
 
 \begin{document}
-\ProjectReport{The factorised explicit framework}{General codebook algebra, implicit operators, and learned D0/D1}{3 of 4}
-{Small-$B$ framework validated; jobs 021--022 complete}
+\ProjectReport{The explicit factorised URA framework}
+{From the unrestricted $n\times2^B$ codebook to implicit operators, learned D0/D1, and controlled structure}{3 of 5}
+{Exact small-$B$ framework validated; jobs 018--022 complete}
 
-\section{Purpose}
+\section{Research principle and starting point}
 
-The explicit experiments used a different construction routine for each codebook. The framework replaced those special
-cases by one factorisation, allowing representation, encoder learning, and decoder learning to be compared without
-changing the outer experiment contract. It also clarified two different meanings of ``implicit'': avoiding a stored
-$n\times M$ matrix is useful, but it does not remove an $M=2^B$ decoder state.
-
-\section{Full global construction and shapes}
-
-Let $M=2^B$ and let $L$ be the number of additive components. Component $\ell$ has:
+The support-oracle experiment suggested that the principal loss was not merely energy sparsity. The next aim was to
+search for structured codebooks without deciding in advance that one named scheme---ODMA, CCS, SPARC, or another---was
+the answer. The correct unconstrained reference is the full common codebook
 \[
- R_{\ell,q}\in\C^{n\times d_\ell},\quad q=0,\ldots,Q_\ell-1,
- \qquad C_\ell\in\C^{d_\ell\times V_\ell}.
+ \Phi=[\phi_0,\ldots,\phi_{M-1}]\in\C^{n\times M},\qquad M=2^B,
 \]
-Define the complete product bank
+and the full count vector
 \[
- B_\ell=[R_{\ell,0}C_\ell\mid\cdots\mid R_{\ell,Q_\ell-1}C_\ell]
- \in\C^{n\times(Q_\ell V_\ell)}.
+ a=(a_0,\ldots,a_{M-1})^T\in\Z_+^M,qquad y=\Phi a+z.
 \]
-A sparse selector $U_\ell\in\{0,1\}^{Q_\ell V_\ell\times N_\ell}$ retains $N_\ell$ legal local atoms. A lookup
-$T_\ell\in\{0,1\}^{N_\ell\times M}$ has one nonzero per column and maps every global message to one local atom. The
-global codebook is
+Every column is one complete $B$-bit message. At $B=12$, $M=4096$; at $B=14$, $M=16384$; at $B=100$, the explicit
+matrix and even the length-$M$ vector are impossible to store. Nevertheless, the explicit model is the right algebraic
+starting point because it defines the broad model class before computational restrictions are imposed.
+
+The research philosophy is to remove exponential storage or search with the weakest structural restriction that works,
+and to measure each restriction against the broad explicit class. A compact representation is useful only if it retains
+good codebook geometry and admits complete-message recovery.
+
+\section{Layer 1: latent contribution decomposition}
+
+Suppose a complete codeword is the sum of $L$ contributions. Component $\ell$ has a local alphabet of $N_\ell$ full-
+frame atoms
 \[
- \boxed{\Phi=\sum_{\ell=1}^L B_\ell U_\ell T_\ell\in\C^{n\times M}.}
+ \Phi_\ell=[\phi_{\ell,1},\ldots,\phi_{\ell,N_\ell}]
+ \in\C^{n\times N_\ell}.
 \]
-
-For global counts $a\in\R^M$, the noiseless signal is
+Global message $m$ chooses index $i_\ell(m)\in\{1,\ldots,N_\ell\}$. Define the one-hot selection matrix
 \[
- y=\Phi a=\sum_\ell B_\ell U_\ell s_\ell,
- \qquad s_\ell=T_\ell a\in\R^{N_\ell}.
+ T_\ell\in\{0,1\}^{N_\ell\times M},\qquad T_\ell[:,m]=e_{i_\ell(m)}.
 \]
-$s_\ell$ aggregates every global message that uses the same local atom. This is the core many-to-one compression, but
-the explicit backend still needs the length-$M$ mapping $T_\ell$ and a length-$M$ output to distinguish messages.
-
-\subsection{Column-level interpretation}
-
-If message $m$ maps to local atom $i_\ell(m)$, and that atom represents pair $(q_\ell(m),v_\ell(m))$, then
+Then the complete waveform and codebook are
 \[
- \phi_m=\sum_{\ell=1}^LR_{\ell,q_\ell(m)}c_{\ell,v_\ell(m)}.
-\]
-This can represent a dense global codebook, ODMA placements, shared product alphabets, restricted valid pairs, multiple
-section contributions, and fixed or learned local matrices. Representability is not the same as compact scalability:
-an arbitrary $T_\ell$ contains $M$ choices.
-
-\section{How implementation avoids materialising the global matrix}
-
-The implemented component stores integer arrays describing the $N_\ell$ legal atoms and a length-$M$
-\texttt{msg\_to\_atom} lookup. The forward path performs
-\[
- a\xrightarrow{T_\ell}s_\ell
- \xrightarrow{U_\ell}\text{coefficients on }(q,v)
- \xrightarrow{C_\ell}\text{one local vector per }q
- \xrightarrow{R_{\ell,q}} y_\ell,
-\]
-then sums $y=\sum_\ell y_\ell$. The adjoint reverses these operations:
-\[
- r\xrightarrow{R_{\ell,q}^H}r_{\ell,q}
- \xrightarrow{C_\ell^H}\text{scores on }(q,v)
- \xrightarrow{U_\ell^H}\text{local atom scores}
- \xrightarrow{T_\ell^H}\Phi_\ell^Hr.
-\]
-Thus normal training uses memory proportional to factors plus $M$, rather than $nM$. Selected columns or the entire
-matrix can still be materialised for small-system diagnostics.
-
-\subsection{Gradient flow}
-
-For loss $\mathcal L(y)$ and upstream vector $g_y=\partial\mathcal L/\partial y$, automatic differentiation follows the
-same adjoints. For example, with $Z_{\ell,q}=C_\ell X_{\ell,q}$ and $y_\ell=\sum_qR_{\ell,q}Z_{\ell,q}$,
-\[
- \frac{\partial\mathcal L}{\partial Z_{\ell,q}}=R_{\ell,q}^Hg_y,
+ \phi_m=\sum_{\ell=1}^L\phi_{\ell,i_\ell(m)},
  \qquad
- \frac{\partial\mathcal L}{\partial C_\ell}=\sum_q(R_{\ell,q}^Hg_y)X_{\ell,q}^H.
+ \boxed{\Phi=\sum_{\ell=1}^L\Phi_\ell T_\ell.}
 \]
-The gradient with respect to counts is $\partial\mathcal L/\partial a=\Phi^Hg_y$. Fixed integer selectors $U,T$ receive
-no gradient; learning them requires a discrete search or a separate relaxation. Learning $C$ or continuous $R$ does not.
-
-\section{D0: exact data consistency, learned scalar denoising}
-
-After matched channel combining, initialise $a^0=0\in\R^{P\times M}$ for batch size $P$. At layer $t$,
+This does not require the message to be semantically split. The fully general one-shot codebook is the special case
 \[
- r^t=y-\Phi a^t,\qquad g^t=\Re\{\Phi^Hr^t\},\qquad
- u^t=a^t+\eta_tg^t,
+ L=1,\qquad \Phi_1=\Phi,\qquad T_1=I_M.
 \]
-where $\eta_t>0$ is scaled by an implicit estimate of $\|\Phi\|_2^2$. With known $K_a$, D0 uses
-$\rho=K_a/M$ and produces calibrated support logits
+
+For global counts $a$, define local aggregate counts
 \[
- \lambda_j^t=\operatorname{clip}\!\left[
- \gamma_t\frac{u_j^t-1/2}{\tau_t}+\beta_t\log\frac{\rho}{1-\rho}+b_t,-30,30\right].
+ s_\ell=T_\ell a\in\Z_+^{N_\ell}.
 \]
-The soft proposal is $\widetilde a^t\propto\sigma(\lambda^t)$, normalised so $\one^T\widetilde a^t=K_a$, and damping
-forms $a^{t+1}$. Only the final evaluation output is projected to nonnegative integer counts.
+Then
+\[
+ y=\Phi a+z=\sum_{\ell=1}^L\Phi_\ell s_\ell+z.
+\]
+Each $s_\ell$ is many-to-one: it records how many active messages used each local atom, not which atoms across different
+components belonged to the same complete message. This observation later becomes the association problem.
 
-The exact $\Phi/\Phi^H$ pair preserves physical data consistency. Learned parameters calibrate evidence, prior strength,
-temperature, step size, and damping; there is no learned dense message-to-message matrix. Gradients flow through every
-unrolled layer to the decoder scalars and any learnable encoder matrices.
+\section{Layer 2: product structure within a component}
 
-\section{D1: nonlocal factor context}
+Component $\ell$ may itself be generated by resource operators and local codewords. Let
+\[
+ R_{\ell,q}\in\C^{n\times d_\ell},\quad q=1,\ldots,Q_\ell,
+ \qquad
+ C_\ell=[c_{\ell,1},\ldots,c_{\ell,V_\ell}]\in\C^{d_\ell\times V_\ell}.
+\]
+For a fixed operator $q$, $R_{\ell,q}C_\ell$ contains all $V_\ell$ codewords passed through that operator. The complete
+product library is
+\[
+ B_\ell=[R_{\ell,1}C_\ell\mid\cdots\mid R_{\ell,Q_\ell}C_\ell]
+ \in\C^{n\times Q_\ell V_\ell}.
+\]
+Not every pair $(q,v)$ must be legal. Let
+\[
+ U_\ell\in\{0,1\}^{Q_\ell V_\ell\times N_\ell}
+\]
+select $N_\ell$ valid local atoms, with one nonzero per column for an exact selection. Thus
+\[
+ \Phi_\ell=B_\ell U_\ell.
+\]
+Substitution gives the central framework:
+\[
+ \boxed{
+ \Phi=\sum_{\ell=1}^L
+ [R_{\ell,1}C_\ell\mid\cdots\mid R_{\ell,Q_\ell}C_\ell]U_\ell T_\ell.}
+\]
 
-D1 starts with the identical D0 map and adds a learned proximal correction. For a single product component it labels
-each message by its pattern $q_j$ and local value $v_j$. Per-message features include $u_j^t,a_j^t,g_j^t$, base logit,
-pattern mass, residual scale, noise scale, and prior logit. Slot attention pools context:
+The factors have different meanings and should not be conflated:
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}p{0.22\textwidth}YY@{}}
+\toprule
+Object and shape & Meaning & Computational or modelling implication \\
+\midrule
+$L$ & Number of additive contributions & $L>1$ creates a path/association problem unless the tuple is constrained \\
+Operator $R_{\ell,q}$\newline $n\times d_\ell$ & Placement, mask, spreading, or transform & Controls resource occupation and geometry \\
+Alphabet $C_\ell$\newline $d_\ell\times V_\ell$ & Local value/codeword alphabet & Natural continuous learning target \\
+Validity $U_\ell$\newline $Q_\ell V_\ell\times N_\ell$ & Legal local $(q,v)$ pairs & Usually a fixed discrete map \\
+Mapping $T_\ell$\newline $N_\ell\times M$ & Complete message to local atom & Contains global semantics and is exponential if stored arbitrarily \\
+\bottomrule
+\end{tabularx}
+\end{center}
 
+\section{Representation library}
+
+The value of the factorisation is that named constructions become controlled restrictions of one global model.
+
+\subsection{Dense one-shot codebook}
+
+For arbitrary $\Phi_{\rm dense}\in\C^{n\times M}$, take
+\[
+ L=1,\ Q_1=1,\ d_1=n,\ V_1=N_1=M,
+\]
+\[
+ R_{1,1}=I_n,\quad C_1=\Phi_{\rm dense},\quad U_1=T_1=I_M.
+\]
+No model-class restriction has been introduced.
+
+\subsection{Sparse-global codebook}
+
+Use the same one-component representation but constrain each column of $C_1$:
+\[
+ \|C_1[:,m]\|_0=s,qquad \|C_1[:,m]\|_2=1.
+\]
+Supports may be independent across messages. This preserves a broad family of $\binom ns$ masks and became the most
+promising explicit control.
+
+\subsection{ODMA/product construction}
+
+Let each $R_q$ place or mask a shared local codebook $C$. With all pairs legal,
+\[
+ \Phi=[R_1C\mid\cdots\mid R_QC],\qquad L=1,\quad U=T=I_{QV},\quad M=QV.
+\]
+ODMA is a sparse placement special case. Sharing only $Q$ supports across $M$ messages is a much stronger restriction
+than giving every message its own sparse support.
+
+\subsection{Restricted pattern-codeword pairs}
+
+If only a subset of $(q,v)$ pairs is valid, $U$ selects them:
+\[
+ \Phi=[R_1C\mid\cdots\mid R_QC]U,qquad N=M,qquad T=I_M.
+\]
+This separates the geometry of the available product library from the combinatorial selection of messages.
+
+\subsection{Sectioned CCS or SPARC-style construction}
+
+Let $m$ map to one local index $i_\ell(m)$ in each section. Then
+\[
+ \phi_m=\sum_{\ell=1}^L\Phi_\ell e_{i_\ell(m)}.
+\]
+Disjoint-section CCS uses $R_{\ell,1}$ to embed a section dictionary into its own channel-use interval. A SPARC-like
+representation may instead use $R_{\ell,1}=I_n$ and $C_\ell=\sqrt{E_\ell}A_\ell$. An outer code constrains which tuples
+$(i_1,\ldots,i_L)$ are legal; algebraically that constraint is carried by the collection of $T_\ell$ maps.
+
+\subsection{Spreading, interleaving, and hybrid families}
+
+Dense diagonal signatures, permutations, interleavers, slot embeddings, and learned linear maps are all possible
+$R_{\ell,q}$. A hybrid may use several components, each with its own operator bank and local alphabet. The factorisation
+is a representation of transmitted waveforms; it does not imply that conventional decoders for all these schemes are
+the same.
+
+\section{Explicit versus implicit implementation}
+
+The non-scalable mathematical object is the matrix $\Phi\in\C^{n\times M}$. The implementation avoids materialising
+it by storing:
 \begin{itemize}
- \item within messages sharing $q$;
- \item across patterns sharing $v$;
- \item globally across all messages.
+ \item the continuous $R$ and $C$ factors or compact operator parameters;
+ \item integer arrays that identify each legal local atom, replacing dense one-hot $U$;
+ \item a length-$M$ \texttt{msg\_to\_atom} lookup, replacing dense one-hot $T$.
 \end{itemize}
 
-A small correction network adds $\Delta_j^t$ to the D0 logit. It is zero-initialised, so before training D1 is exactly
-D0. This construction is linear rather than quadratic in $M$ for fixed slot count, but it remains $M$-indexed and is
-several times more expensive than D0.
+For a vector $v\in\C^M$, the forward operator is
+\[
+ \Phi v=\sum_\ell B_\ell U_\ell(T_\ell v).
+\]
+$T_\ell v$ aggregates global coefficients by local atom; $U_\ell$ scatters them into the $(q,v)$ product library;
+$C_\ell$ forms local vectors; and $R_{\ell,q}$ maps them to the resource grid. The exact adjoint reverses the chain:
+\[
+ \Phi^Hr=\sum_\ell T_\ell^HU_\ell^HB_\ell^Hr.
+\]
+This reduces storage from $O(nM)$ to the factor storage plus $O(M)$ integer mappings and decoder state. It is valuable at
+$B=12$ or 14, but it is not a $B=100$ solution because both $T_\ell$ and the output $\Phi^Hr\in\C^M$ retain the global
+message axis.
 
-\section{Validation before performance claims}
+\section{Gradient flow through the factorisation}
 
-The framework passed exact or numerical checks for implicit versus materialised forward maps, adjoint identities,
-selected-column construction, legacy ODMA representation, reduced sectioned CCS representation, and tiny exact count
-ML. The normal $B=14,M=16384$ training path completed without an $n\times M$ matrix. These checks establish that the
-factor operations implement the intended small-$B$ algebra; they do not validate an arbitrary decoder or establish
-paper-faithful CCS-AMP equivalence.
+Let a batch of global counts be $A\in\R^{P\times M}$ and let the encoder output be $Y=A\Phi^T$. For loss $\mathcal L$
+with upstream gradient $G_Y=\partial\mathcal L/\partial Y$, the count gradient is the adjoint operation
+\[
+ \frac{\partial\mathcal L}{\partial A}=G_Y\Phi^*.
+\]
+For one component and operator, write the aggregated coefficients as $X_{\ell,q}$ and
+\[
+ Z_{\ell,q}=X_{\ell,q}C_\ell^T,qquad
+ Y_\ell=\sum_q Z_{\ell,q}R_{\ell,q}^T.
+\]
+Then, suppressing conjugation conventions,
+\[
+ \frac{\partial\mathcal L}{\partial Z_{\ell,q}}=G_YR_{\ell,q}^*,
+\]
+\[
+ \frac{\partial\mathcal L}{\partial C_\ell}
+ =\sum_q\left(\frac{\partial\mathcal L}{\partial Z_{\ell,q}}\right)^TX_{\ell,q},
+ \qquad
+ \frac{\partial\mathcal L}{\partial R_{\ell,q}}
+ =G_Y^TZ_{\ell,q}^*.
+\]
+Autodifferentiation implements these adjoint chains without building $\Phi$. Continuous $C$ and $R$ are learnable.
+Exact integer $U$ and $T$ have no ordinary gradient; changing them requires discrete design, search, or an explicitly
+labelled relaxation.
 
-\section{Jobs 021--022: what was learned}
+\section{Feasibility constraints and learning objective}
 
-The controlled bank used $L=1$, $U=T=I$, and $d=n$. It compared dense, shared product, independently sparse-global, and
-four-mask ODMA encoders at four $(B,n)$ geometries: $(12,128)$, $(12,256)$, $(14,128)$, and $(14,256)$.
+The broad factorisation is not a proposal to learn everything simultaneously. The communication problem is
+\[
+ \min_{\theta,\gamma}\ \mathbb E[\mathcal L(a,D_\gamma(y;\Phi_\theta))]
+ \quad\text{s.t.}\quad \|\phi_m(\theta)\|_2^2=1\ \forall m,
+\]
+with final evaluation in PUPE or required $E_b/N_0$, not only surrogate loss.
 
-\begin{table}[h]
-\centering
-\small
-\begin{tabular}{@{}lrrrr@{}}
-\toprule
-High-SNR mean PUPE & $12,128$ & $12,256$ & $14,128$ & $14,256$ \\
-\midrule
-Dense D1 & .2912 & .2185 & .3556 & .3099 \\
-Product D1 average & .3118 & .2268 & .3717 & .3264 \\
-Sparse-global D1 & .3399 & .2182 & .3714 & .3040 \\
-ODMA D1 & .5417 & .4561 & .5886 & .5295 \\
-\bottomrule
-\end{tabular}
-\caption{Average over four loads at 8 and 12 dB. Cells contain limited evaluation samples; differences of a few PUPE
-points are not reliable rankings.}
-\end{table}
+Important hard conditions are:
+\begin{enumerate}
+ \item equal unit energy for every global codeword, enforced by parameterisation or projection;
+ \item injectivity of $m\mapsto(i_1(m),\ldots,i_L(m))$ unless deliberate ambiguity is being tested;
+ \item exact support budgets for sparse families rather than hoping an $\ell_1$ penalty produces them;
+ \item balanced resource use and controlled intersections as diagnostics or construction constraints;
+ \item fixed $U,T$ in early experiments, so continuous learning cannot silently change message semantics.
+\end{enumerate}
 
-Across all evaluation cells, D0 improved over matched filtering by about $0.004$ PUPE on average. D1's improvement was
-about $0.042$ at 8/12 dB, but D1 also helped dense codebooks; the experiment therefore supports nonlocal learned context,
-not a uniquely product-factor gain. Product sharing was competitive but slightly worse than dense on average, and
-learning $C$ was mixed across geometries. Median D1 runtime was $5.2$ times D0.
+The first surrogate combined balanced support BCE with a count Smooth-L1 term. Count MSE,
+\[
+ \mathcal L_{\rm count}=M^{-1}\|\widehat a-a\|_2^2,
+\]
+is another simple option, but no differentiable surrogate should be confused with PUPE.
 
-The most consequential result was morphological. Sparse-global and ODMA both used 25\% nonzeros per column, but
-sparse-global gave each message an independently sampled support. ODMA reused only four masks. Sparse-global row-energy
-coefficient of variation was $0.023$--$0.053$; ODMA's was $0.839$--$0.875$, with about 30\% of rows unused. Sparse-global
-was within $0.016$ PUPE of dense in every geometry and essentially tied at $n=256$.
+\section{D0: exact data consistency with learned scalar denoising}
 
-\evidence{Measured finite experiment. It shows that this ODMA support reuse is harmful under the tested decoder; it does
-not show that sparsity is universally harmless or that sparse-global storage is scalable.}
+For batch size $P$, initialise $a^0=0\in\R^{P\times M}$. Layer $t$ performs
+\[
+ r^t=y-\Phi a^t,qquad
+ g^t=\Re\{\Phi^Hr^t\},qquad
+ u^t=a^t+\eta_tg^t.
+\]
+With known $K_a$, a Bernoulli activity approximation uses $\rho=K_a/M$. D0 converts each coordinate to a support logit
+\[
+ \lambda_j^t=\operatorname{clip}\left[
+ \gamma_t\frac{u_j^t-1/2}{\tau_t}+\beta_t\log\frac{\rho}{1-\rho}+b_t,-30,30\right].
+\]
+The soft proposal is proportional to $\sigma(\lambda^t)$ and is normalised to total mass $K_a$; damping produces
+$a^{t+1}$. Hard nonnegative integer projection occurs only at evaluation.
 
-\section{Scalability boundary}
+The physical forward/adjoint pair is exact. Learned scalars calibrate step size, evidence scale, prior, temperature,
+bias, and damping. Gradients through all unrolled layers reach both decoder parameters and continuous encoder factors.
+D0 still computes an $M$-length vector.
 
-Even without a stored $\Phi$, the explicit framework keeps $T_\ell$ and $a^t$ indexed by all $M$ messages. Going from
-$B=14$ to $B=100$ multiplies that dimension from $16{,}384$ to approximately $1.27\times10^{30}$. Factorised matrix
-arithmetic alone cannot cross this boundary. The next stage must generate a message's local choices procedurally and
-decode from local states without ever expanding them back to every global message.
+\section{D1: learned nonlocal factor context}
+
+D1 starts with the same $r^t,g^t,u^t$ and base logits. For an $L=1$ product bank, message $j$ has labels $(q_j,v_j)$.
+Its features include $u_j^t$, $a_j^t$, $g_j^t$, base logit, pattern mass, residual/noise scales, and prior logit. Latent
+slot attention pools context:
+\begin{itemize}
+ \item among messages sharing the same pattern $q$;
+ \item across patterns for a shared local value $v$;
+ \item globally across the message set.
+\end{itemize}
+A small network adds correction $\Delta_j^t$ to the D0 logit. The correction head is zero-initialised, so D1 initially
+equals D0 exactly. For fixed slot count, the operation is linear rather than quadratic in $M$, but it remains indexed
+by all $M$ messages and is several times slower.
+
+The factor-aware interpretation must be made carefully: D1 also improves dense controls, so a D1 gain alone does not
+prove that product structure was exploited. A causal factor benefit requires matched controls or ablations.
+
+\section{Validation before performance}
+
+The implementation checked:
+\begin{itemize}
+ \item implicit versus materialised forward maps and adjoint inner products;
+ \item selected-column construction;
+ \item exact representation of legacy ODMA and reduced sectioned CCS constructions;
+ \item tiny exact count ML, including message collisions;
+ \item normal $B=14,M=16384$ training without constructing an $n\times M$ matrix.
+\end{itemize}
+These certify implementation of the intended algebra at materialisable $B$. They do not prove paper-faithful AMP state
+evolution or large-$B$ complete-message decoding.
+
+\section{Jobs 021--022 and the promising sparse-global result}
+
+The controlled bank fixed $L=1$, $U=T=I$, and $d=n$. It compared dense, shared product, independently sparse-global,
+and four-mask ODMA encoders. The four geometries were $(B,n)=(12,128),(12,256),(14,128)$, and $(14,256)$, under common
+D0/D1 training and evaluation.
+
+The defensible conclusions are:
+\begin{enumerate}
+ \item D0 improved only slightly over its matched-filter calibration, about $0.004$ PUPE on average.
+ \item D1 improved high-SNR PUPE by about $0.042$ on average, but did so for dense controls too; a uniquely factor-aware
+ gain was not isolated. Median runtime was about $5.2$ times D0.
+ \item Product sharing was competitive but did not beat dense controls on average; learning $C$ had mixed effect.
+ \item Independent 25\%-sparse global supports stayed within $0.016$ PUPE of dense in all four geometries and were
+ essentially tied at $n=256$.
+ \item Four-mask ODMA was much worse and left roughly 30\% of rows unused. Equal nonzero fraction therefore did not
+ imply equal recovery geometry.
+\end{enumerate}
+
+\evidence{Measured jobs 021--022. The sparse-global result is an explicit $M=2^B$ existence result under the tested
+learned decoders; it is not yet a compact generator or scalable receiver.}
+
+The original staged programme was therefore sensible: dense $\to$ sparse global $\to$ product/ODMA restrictions
+$\to$ valid-atom restrictions $\to L>1$ $\to$ mapping design. The next implementation attempted to remove the remaining
+$M$ axis by moving to local section states. Report 4 explains why that execution succeeded algebraically but the chosen
+outer association and decoder did not preserve the strong $L=1$ landscape.
 
 \end{document}

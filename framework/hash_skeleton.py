@@ -68,7 +68,7 @@ def linear_hash_bins(A: torch.Tensor, b: torch.Tensor, message_bits: torch.Tenso
         raise ValueError(f"expected b=({T},{r}) and message_bits=(M,{B}); got {tuple(b.shape)}, {tuple(message_bits.shape)}")
     bits = (torch.einsum("trb,mb->trm", A.to(torch.int64), message_bits.to(torch.int64))
             + b.to(torch.int64).unsqueeze(-1)).remainder_(2)
-    weights = (1 << torch.arange(r, dtype=torch.int64)).reshape(1, r, 1)
+    weights = (1 << torch.arange(r, dtype=torch.int64, device=bits.device)).reshape(1, r, 1)
     return torch.sum(bits * weights, dim=1)
 
 
@@ -187,16 +187,16 @@ def materialize_sparse_codebook(rows: torch.Tensor, amplitudes: torch.Tensor, n:
         sorted_rows = torch.sort(rows, dim=0).values
         if bool((sorted_rows[1:] == sorted_rows[:-1]).any()):
             raise ValueError("each codeword must select distinct physical rows")
-    codebook = torch.zeros(n, M, dtype=amplitudes.dtype)
-    columns = torch.arange(M).repeat(T)
+    rows = rows.to(device=amplitudes.device)
+    codebook = torch.zeros(n, M, dtype=amplitudes.dtype, device=amplitudes.device)
+    columns = torch.arange(M, device=amplitudes.device).repeat(T)
     codebook[rows.reshape(-1), columns] = amplitudes.reshape(-1)
     return codebook
 
 
-def hash_skeleton_component_specs(spec: URASpec, family: str, support_size: int, seed: int,
-                                  search_candidates: int = 128,
-                                  learn_amplitudes: bool = False) -> tuple[list[ComponentSpec], dict]:
-    """Build one B-small certification codebook while retaining its compact support-rule metadata."""
+def hash_skeleton_rows(spec: URASpec, family: str, support_size: int, seed: int,
+                       search_candidates: int = 128) -> tuple[torch.Tensor, dict]:
+    """Construct supports and their compact-rule metadata, without choosing amplitudes."""
     if family not in HASH_SKELETON_FAMILIES:
         raise ValueError(f"unknown hash-skeleton family '{family}'")
     B, n, M, T = int(spec.payload_bits), int(spec.n), int(spec.num_codewords), int(support_size)
@@ -204,16 +204,12 @@ def hash_skeleton_component_specs(spec: URASpec, family: str, support_size: int,
         raise ValueError(f"hash-skeleton certification requires M=2^B, got M={M}, B={B}")
     if T <= 0 or T > n:
         raise ValueError(f"support size T must lie in [1,{n}], got {T}")
-    structure_seed, amplitude_seed = int(seed) + 310_003, int(seed) + 410_009
+    structure_seed = int(seed) + 310_003
     structure_generator = torch.Generator().manual_seed(structure_seed)
-    amplitude_generator = torch.Generator().manual_seed(amplitude_seed)
     construction = {
         "family": family, "payload_bits": B, "n": n, "num_messages": M, "support_size": T,
-        "structure_seed": structure_seed, "amplitude_seed": amplitude_seed,
-        "amplitude_pairing_key": f"gaussian_seed_{amplitude_seed}_shape_{T}x{M}",
-        "exact_column_energy": True, "materialised_for_small_B_certification": True,
+        "structure_seed": structure_seed, "materialised_for_small_B_certification": True,
         "scalable_claim_applies_to_support_rule_only": True,
-        "learnable_amplitudes_on_fixed_support": bool(learn_amplitudes),
     }
 
     if family == "sparse_iid_fixed":
@@ -248,15 +244,31 @@ def hash_skeleton_component_specs(spec: URASpec, family: str, support_size: int,
                 **search,
             })
 
-    amplitudes = nonzero_gaussian((T, M), torch.float32, amplitude_generator)
-    amplitudes = amplitudes / amplitudes.norm(dim=0, keepdim=True).clamp_min(1e-12)
-    codebook = materialize_sparse_codebook(rows, amplitudes, n)
     support_tuples = torch.unique(torch.sort(rows.transpose(0, 1), dim=1).values, dim=0).shape[0]
-    row_load = (codebook != 0).sum(dim=1)
+    row_load = torch.bincount(rows.reshape(-1), minlength=n)
     construction.update({
         "distinct_support_tuples": int(support_tuples), "support_tuple_injective": bool(support_tuples == M),
         "row_load_min": int(row_load.min()), "row_load_max": int(row_load.max()),
     })
+    return rows, construction
+
+
+def hash_skeleton_component_specs(spec: URASpec, family: str, support_size: int, seed: int,
+                                  search_candidates: int = 128,
+                                  learn_amplitudes: bool = False) -> tuple[list[ComponentSpec], dict]:
+    """Build one B-small certification codebook while retaining its compact support-rule metadata."""
+    rows, construction = hash_skeleton_rows(spec, family, support_size, seed, search_candidates)
+    T, M, n = int(rows.shape[0]), int(rows.shape[1]), int(spec.n)
+    amplitude_seed = int(seed) + 410_009
+    amplitude_generator = torch.Generator().manual_seed(amplitude_seed)
+    construction.update({
+        "amplitude_seed": amplitude_seed, "amplitude_pairing_key": f"gaussian_seed_{amplitude_seed}_shape_{T}x{M}",
+        "exact_column_energy": True, "learnable_amplitudes_on_fixed_support": bool(learn_amplitudes),
+    })
+
+    amplitudes = nonzero_gaussian((T, M), torch.float32, amplitude_generator)
+    amplitudes = amplitudes / amplitudes.norm(dim=0, keepdim=True).clamp_min(1e-12)
+    codebook = materialize_sparse_codebook(rows, amplitudes, n)
     components = [ComponentSpec(Q=1, d=n, V=M, N=M, R_init="identity", C_init="explicit", U_init="all_pairs",
                                 T_init="identity", learn_R=False, learn_C=bool(learn_amplitudes), explicit_C=codebook,
                                 fixed_C_support=(codebook != 0) if learn_amplitudes else None)]

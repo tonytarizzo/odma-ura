@@ -33,8 +33,16 @@
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\C}{\mathbb{C}}
 \newcommand{\Z}{\mathbb{Z}}
+\newcommand{\F}{\mathbb{F}}
 \newcommand{\one}{\mathbf{1}}
 \newcommand{\given}{\,|\,}
+\newcommand{\CN}{\mathcal{CN}}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\Cov}{Cov}
+\DeclareMathOperator{\Var}{Var}
+\DeclareMathOperator{\supp}{supp}
+\DeclareMathOperator*{\argminop}{arg\,min}
+\DeclareMathOperator*{\argmaxop}{arg\,max}
 \newcommand{\evidence}[1]{\textcolor{accent}{\textbf{Evidence status:}} #1}
 \providecommand{\ReportUpdated}{30 August 2026}
 \newcommand{\ProjectReport}[4]{%
@@ -44,11 +52,11 @@
     {\large\color{accent}\textbf{ODMA--URA research record}}\\[12mm]
     {\huge\bfseries #1}\\[5mm]
     {\Large\color{muted}#2}\\[18mm]
-    \begin{tabular}{@{}ll@{}}
+    \begin{tabularx}{\textwidth}{@{}p{0.16\textwidth}Y@{}}
       Stage & #3\\
       Updated & \ReportUpdated\\
       Status & #4
-    \end{tabular}
+    \end{tabularx}
     \vfill
     \textcolor{muted}{This report is a chronological research record. Measured results, interpretations, and open
     hypotheses are labelled separately. Detailed numerical ledgers remain in \texttt{results/}.}

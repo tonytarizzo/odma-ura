@@ -4,6 +4,10 @@ This is the concise operational ledger. The chronological explanation is in [`do
 neutral handoff is in [`docs/CURRENT_STATE.md`](CURRENT_STATE.md), and full numerical evidence is in
 [`results/04_results.md`](../results/04_results.md).
 
+The ledger intentionally does not duplicate derivations. Reports 1--2 retain the historical receiver equations;
+Report 3 derives the explicit factorised model; Report 4 derives and audits the section-domain route; Report 5 connects
+job `027` to the generated hash-skeleton tests.
+
 ## Explicit `L=1` contract (`021--022`)
 
 - Message space: `M=2^B=Q*V`; every `(q,v)` pair is legal, so `U=T=I`.
@@ -189,7 +193,7 @@ one larger explicit payload while retaining iid sparse controls.
 
 ### `028_hash_skeleton_B14`
 
-- Status: implemented and locally certified; HPC results pending. The manifest has 36 rows.
+- Status: implemented and locally certified; 18/36 HPC summaries and checkpoints are present.
 - Scale: `B=14,n=256`, training `K=7--22`, evaluation `K in {7,15,22,26}`, and the established
   `Eb/N0 in {-4,0,4,8,12}` dB grid.
 - Sparse supports: `T in {16,32}`, giving `(R,r)=(16,4)` and `(8,3)` under `n=TR`, `R=2^r`.
@@ -213,14 +217,35 @@ a compact hash matches the control should work move to procedural amplitudes and
 
 ### `029_joint_encoder_decoder_B14`
 
-- Status: implemented; local invariant, smoke, and six-row mini tests pass; HPC results pending. The manifest has 20 rows.
+- Status: complete; local checks and all 20 HPC summaries/checkpoints pass the strict merger.
 - Question: did fixed amplitudes and unequal/short decoder training understate the sparse and hash model classes?
 - Scale: the job-`028` `B=14,n=256` operating point, with dense plus iid and selected-hash supports at `T=16,32`.
 - Training: D0/D1 and their encoder amplitudes are optimized together for 120 epochs. Sparse support is immutable;
   exact zero masking and unit-column projection are applied after every step. Dense is learned under the same budget.
 - Evidence recorded: full loss curves and codebook geometry before/after learning, alongside the common PUPE grid.
+- Result: selected hash and iid sparse are effectively tied at both supports. Selected-minus-iid PUPE is approximately
+  `-0.0003/-0.0103` for D0/D1 at `T=16` and `+0.0026/+0.0025` at `T=32`.
 - Boundary: the per-message learned amplitudes and global D0/D1 state still scale with `2^B`.
 
 Decision rule: compare fixed job `028` with joint job `029`, then compare selected hash with iid at matched `T`, decoder,
 and seed. Improvement from joint learning changes the fixed-amplitude conclusion; a persistent hash--iid gap identifies
 support structure rather than amplitude co-adaptation as the remaining limitation.
+
+### `030_prototype_amplitude_frontier_B14`
+
+- Status: implemented and locally certified; the 48-row HPC bank is pending.
+- Fixed object: the same selected affine support hash `A,b` at `B=14,n=256,T=32`.
+- Amplitude classes: `u_J=P_Jw`, `V in R^(T x 2^J)`, and `J in {0,2,4,8,14}`. Prefix projections make the model
+  classes nested; `J=0` shares one table profile and `J=14` recovers arbitrary per-message amplitudes.
+- Training comparison: every Gaussian `J` has a fixed-`V` row (decoder only) and a paired learned-`V` row (joint
+  amplitude/decoder training). `A,b,P_J` are always fixed. Equal `J=0` and Rademacher `J=14` are fixed controls.
+- Energy: normalising each column of `V` in the forward rule guarantees unit energy for every message, including unseen
+  messages after deployment; projection after an update removes the unused radial degree of freedom.
+- Training contract: at most 120 epochs, a fixed validation stream, stop after five consecutive non-improvements, and
+  restore the best validation checkpoint. D0/D1, seed, support, projection, and initial amplitudes are paired.
+- Boundary: the saved generator contains only `A,b,P_J,V`, but the `B=14` adapter builds runtime message lookups because
+  current D0/D1 remain global. This is an amplitude model-class frontier, not a scalable inverse experiment.
+
+Decision rule: first measure fixed versus learned at each `J`; then find the smallest `J` statistically consistent with
+the unrestricted `J=B` endpoint. A gap in full-message D0/D1 is amplitude model-class loss. Candidate-proposal loss is
+deliberately deferred so the two causes cannot be confused.

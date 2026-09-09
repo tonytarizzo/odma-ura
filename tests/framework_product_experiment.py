@@ -22,6 +22,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from framework.channel import constant_fading, sample_batch, uniform_count_range_generator, uniform_counts_generator  # noqa: E402
 from framework.core import URASpec  # noqa: E402
 from framework.encoder import ComponentConstraints, build_encoder  # noqa: E402
+from framework.early_stopping import EarlyStopping  # noqa: E402
 from framework.hash_skeleton import HASH_SKELETON_FAMILIES, hash_skeleton_component_specs  # noqa: E402
 from framework.learned_decoders import (FactorAttentionISTANet, UnrolledBernoulliPGD,
                                         UnrolledNonnegativeISTA, matched_filter_decoder)  # noqa: E402
@@ -29,6 +30,8 @@ from framework.losses import support_count_loss  # noqa: E402
 from framework.metrics import aggregate_metrics, batch_evaluate  # noqa: E402
 from framework.pipeline import (dense_component_specs, odma_component_specs,
                                 product_all_pairs_component_specs, sparse_global_component_specs)  # noqa: E402
+from framework.prototype_amplitudes import (AMPLITUDE_INITIALIZATIONS,
+                                            build_prototype_hash_encoder)  # noqa: E402
 from tests.framework_sparsity_diagnostics import analyse_encoder_sparsity  # noqa: E402
 
 
@@ -43,7 +46,8 @@ def parse_int_grid(text: str) -> list[int]:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--encoder", choices=["product_fixed", "product_learned", "dense_fixed", "dense_learned",
-                                                   "odma_fixed", "sparse_global_fixed", *HASH_SKELETON_FAMILIES],
+                                                   "odma_fixed", "sparse_global_fixed", "hash_prototype",
+                                                   *HASH_SKELETON_FAMILIES],
                    default="product_fixed")
     p.add_argument("--decoder", choices=["d0", "d1", "ista"], default="d0")
     p.add_argument("-B", "--payload-bits", type=int, default=12)
@@ -55,6 +59,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                    help="pair sparse-global codebooks across support sizes when the seed is reused")
     p.add_argument("--hash-search-candidates", type=int, default=128,
                    help="offline binary-hash candidates scored for hash_linear_selected_fixed")
+    p.add_argument("--amplitude-label-bits", type=int, default=0,
+                   help="J in the compact amplitude label P_J w (hash_prototype only)")
+    p.add_argument("--amplitude-init", choices=AMPLITUDE_INITIALIZATIONS, default="gaussian",
+                   help="prototype-bank initialization (hash_prototype only)")
     p.add_argument("--learn-encoder", action="store_true",
                    help="learn codeword amplitudes; sparse/hash families retain their generated support")
     p.add_argument("--joint-train", action="store_true",
@@ -73,11 +81,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--train-ebn0-min", type=float, default=-4.0)
     p.add_argument("--train-ebn0-max", type=float, default=12.0)
     p.add_argument("--eval-ebn0", type=parse_float_grid, default=parse_float_grid("-4,0,4,8,12"))
-    p.add_argument("--encoder-epochs", type=int, default=10)
-    p.add_argument("--decoder-epochs", type=int, default=20)
+    p.add_argument("--encoder-epochs", type=int, default=120)
+    p.add_argument("--decoder-epochs", type=int, default=120)
     p.add_argument("--batches-per-epoch", type=int, default=100)
     p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--eval-batches", type=int, default=4)
+    p.add_argument("--validation-batches", type=int, default=8)
+    p.add_argument("--early-stopping-patience", type=int, default=5)
+    p.add_argument("--early-stopping-min-delta", type=float, default=0.0)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--weight-decay", type=float, default=0.0)
     p.add_argument("--grad-clip", type=float, default=5.0)
@@ -96,6 +107,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--train-seed", type=int, default=None, help="optional data-stream seed, separate from codebook/init")
     p.add_argument("--eval-seed", type=int, default=None, help="optional common evaluation-data seed")
+    p.add_argument("--validation-seed", type=int, default=None, help="optional fixed validation-stream seed")
     p.add_argument("--out-dir", default="results/framework_product_experiment")
     return p.parse_args(argv)
 
@@ -119,8 +131,12 @@ def build_experiment_encoder(args: argparse.Namespace, gen: torch.Generator):
     k_min, k_max, _ = load_range(args)
     spec = URASpec(n=int(args.n), num_codewords=M, num_active=k_max, num_antennas=int(args.num_antennas),
                    payload_bits=int(args.payload_bits))
-    learn_C = args.encoder.endswith("learned") or bool(args.learn_encoder)
+    learn_C = args.encoder.endswith("learned") or bool(getattr(args, "learn_encoder", False))
     construction_metadata = None
+    if args.encoder == "hash_prototype":
+        support = int(args.sparse_support) if args.sparse_support is not None else max(spec.n // int(args.Q), 1)
+        return build_prototype_hash_encoder(spec, support, int(args.seed), int(args.amplitude_label_bits), learn_C,
+                                            args.amplitude_init, int(args.hash_search_candidates)), k_min, k_max
     if args.encoder.startswith("product"):
         components = product_all_pairs_component_specs(spec, int(args.Q), learn_C, "random_sign_diagonal")
     elif args.encoder.startswith("dense"):
@@ -159,11 +175,35 @@ def random_ebn0(args: argparse.Namespace, gen: torch.Generator) -> float:
     return float(args.train_ebn0_min + u * (args.train_ebn0_max - args.train_ebn0_min))
 
 
+def validation_loss(encoder, decoder, k_min: int, k_max: int, fading_sampler,
+                    args: argparse.Namespace, seed: int) -> tuple[float, dict[str, float]]:
+    gen = torch.Generator().manual_seed(int(seed))
+    sampler = uniform_count_range_generator(k_min, k_max, encoder.num_codewords, gen, encoder.device)
+    sums = {"support": 0.0, "count": 0.0, "symmetry": 0.0, "total": 0.0}
+    encoder_was_training, decoder_was_training = encoder.training, decoder.training
+    encoder.eval(); decoder.eval()
+    with torch.no_grad():
+        for _ in range(int(args.validation_batches)):
+            batch = sample_batch(encoder, int(args.batch_size), sampler, fading_sampler, random_ebn0(args, gen), gen,
+                                 energy_per_codeword=encoder.spec.energy_per_codeword)
+            out = decoder(encoder, batch.Y, batch.H, batch.num_active, noise_var=batch.noise_var)
+            _, parts = support_count_loss(out, batch.counts, args.lambda_count, args.lambda_symmetry)
+            for key in sums:
+                sums[key] += float(parts[key].detach())
+    encoder.train(encoder_was_training); decoder.train(decoder_was_training)
+    averages = {key: value / int(args.validation_batches) for key, value in sums.items()}
+    return averages["total"], averages
+
+
 def train_phase(name: str, encoder, decoder, parameters, counts_sampler, fading_sampler,
-                args: argparse.Namespace, gen: torch.Generator, epochs: int) -> list[dict]:
+                args: argparse.Namespace, gen: torch.Generator, epochs: int,
+                k_min: int, k_max: int, validation_seed: int) -> tuple[list[dict], dict]:
     if epochs <= 0:
-        return []
+        return [], {"enabled": False, "epochs_run": 0, "reason": "zero_epochs"}
+    parameters = list(parameters)
     opt = torch.optim.Adam(parameters, lr=float(args.lr), weight_decay=float(args.weight_decay))
+    stopper = EarlyStopping(int(args.early_stopping_patience), float(args.early_stopping_min_delta))
+    modules = {"encoder": encoder, "decoder": decoder}
     progress = []
     for epoch in range(1, epochs + 1):
         sums = {"support": 0.0, "count": 0.0, "symmetry": 0.0, "total": 0.0}
@@ -184,10 +224,16 @@ def train_phase(name: str, encoder, decoder, parameters, counts_sampler, fading_
                 sums[key] += float(parts[key].detach())
         record = {"phase": name, "epoch": epoch,
                   **{key: value / int(args.batches_per_epoch) for key, value in sums.items()}}
+        val_total, val_parts = validation_loss(encoder, decoder, k_min, k_max, fading_sampler, args, validation_seed)
+        record.update({f"validation_{key}": value for key, value in val_parts.items()})
         progress.append(record)
         print(f"{name} epoch={epoch:3d} loss={record['total']:.5f} support={record['support']:.5f} "
-              f"count={record['count']:.5f} symmetry={record['symmetry']:.5f}", flush=True)
-    return progress
+              f"val={val_total:.5f} count={record['count']:.5f} symmetry={record['symmetry']:.5f}", flush=True)
+        if stopper.update(val_total, epoch, modules):
+            break
+    restored = stopper.restore(modules) if stopper.enabled else False
+    encoder.apply_constraints()
+    return progress, stopper.summary(len(progress), restored)
 
 
 def evaluate_one(encoder, decoder, K: int, ebn0_db: float, args: argparse.Namespace,
@@ -206,7 +252,7 @@ def evaluate_one(encoder, decoder, K: int, ebn0_db: float, args: argparse.Namesp
             matched_rows, _ = batch_evaluate(batch.counts, matched.counts.to(batch.counts), max_list_size=K)
             rows_learned.extend(learned_rows); rows_matched.extend(matched_rows)
             collision_batches.extend((batch.counts > 1).any(dim=1).to(torch.float32).cpu().tolist())
-    actual_Q = encoder.components[0].Q if len(encoder.components) == 1 else 1
+    actual_Q = encoder.components[0].Q if hasattr(encoder, "components") and len(encoder.components) == 1 else 1
     common = {"K": K, "ebn0_db": ebn0_db, "expected_users_per_pattern": K / actual_Q,
               "empirical_any_collision": sum(collision_batches) / max(len(collision_batches), 1),
               "theoretical_any_collision": 1.0 - math.prod(1.0 - i / encoder.num_codewords for i in range(K))}
@@ -224,19 +270,23 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit("diagnostic sample counts must be nonnegative")
     if args.hash_search_candidates <= 0:
         raise SystemExit("--hash-search-candidates must be positive")
+    if args.validation_batches <= 0:
+        raise SystemExit("--validation-batches must be positive")
     torch.manual_seed(int(args.seed))
     gen = torch.Generator().manual_seed(int(args.seed))
     out_dir = Path(args.out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     encoder, k_min, k_max = build_experiment_encoder(args, gen)
     learned_encoder = any(p.requires_grad for p in encoder.parameters())
+    initial_amplitude_diagnostics = encoder.prototype_diagnostics() if hasattr(encoder, "prototype_diagnostics") else None
     if args.joint_train and not learned_encoder:
         raise SystemExit("--joint-train requires a learnable encoder; add --learn-encoder or select a learned family")
     _, _, eval_k = load_range(args)
     train_gen = gen if args.train_seed is None else torch.Generator().manual_seed(int(args.train_seed))
     eval_gen = train_gen if args.eval_seed is None else torch.Generator().manual_seed(int(args.eval_seed))
+    validation_seed = int(args.validation_seed) if args.validation_seed is not None else int(args.seed) + 300_000
     train_sampler = uniform_count_range_generator(k_min, k_max, encoder.num_codewords, train_gen, encoder.device)
     fading_sampler = constant_fading(encoder.spec.num_antennas, encoder.dtype, encoder.device)
-    progress, t0 = [], time.time()
+    progress, stopping_summaries, t0 = [], [], time.time()
     diagnostic_requested = bool(args.diagnostic_pairs or args.diagnostic_active_samples
                                 or args.diagnostic_active_gram_samples or args.diagnostic_sum_pairs)
     initial_sparsity_diagnostics = None
@@ -250,13 +300,16 @@ def main(argv: list[str] | None = None) -> None:
     if args.joint_train:
         decoder = make_decoder(args)
         params = [p for p in encoder.parameters() if p.requires_grad] + list(decoder.parameters())
-        progress += train_phase("joint", encoder, decoder, params, train_sampler, fading_sampler,
-                                args, train_gen, int(args.decoder_epochs))
+        phase_progress, phase_stopping = train_phase("joint", encoder, decoder, params, train_sampler, fading_sampler,
+                                                     args, train_gen, int(args.decoder_epochs), k_min, k_max, validation_seed)
+        progress += phase_progress; stopping_summaries.append({"phase": "joint", **phase_stopping})
     elif learned_encoder:
         surrogate = UnrolledBernoulliPGD(num_layers=int(args.num_layers), power_iters=int(args.power_iters))
         params = list(surrogate.parameters()) + [p for p in encoder.parameters() if p.requires_grad]
-        progress += train_phase("encoder_d0", encoder, surrogate, params, train_sampler, fading_sampler,
-                                args, train_gen, int(args.encoder_epochs))
+        phase_progress, phase_stopping = train_phase("encoder_d0", encoder, surrogate, params, train_sampler,
+                                                     fading_sampler, args, train_gen, int(args.encoder_epochs),
+                                                     k_min, k_max, validation_seed)
+        progress += phase_progress; stopping_summaries.append({"phase": "encoder_d0", **phase_stopping})
         for p in encoder.parameters():
             p.requires_grad_(False)
         if args.decoder == "d0":
@@ -264,8 +317,10 @@ def main(argv: list[str] | None = None) -> None:
     if decoder is None:
         decoder = make_decoder(args)
     if not args.joint_train:
-        progress += train_phase("decoder", encoder, decoder, list(decoder.parameters()), train_sampler, fading_sampler,
-                                args, train_gen, int(args.decoder_epochs))
+        phase_progress, phase_stopping = train_phase("decoder", encoder, decoder, list(decoder.parameters()),
+                                                     train_sampler, fading_sampler, args, train_gen,
+                                                     int(args.decoder_epochs), k_min, k_max, validation_seed)
+        progress += phase_progress; stopping_summaries.append({"phase": "decoder", **phase_stopping})
 
     learned_results, matched_results = [], []
     for K in eval_k:
@@ -283,19 +338,26 @@ def main(argv: list[str] | None = None) -> None:
                                                         active_gram_samples=int(args.diagnostic_active_gram_samples),
                                                         sum_pair_samples=int(args.diagnostic_sum_pairs),
                                                         seed=int(args.seed) + 7919)
-    component = encoder.components[0]
+    if hasattr(encoder, "components"):
+        component = encoder.components[0]
+        encoder_shape = {"V": component.V, "d": component.d, "operator_storage_shape": list(component.R.shape)}
+    else:
+        encoder_shape = {"V": None, "d": None, "operator_storage_shape": None,
+                         "prototype_storage_shape": list(encoder.codebook.amplitude_bank.prototypes.shape)}
     metadata = {"args": vars(args), "K_train": [k_min, k_max], "K_eval": eval_k,
-                "M": encoder.num_codewords, "V": component.V, "d": component.d,
-                "operator_storage_shape": list(component.R.shape), "implicit_forward": True,
+                "M": encoder.num_codewords, **encoder_shape, "implicit_forward": True,
                 "decoder_knows_K": True, "decoder_knows_noise_variance": True,
                 "receiver_knows_fading": True, "single_antenna_default": True,
-                "wall_s": time.time() - t0}
+                "early_stopping": stopping_summaries, "wall_s": time.time() - t0}
     if getattr(encoder, "construction_metadata", None) is not None:
         metadata["codebook_construction"] = encoder.construction_metadata
     if sparsity_diagnostics is not None:
         metadata["codebook_sparsity"] = sparsity_diagnostics
     if initial_sparsity_diagnostics is not None:
         metadata["codebook_sparsity_initial"] = initial_sparsity_diagnostics
+    if hasattr(encoder, "prototype_diagnostics"):
+        metadata["amplitude_prototypes_initial"] = initial_amplitude_diagnostics
+        metadata["amplitude_prototypes"] = encoder.prototype_diagnostics()
     checkpoint = {"metadata": metadata, "encoder": encoder.state_dict(), "decoder": decoder.state_dict()}
     torch.save(checkpoint, out_dir / "checkpoint.pt")
     (out_dir / "summary.json").write_text(json.dumps({"metadata": metadata, "progress": progress,

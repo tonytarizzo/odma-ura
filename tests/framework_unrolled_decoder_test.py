@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import sys
 import time
 from pathlib import Path
 
-import numpy as np
 import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -20,6 +18,7 @@ from framework.channel import constant_fading, sample_batch, uniform_counts_gene
 from framework.core import URASpec  # noqa: E402
 from framework.decoders import oracle_k_omp  # noqa: E402
 from framework.encoder import build_encoder  # noqa: E402
+from framework.early_stopping import EarlyStopping  # noqa: E402
 from framework.learned_decoders import UnrolledNonnegativeISTA, matched_filter_decoder  # noqa: E402
 from framework.losses import support_count_loss  # noqa: E402
 from framework.metrics import aggregate_metrics, batch_evaluate  # noqa: E402
@@ -37,10 +36,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--num-antennas", type=int, default=2)
     p.add_argument("--ebn0-db", type=float, default=4.0)
     p.add_argument("--num-layers", type=int, default=8)
-    p.add_argument("--epochs", type=int, default=8)
+    p.add_argument("--epochs", type=int, default=120)
     p.add_argument("--batches-per-epoch", type=int, default=25)
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--eval-batches", type=int, default=8)
+    p.add_argument("--validation-batches", type=int, default=8)
+    p.add_argument("--early-stopping-patience", type=int, default=5)
+    p.add_argument("--early-stopping-min-delta", type=float, default=0.0)
     p.add_argument("--lr", type=float, default=1e-2)
     p.add_argument("--lambda-count", type=float, default=0.1)
     p.add_argument("--lambda-symmetry", type=float, default=0.01)
@@ -112,6 +114,8 @@ def plot_progress(progress: list[dict], out_path: Path) -> None:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
+    if args.validation_batches <= 0:
+        raise SystemExit("--validation-batches must be positive")
     if args.preset == "odma" and (args.d <= 0 or args.d > args.n):
         raise SystemExit(f"invalid ODMA geometry: d={args.d}, n={args.n}")
     torch.manual_seed(int(args.seed))
@@ -123,6 +127,7 @@ def main(argv: list[str] | None = None) -> None:
     fading_sampler = constant_fading(encoder.spec.num_antennas, encoder.dtype, encoder.device)
     model = UnrolledNonnegativeISTA(num_layers=int(args.num_layers)).to(device=encoder.device)
     opt = torch.optim.Adam(model.parameters(), lr=float(args.lr))
+    stopper = EarlyStopping(args.early_stopping_patience, args.early_stopping_min_delta)
 
     def learned_fn(enc, Y, H, K, noise_var=None): return model(enc, Y, H, K, noise_var=noise_var)
     def nnomp_fn(enc, Y, H, K, noise_var=None): return oracle_k_omp(enc, Y, H, K, noise_var=noise_var)
@@ -151,9 +156,20 @@ def main(argv: list[str] | None = None) -> None:
             opt.step()
             for k, v in parts.items():
                 parts_sum[k] = parts_sum.get(k, 0.0) + v
+        val_gen = torch.Generator().manual_seed(int(args.seed) + 300_000)
+        val_sampler = uniform_counts_generator(encoder.spec.num_active, encoder.spec.num_codewords, val_gen, encoder.device)
+        model.eval(); val_loss = 0.0
+        with torch.no_grad():
+            for _ in range(int(args.validation_batches)):
+                batch = sample_batch(encoder, int(args.batch_size), val_sampler, fading_sampler, float(args.ebn0_db), val_gen)
+                out = model(encoder, batch.Y, batch.H, batch.num_active, noise_var=batch.noise_var)
+                loss, _ = decoder_loss(out, batch.counts, args.lambda_count, args.lambda_symmetry)
+                val_loss += float(loss)
+        val_loss /= int(args.validation_batches)
         learned = evaluate_decoder(encoder, learned_fn, counts_sampler, fading_sampler,
                                    args.ebn0_db, args.eval_batches, args.batch_size, gen)
-        rec = {"epoch": epoch, **{k: v / args.batches_per_epoch for k, v in parts_sum.items()},
+        rec = {"epoch": epoch, "validation_loss": val_loss,
+               **{k: v / args.batches_per_epoch for k, v in parts_sum.items()},
                "learned_l1_acc": learned.get("l1_acc", float("nan")),
                "learned_pupe": learned.get("pupe", float("nan")),
                "matched_l1_acc": matched.get("l1_acc", float("nan")),
@@ -162,10 +178,14 @@ def main(argv: list[str] | None = None) -> None:
                "nnomp_pupe": nnomp.get("pupe", float("nan"))}
         progress.append(rec)
         print(f"epoch={epoch:<3d} loss={rec['loss']:.4f} "
-              f"learned L1={rec['learned_l1_acc']:.4f} PUPE={rec['learned_pupe']:.4f}", flush=True)
+              f"val={val_loss:.4f} learned L1={rec['learned_l1_acc']:.4f} PUPE={rec['learned_pupe']:.4f}", flush=True)
+        if stopper.update(val_loss, epoch, {"decoder": model}):
+            break
 
+    restored = stopper.restore({"decoder": model}) if stopper.enabled else False
+    stopping = stopper.summary(len(progress), restored)
     payload = {"args": vars(args), "matched_filter": matched, "nnomp_oracle_k": nnomp,
-               "progress": progress, "wall_s": time.time() - t0}
+               "progress": progress, "early_stopping": stopping, "wall_s": time.time() - t0}
     (out_dir / "summary.json").write_text(json.dumps(payload, indent=2, default=str))
     plot_progress(progress, out_dir / "training_progress.png")
     print(f"Wrote {out_dir / 'summary.json'}")

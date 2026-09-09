@@ -123,6 +123,8 @@ couples otherwise identically distributed sparse-global codebooks across support
 The same runner now accepts the four job-`028` support families. Their compact rule is generated separately, then
 materialised only for the `B=14` common-decoder certification. `--learn-encoder --joint-train` jointly optimizes the
 selected decoder and codeword amplitudes; generated sparse supports remain fixed and every column is re-normalized.
+It also supports compact hash prototypes through `--encoder hash_prototype`. Epoch-based training uses a fixed
+validation stream, patience five by default, and restores the best validation checkpoint.
 
 ## `framework_sparsity_diagnostics.py` and `framework_sparsity_diagnostics_test.py`
 
@@ -143,6 +145,17 @@ entries and that projection restores exact unit-column energy.
 Enforces the 36-row job-`028` manifest, paired D0/D1 construction and diagnostic equality, and required high-SNR cells.
 It writes run/aggregate/construction tables and separate PUPE and geometry plots. An incomplete tree is rejected unless
 explicitly marked diagnostic-only.
+
+## `framework_prototype_amplitude_test.py` and `framework_early_stopping_test.py`
+
+Certify nested binary projections, the unrestricted `J=B` endpoint, fixed/learned pairing, gradients only into `V`,
+exact unit energy, implicit forward/adjoint equality, and selected-column generation at `B=100` without a global
+message tensor. The stopping test checks the exact five-non-improvement rule and best-state restoration.
+
+## `framework_prototype_amplitude_merge.py`
+
+Requires all 48 job-`030` outputs, validates their training mode, early-stopping record, and energy invariant, then
+writes per-run/aggregate tables plus PUPE-frontier and epochs-used plots.
 
 ## `framework_joint_learning_merge.py`
 

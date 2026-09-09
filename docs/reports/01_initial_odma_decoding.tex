@@ -1,137 +1,266 @@
 \documentclass[11pt]{article}
 \newcommand{\ReportShortTitle}{Initial ODMA decoding}
+\newcommand{\ReportUpdated}{5 September 2026}
 \input{report_style}
 
 \begin{document}
-\ProjectReport{Initial ODMA-aware decoding}{From the structured signal model to factor-graph BP/EP}{1 of 4}
-{Historical stage; algebra retained, early comparisons interpreted conservatively}
+\ProjectReport{Initial ODMA-aware decoding}{The structured signal model, BP/EP derivation, and V1--V4 development}{1 of 5}
+{Historical stage reconstructed from the original derivations and retained implementation}
 
-\section{Question at this stage}
+\section{Position in the research story}
 
-The project began with a receiver-side question: if the transmitted codebook has an on--off division multiple access
-(ODMA) structure, can a decoder use that structure more effectively than a generic global sparse-recovery method? The
-first implementation therefore kept the ODMA construction explicit and concentrated on message passing, activity
-priors, multiplicities, and fading.
+The project began with a receiver-side question: if every message waveform has explicit on--off division multiple
+access (ODMA) structure, can a decoder exploit the resulting sparse factor graph more effectively than a generic
+global sparse-recovery method? This report retains the algebra used to answer that question. It is intentionally more
+detailed than a present-day summary because these equations explain how the early algorithms were constructed and why
+their failure modes led to the later codebook-design programme.
 
-The enduring contribution of this stage is the factor-graph algebra. The main empirical outcome was less favourable:
-the specialised variants were fragile and generic global recovery was usually stronger in the tested regimes. That
-result motivated the later separation of \emph{codebook geometry} from \emph{decoder design}.
+The central receiver was a two-stage hybrid:
+\begin{enumerate}
+ \item a linear-Gaussian resource stage, which compresses interfering contributions to means and covariances;
+ \item a discrete block stage, which enumerates valid local count vectors and uses the exact local codebook.
+\end{enumerate}
+The stages exchange extrinsic Gaussian information. Successive V1--V4 variants changed the observation model,
+covariance approximation, schedule, and fading treatment; they did not change the underlying unsourced target.
 
-\section{Structured URA model from first principles}
+\evidence{Historical reconstruction. The factorisation and current Graph-BP implementation are directly verifiable;
+some superseded V1--V4 variants survive only as research records and should not be treated as current baselines.}
 
-Let $n$ be the number of channel uses, $Q$ the number of ODMA placement patterns, $d$ the local codeword length, and $V$
-the number of local codewords. A local alphabet is
+\section{ODMA--URA signal model}
+
+\subsection{Patterns, local codebooks, and global messages}
+
+Let $n$ be the number of channel uses and let $Q$ be the number of ODMA placement patterns. Pattern $q$ occupies
+$d_q$ resources $S_q\subseteq\{1,\ldots,n\}$ and is represented by
 \[
- C=[c_0,\ldots,c_{V-1}]\in\C^{d\times V},
+ P_q\in\{0,1\}^{n\times d_q},\qquad P_q^HP_q=I_{d_q}.
 \]
-and pattern $q$ is an embedding or linear operator $R_q\in\C^{n\times d}$. Message $(q,v)$ uses
+If $x_q\in\C^{d_q}$ is a local signal, $P_qx_q$ embeds it into the full resource grid. Pattern $q$ owns $V_q$ local
+codewords, stored as rows of
 \[
- \phi_{q,v}=R_qc_v\in\C^n,\qquad \|\phi_{q,v}\|_2^2=1.
+ C_q\in\C^{V_q\times d_q},\qquad c_{q,v}=C_q[v,:]^T.
 \]
-When every pair is legal, the global alphabet has $M=QV$ messages and
+The global message $(q,v)$ transmits
 \[
- \Phi=[R_0C\mid R_1C\mid\cdots\mid R_{Q-1}C]\in\C^{n\times M}.
+ \phi_{q,v}=P_qc_{q,v}\in\C^n.
 \]
-
-With $K_a$ active devices, let $a_{q,v}\in\Z_+$ count how many devices selected message $(q,v)$. Then
+When every pair is legal, the total message alphabet is $M=\sum_qV_q$ and the explicit global codebook is
 \[
- \sum_{q,v}a_{q,v}=K_a,\qquad
- y=\sum_{q=0}^{Q-1}\sum_{v=0}^{V-1}a_{q,v}R_qc_v+z=\Phi a+z,
+ \Phi=[P_1C_1^T\mid P_2C_2^T\mid\cdots\mid P_QC_Q^T]\in\C^{n\times M}.
 \]
-where $z\sim\mathcal{CN}(0,\sigma^2I_n)$. Device identities never appear: only the unsourced message multiset is
-recoverable. For known multi-antenna channel vector $h\in\C^{M_{\rm ant}}$, the observation is
-$Y=(\Phi a)h^T+Z$; matched channel combining reduces it to the same scalar resource model with an adjusted noise level.
+Column normalisation $\|\phi_m\|_2^2=1$ fixes the transmitted energy of every message.
 
-The payload bits label a column. They are \emph{not} binary channel symbols: each entry of $\phi_{q,v}$ can be real or
-complex and therefore can carry amplitude and phase.
+The $B$ payload bits select one of $M=2^B$ columns. They are labels, not binary channel symbols: the entries of
+$\phi_m$ may be real or complex amplitudes, so each physical channel use may carry magnitude and phase.
 
-\section{Factor graph}
+\subsection{Unsourced count target}
 
-Flatten $(q,v)$ into variable index $j\in\{0,\ldots,M-1\}$ and write $A=\Phi$. A variable node represents the discrete
-count $a_j\in\{0,1,\ldots,K_a\}$; a resource factor represents
+For $K_a$ active devices, define
 \[
- y_i=\sum_{j=0}^{M-1}A_{ij}a_j+z_i.
+ a_q\in\Z_+^{V_q},\qquad a_{q,v}=\text{number of devices that chose }(q,v).
 \]
-ODMA makes many $A_{ij}$ exactly zero, so the graph connects a variable only to the resources occupied by its pattern.
-This is computationally attractive, but it also creates short loops and groups many columns into the same subspace.
-
-\subsection{Gaussian resource update}
-
-Suppose the message from variable $k$ to resource $i$ has mean $m_{k\to i}$ and variance $v_{k\to i}$. Excluding
-candidate variable $j$, approximate the interference by
+The local superposition in block $q$ and the global resource signal are
 \[
- \mu_{i\to j}=\sum_{k\ne j}A_{ik}m_{k\to i},\qquad
- \nu_{i\to j}=\sigma^2+\sum_{k\ne j}|A_{ik}|^2v_{k\to i}.
+ x_q=C_q^Ta_q\in\C^{d_q},\qquad
+ s=\sum_{q=1}^QP_qx_q=\Phi a,qquad \one^Ta=K_a.
 \]
-Conditional on $a_j=t$, resource $i$ contributes the log-likelihood
+The decoder seeks the multiset $a$, not device identities. If two devices send the same message then $a_m=2$; this is
+a valid message collision, not two separately identifiable users.
+
+\subsection{Observation models used during V1--V4}
+
+The original sequence can be written as increasingly difficult versions of the same resource signal.
+
+\paragraph{V1: scalar, known unit channel.}
 \[
- \ell_{i\to j}(t)=-\frac{|y_i-\mu_{i\to j}-A_{ij}t|^2}{\nu_{i\to j}}-log\nu_{i\to j}+\text{const}.
+ y=s+z=\sum_qP_qC_q^Ta_q+z,
+ \qquad z\sim\CN(0,\sigma^2I_n).
 \]
-This is an expectation-propagation or Gaussian-interference approximation: the candidate count stays discrete while the
-sum of all other users is compressed to two moments.
 
-\subsection{Discrete variable update}
-
-Let $p_j(t)$ be the activity/count prior. The cavity distribution sent from variable $j$ to resource $i$ is
+\paragraph{V2: multiple antennas with a known common signature.}
+For $M_{\rm ant}$ receive antennas and known $h\in\C^{M_{\rm ant}}$,
 \[
- q_{j\to i}(t)\propto p_j(t)\exp\!\left(\sum_{r\in\mathcal N(j)\setminus i}\ell_{r\to j}(t)\right).
+ Y=sh^T+Z,
+ \qquad Z_{i,:}\sim\CN(0,\sigma^2I).
 \]
-The outgoing moments are
+Let $\gamma=\|h\|_2^2$. Matched combining gives the sufficient scalar observation
 \[
- m_{j\to i}=\sum_{t=0}^{K_a}tq_{j\to i}(t),\qquad
- v_{j\to i}=\sum_{t=0}^{K_a}t^2q_{j\to i}(t)-m_{j\to i}^2.
+ \bar y=\frac{Yh^*}{\gamma}=s+\bar z,
+ \qquad \bar z\sim\CN(0,\sigma^2\gamma^{-1}I_n).
 \]
-At termination, include every neighbouring resource and choose either the posterior mean or MAP count. Damping
-$m^{+}=\alpha m^{\rm old}+(1-\alpha)m^{\rm new}$ was essential because the graph is loopy.
+In the implementation $h=\one$, so $\gamma=M_{\rm ant}$. The orthogonal antenna projector
+\[
+ Q_\perp=I-\frac{hh^H}{\gamma}
+\]
+contains no signal under this model and can estimate noise because $Q_\perp Y_i=Q_\perp Z_i$.
 
-\subsection{Priors and the global load constraint}
+\paragraph{V3: message-dependent unknown fading.}
+With channel vector $h_u$ for device $u$ and selected message $m_u$,
+\[
+ Y=\sum_{u=1}^{K_a}\phi_{m_u}h_u^T+Z.
+\]
+Now activity and channel are bilinearly coupled. A count $a_m$ alone is no longer sufficient unless the fading
+coefficients are known, integrated out, or replaced by an energy/support statistic.
 
-For low collision, a Bernoulli approximation uses $\Pr(a_j>0)\approx K_a/M$. A Poisson prior with rate $K_a/M$ allows
-multiplicity. The exact independent-message experiment instead induces a multinomial count vector with
-$\one^Ta=K_a$; treating its coordinates independently loses this negative dependence. Several variants tried to restore
-the total mass by estimating activity, projecting counts to sum to $K_a$, or adding load feedback.
+\paragraph{V4: exact small-state reference.}
+At tiny dimensions, the intended posterior over discrete counts and any retained channel state can be enumerated or
+integrated exactly. This is a correctness reference, not a scalable receiver.
 
-\section{What was varied}
+\section{Factor graph in block variables}
 
-The many historical variants reduce to four modelling choices:
+The early decoder used one variable node per ODMA block signal $x_q$ and one factor per resource. If coordinate $j$ of
+block $q$ is placed at resource $i$, then $P_q[i,j]=1$. Define the neighbours
+\[
+ \mathcal N(i)=\{(q,j):P_q[i,j]=1\},\qquad
+ \mathcal N(q)=S_q.
+\]
+Under V2, resource $i$ obeys
+\[
+ Y_i=h\sum_{(q,j)\in\mathcal N(i)}x_{q,j}+Z_i.
+\]
+The exact posterior factors into resource likelihoods and discrete block priors, but shared resources create loops.
+The algorithm therefore approximates every incoming block-coordinate belief by a Gaussian.
+
+\subsection{Stage 1: linear-Gaussian resource update}
+
+Suppose edge $(q,j)\to i$ carries
+\[
+ x_{q,j}\sim\CN(m_{qj\to i},v_{qj\to i}).
+\]
+Excluding the candidate edge, the other contributions are approximated by
+\[
+ \mu_{i\setminus qj}=\sum_{(b,k)\in\mathcal N(i)\setminus(q,j)}m_{bk\to i},
+ \qquad
+ \nu_{i\setminus qj}=\sum_{(b,k)\in\mathcal N(i)\setminus(q,j)}v_{bk\to i}.
+\]
+After matched combining, the extrinsic scalar observation is
+\[
+ r_{i\to qj}=\bar y_i-\mu_{i\setminus qj}=x_{q,j}+\epsilon_{i\to qj},
+ \qquad
+ \Var(\epsilon_{i\to qj})=\nu_{i\setminus qj}+\sigma^2/\gamma.
+\]
+For vector block updates, stacking the relevant coordinates gives a Gaussian cavity
+\[
+ q^{\setminus q}(x_q)=\CN(x_q;r_q^{\rm cav},V_q^{\rm cav}).
+\]
+
+\subsection{Stage 2: exact discrete block update}
+
+The structural constraint is
+\[
+ x_q=C_q^Ta_q,qquad a_q\in\mathcal A_q\subset\Z_+^{V_q}.
+\]
+For a Poisson approximation with rate $\lambda$ per message,
+\[
+ p(a_q)=\prod_{v=1}^{V_q}e^{-\lambda}\frac{\lambda^{a_{q,v}}}{a_{q,v}!}.
+\]
+Given the Gaussian cavity, the posterior weight of state $a\in\mathcal A_q$ is
+\[
+ \omega_q(a)\propto p(a)
+ \exp\!\left[-(C_q^Ta-r_q^{\rm cav})^H(V_q^{\rm cav})^{-1}
+ (C_q^Ta-r_q^{\rm cav})\right].
+\]
+Normalising these weights yields the exact moments inside the enumerated local state set:
+\begin{align*}
+ \widehat a_q&=\sum_{a\in\mathcal A_q}\omega_q(a)a,\\
+ \widehat x_q&=\sum_{a\in\mathcal A_q}\omega_q(a)C_q^Ta,\\
+ \widehat\Sigma_q&=\sum_{a\in\mathcal A_q}\omega_q(a)
+ (C_q^Ta-\widehat x_q)(C_q^Ta-\widehat x_q)^H.
+\end{align*}
+The block MAP state is $a_q^{\rm MAP}=\argmaxop_{a\in\mathcal A_q}\omega_q(a)$.
+
+The state count explains the cost. If at most $k_{\max}$ local messages are nonzero and each count is at most
+$c_{\max}$, then
+\[
+ |\mathcal A_q|=\sum_{k=0}^{k_{\max}}\binom{V_q}{k}c_{\max}^{k}.
+\]
+Truncation makes the decoder executable, but it also changes the inference domain.
+
+\subsection{Extrinsic EP site update}
+
+Write a Gaussian in natural parameters $(\Lambda,\eta)=(\Sigma^{-1},\Sigma^{-1}\mu)$. EP divides the moment-matched
+posterior by the cavity:
+\[
+ \Lambda_q^{\rm site}=\widehat\Sigma_q^{-1}-(V_q^{\rm cav})^{-1},
+ \qquad
+ \eta_q^{\rm site}=\widehat\Sigma_q^{-1}\widehat x_q-(V_q^{\rm cav})^{-1}r_q^{\rm cav}.
+\]
+These site parameters are damped and returned to the linear system. The current implementation forms the cavity by
+omitting the old block site from the global precision system rather than subtracting nearly equal posterior and site
+parameters after solving.
+
+\subsection{EM updates used by the approximation}
+
+If $M=\sum_qV_q$, the Poisson-rate update is
+\[
+ \lambda^{+}=\frac{1}{M}\sum_q\one^T\widehat a_q.
+\]
+Let $\widehat y=\sum_qP_q\widehat x_q$. A moment-corrected noise update has the form
+\[
+ (\sigma^2)^{+}=\frac{\|Y-\widehat yh^T\|_F^2+gamma\sum_q\operatorname{tr}(\widehat\Sigma_q)}
+ {nM_{\rm ant}}.
+\]
+These are empirical-Bayes updates inside an approximate posterior, not ground-truth parameter estimates.
+
+\section{Implementation sequence and what each change meant}
 
 \begin{tabularx}{\textwidth}{@{}lYY@{}}
 \toprule
-Choice & Principle & Main risk exposed \\
+Variant & Structural change & Intended diagnostic \\
 \midrule
-Basic BP/EP & Gaussian interference plus a discrete count prior & Loopy feedback and overconfident messages \\
-Load-aware updates & Enforce or estimate $\one^Ta=K_a$ & Oracle load can hide activity-estimation difficulty \\
-Joint fading/activity & Infer channel and support together & Bilinear scale/phase ambiguity and zero-mean collapse \\
-Pilot/pre-equalised variants & Supply extra channel structure & Changes the communication model and receiver knowledge \\
+V1 & Scalar, no-fading resource messages & Establish the two-stage algebra in the simplest channel \\
+V2 & Common known multi-antenna signature & Test antenna combining without bilinear channel uncertainty \\
+V2b & Block/full covariance rather than diagonal moments & Measure the value of within-block correlations \\
+V2c & Onsager-like self-response correction & Reduce feedback through loopy shared resources \\
+V2d & Serial/turbo block schedule & Use freshly updated cavities rather than stale parallel messages \\
+V2e & Global EP with cavity-by-omission & Avoid unstable subtraction when forming cavities \\
+V2f & Fractional EP site power & Limit information injection when sites become overconfident \\
+V3 & Explicit latent fading variables & Represent the physical bilinear channel rather than pre-equalise it \\
+V3a & Energy/support scoring inspired by noncoherent aggregation & Retain multi-antenna support evidence at lower cost \\
+V4 & Exact small-state likelihood/reference & Separate approximation failure from model/code errors \\
 \bottomrule
 \end{tabularx}
 
-These are not four independent final decoders. They are successive attempts to repair a shared approximation. Retaining
-every code variant in the main narrative obscures that common structure, so the superseded implementation notes have
-been removed while this algebra and the result transition are preserved.
+Fractional EP replaces a full site update by a powered one. In natural coordinates a simple damped form is
+\[
+ \Lambda_q^+ = (1-\alpha)\Lambda_q^{\rm old}+\alpha\beta\Lambda_q^{\rm site},
+ \qquad
+ \eta_q^+ = (1-\alpha)\eta_q^{\rm old}+\alpha\beta\eta_q^{\rm site},
+ \qquad 0<\beta\le1.
+\]
+It can stabilise an iteration by shrinking the update, but does not correct an inaccurate local likelihood or remove
+short loops. Similarly, a serial schedule changes dynamics, not the fixed-point objective.
 
-\section{Observed behaviour and diagnosis}
+\section{Why the graph decoder became unstable}
 
-\evidence{The early records are qualitative and do not provide the later seed-controlled job contract.}
+The observed high-load failure has a concrete EP mechanism. When the discrete posterior places nearly all mass on one
+state, $\widehat\Sigma_q$ becomes very small. Then $\widehat\Sigma_q^{-1}$ and hence the site precision become large.
+That strong precision tightens the cavities of every overlapping block. With many short loops, the next blocks become
+overconfident in turn, and the feedback gain can exceed one. Damping and fractional powers slow this amplification;
+they do not guarantee that the Gaussian projection is accurate.
 
-The specialised receiver could work well in easy configurations, but gains were not stable as load, fading uncertainty,
-or graph coupling increased. Global decoders---especially NNOMP with known $K_a$---performed better in the decisive
-comparisons. The likely causes were not one isolated coding bug:
-
+Four additional limitations remained:
 \begin{enumerate}
- \item Gaussian interference messages are least accurate when a few structured neighbours dominate a resource.
- \item Reused placement masks produce highly correlated local subproblems and short graph loops.
- \item Independent coordinate priors approximate, rather than impose, the global count constraint.
- \item Joint fading and activity is bilinear; without pilots or a reference convention it is not identifiable in the
- same way as the known-channel model.
- \item A more complicated structured decoder can still lose to a global method if the dominant difficulty is choosing
- the correct support among all $M$ messages.
+ \item the independent Poisson prior does not impose the exact multinomial constraint $\one^Ta=K_a$;
+ \item local state caps may exclude the true high-occupancy block state;
+ \item ODMA reuses a small number of support subspaces, creating correlated columns and local ambiguities;
+ \item under unknown fading, activity and channel scale/phase are not separately identified without extra structure.
 \end{enumerate}
 
-\section{Decision and transition}
+\section{Baseline comparison and historical conclusion}
 
-The next research question became: \emph{is ODMA losing because its active columns are intrinsically poor once known, or
-because its support is hard for the practical decoder to find?} That required a common global model, matched dense and
-ODMA codebooks, and an oracle-support control. Report 2 develops that decomposition.
+The important baselines were global OMP/NNOMP, linear MMSE, SIC, AMP-like iterations, local BlockMAP, and exact tiny
+references. Their assumptions differ. In particular, NNOMP was usually supplied the true $K_a$ and therefore received
+oracle knowledge of how much total mass to select. Exact BlockMAP ignored or only approximated cross-block
+interference. V4 was too small to be a practical competitor.
+
+Qualitatively, the structured graph decoder could work in easy regimes but did not show a stable advantage as load,
+overlap, or fading uncertainty increased. Global NNOMP was simpler and usually stronger in the comparisons that drove
+the project. This did not establish that ODMA was information-theoretically inferior. It established that adding more
+local message-passing machinery was not isolating the dominant loss.
+
+The next question was therefore causal: once the true active columns are supplied, are ODMA columns intrinsically hard
+to fit, or is the main loss the search for those columns? Report 2 places every construction in one global count model,
+catalogues the decoder objectives tried, and answers that question with an oracle-support control.
 
 \end{document}

@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 
 def plot_training_curves(progress: list[dict], path: Path, *,
-                          metric_keys: Iterable[str] = ("loss", "loss_dec",
+                          metric_keys: Iterable[str] = ("loss", "loss_dec", "validation_loss",
                                                           "eval_pupe", "eval_f1",
                                                           "eval_l1_err")) -> None:
     if not progress:
@@ -20,7 +20,7 @@ def plot_training_curves(progress: list[dict], path: Path, *,
     for key in metric_keys:
         if not all(key in r for r in progress):
             continue
-        ax = axes[0] if "eval" not in key else axes[1]
+        ax = axes[1] if "eval" in key or key == "validation_loss" else axes[0]
         ax.plot(epochs, [float(r[key]) for r in progress], marker="o", label=key)
     for ax in axes:
         ax.set_xlabel("epoch")

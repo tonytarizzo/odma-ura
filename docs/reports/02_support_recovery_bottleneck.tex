@@ -1,67 +1,286 @@
 \documentclass[11pt]{article}
-\newcommand{\ReportShortTitle}{Support-recovery bottleneck}
+\newcommand{\ReportShortTitle}{Decoder search and support recovery}
+\newcommand{\ReportUpdated}{5 September 2026}
 \input{report_style}
 
 \begin{document}
-\ProjectReport{The support-recovery bottleneck}{A common global model, decoder controls, and explicit ODMA gap}{2 of 4}
-{Jobs 001--017 complete; conclusions limited to tested algorithms and regimes}
+\ProjectReport{Decoder search and the\\support-recovery bottleneck}
+{BP/EP, MAP-ADMM, NNOMP, VAMP, block MAP, and the decisive oracle experiment}{2 of 5}
+{Jobs 001--017 complete; algorithms, oracle knowledge, and conclusions separated}
 
-\section{Why a common global model was needed}
+\section{Why every decoder was put in one model}
 
-The first-stage decoder comparison mixed codebook structure and inference approximations. This stage held the recovery
-target fixed: every construction was represented by a unit-column matrix $\Phi\in\C^{n\times M}$ and the decoder
-estimated the same integer count vector $a\in\Z_+^M$ from
+The initial work mixed a structured ODMA codebook with a specialised approximation. A poor result could therefore be
+caused by the physical columns, the support search, the prior, the numerical iteration, or channel uncertainty. The
+next stage fixed one global target for every method:
 \[
- y=\Phi a+z,\qquad \one^Ta=K_a,\qquad M=2^B.
+ y=\Phi a+z,qquad
+ \Phi=[\phi_0,\ldots,\phi_{M-1}]\in\C^{n\times M},qquad
+ M=2^B,
 \]
-Dense and ODMA codebooks could therefore be compared through identical metrics and decoder interfaces.
-
-\section{The ideal and practical recovery problems}
-
-With known noise variance and load, exact maximum likelihood is
 \[
- \widehat a_{\rm ML}=\arg\min_{a\in\Z_+^M,\,\one^Ta=K_a}\|y-\Phi a\|_2^2.
+ a\in\Z_+^M,qquad \one^Ta=K_a,qquad
+ z\sim\CN(0,\sigma_{\rm eff}^2I_n),qquad \|\phi_m\|_2=1.
 \]
-The number of count multisets is $\binom{M+K_a-1}{K_a}$, so exact enumeration is only a tiny-system certificate.
+Dense, sparse-global, and ODMA constructions now differed only through $\Phi$. Every receiver returned the same count
+vector, allowing the experiment to separate codebook geometry from decoder behaviour.
 
-The principal scalable baseline was nonnegative OMP with oracle $K_a$ (NNOMP-OracleK). At iteration $t$, it selects a
-column using the residual correlation,
+For the common-signature multi-antenna model of Report 1,
 \[
- j_t=\arg\max_{j\notin S_t}\Re\{\phi_j^Hr_t\},
+ \bar y=Yh^*/\|h\|_2^2,qquad \sigma_{\rm eff}^2=\sigma^2/\|h\|_2^2,
 \]
-then solves nonnegative least squares on $S_{t+1}$ and updates $r_{t+1}=y-\Phi_{S_{t+1}}\widehat a_{S_{t+1}}$. Its
-advantages are a transparent support-search mechanism and a matched interface across codebooks. Its oracle load and
-greedy selection mean that it is a practical baseline, not Bayes-optimal URA decoding.
+so the remaining algebra is scalar without discarding signal information under that model.
 
-Other explored routes---MAP-ADMM, block coordinate descent, AMP/VAMP variants, residual MAP, SIC, and BlockMAP---can be
-understood as different approximations to the same constrained objective. They were useful diagnostics, but none changed
-the central causal experiment: remove support search and measure what remains.
+\section{Exact likelihood, prior, and recovery target}
 
-\section{Metric and collisions}
-
-For true and estimated count vectors with equal total mass $K_a$, multiplicity-aware PUPE is
+Conditioned on $a$,
 \[
- \mathrm{PUPE}(a,\widehat a)=1-\frac{1}{K_a}\sum_{m=0}^{M-1}\min(a_m,\widehat a_m).
+ -\log p(y\given a)=\frac{1}{\sigma_{\rm eff}^2}\|y-\Phi a\|_2^2+\text{const}.
 \]
-This reduces to missed-set fraction when every count is zero or one. At small $B$, repeated messages are not negligible,
-so a support-only metric would incorrectly penalise or ignore multiplicity. The project therefore distinguishes:
+If exactly $K_a$ devices independently choose one of $M$ messages uniformly, the count vector is multinomial:
+\[
+ p(a\given K_a)=\frac{K_a!}{M^{K_a}\prod_{m=1}^M a_m!}
+ \mathbf 1\{a\in\Z_+^M,\ \one^Ta=K_a\}.
+\]
+Hence exact MAP with known $K_a$ is
+\[
+ \widehat a_{\rm MAP}=\argminop_{a\in\Z_+^M,\ \one^Ta=K_a}
+ \frac{1}{\sigma_{\rm eff}^2}\|y-\Phi a\|_2^2+
+ \sum_{m=1}^M\log(a_m!).
+\]
+The pure maximum-likelihood reference omits the factorial term. Both are combinatorial: there are
+\[
+ \binom{M+K_a-1}{K_a}
+\]
+nonnegative integer count vectors of total $K_a$. Exact enumeration is therefore a tiny-system certificate.
 
+When $K_a$ is unknown, the research code also used a softened total-count prior. Let $K=\one^Ta$ and
+$K\sim\mathcal N(\mu_K,\sigma_K^2)$. Up to constants, the variable-$K$ multinomial objective is
+\[
+ J(a)=\frac{\beta}{2}\|y-\Phi a\|_2^2+sum_m\log(a_m!)
+ -\log(K!)+K\log M+\frac{(K-\mu_K)^2}{2\sigma_K^2},
+ \qquad \beta=2/\sigma_{\rm eff}^2
+\]
+under the implementation's real-Gaussian scaling. This objective is the common reference for the ADMM and block
+coordinate families below.
+
+\section{Decoder family 1: Graph-BP/EP}
+
+The Graph-BP algorithm in Report 1 works in ODMA blocks, approximates cross-block interference by Gaussians, then
+enumerates each local count state. In the global notation it approximates the exact posterior
+\[
+ p(a\given y)\propto
+ \exp[-\|y-\Phi a\|_2^2/\sigma_{\rm eff}^2]p(a)
+\]
+by block Gaussian sites. Its attraction is structural locality; its weaknesses are loopy overconfidence, a restricted
+local state cache, and an independent-Poisson approximation to the global multinomial dependence. It remains a useful
+historical structured receiver, but the later global experiments did not rely on it for the decisive comparison.
+
+\section{Decoder family 2: MAP-ADMM}
+
+\subsection{Variable split}
+
+ADMM separates a continuous data-fit variable $x\in\R_+^M$ from a structured count variable $a$:
+\[
+ \min_{x,a}\ f(x)+g(a)\quad\text{s.t.}\quad x=a,
+\]
+\[
+ f(x)=\frac{\beta}{2}\|y-\Phi x\|_2^2+I_{\R_+^M}(x),
+\]
+where $g$ is either the independent-Poisson penalty, the multinomial/soft-$K$ penalty, or an indicator restricting $a$
+to cached block states. With scaled dual $u$ and penalty $\rho>0$,
+\[
+ \mathcal L_\rho(x,a,u)=f(x)+g(a)+\frac{\rho}{2}\|x-a+u\|_2^2-\frac{\rho}{2}\|u\|_2^2.
+\]
+One iteration is
+\begin{align*}
+ x^{t+1}&=\argminop_{x\ge0}f(x)+\frac{\rho_t}{2}\|x-a^t+u^t\|_2^2,\\
+ a^{t+1}&=\argminop_a g(a)+\frac{\rho_t}{2}\|x^{t+1}-a+u^t\|_2^2,\\
+ u^{t+1}&=u^t+x^{t+1}-a^{t+1}.
+\end{align*}
+
+\subsection{Continuous count-relaxation update}
+
+Ignoring the nonnegative boundary, stationarity gives
+\[
+ (\beta\Phi^H\Phi+\rho I)x=\beta\Phi^Hy+\rho(a^t-u^t).
+\]
+Thus
+\[
+ x_{\rm unc}^{t+1}=(\beta\Phi^H\Phi+\rho I)^{-1}
+ [\beta\Phi^Hy+\rho(a^t-u^t)].
+\]
+Projection $[x_{\rm unc}]_+$ is exact only when the quadratic metric is diagonal. The implementation therefore uses
+iterative nonnegative solution steps; this distinction matters when interpreting it as MAP rather than a heuristic.
+Using Woodbury can move the dense inverse to resource dimension:
+\[
+ (\rho I+\beta\Phi^H\Phi)^{-1}
+ =\rho^{-1}I-\rho^{-1}\Phi^H(\beta^{-1}I+\rho^{-1}\Phi\Phi^H)^{-1}\Phi\rho^{-1}.
+\]
+
+\subsection{Independent-Poisson discrete update}
+
+For $a_m\sim\operatorname{Poisson}(\lambda)$ independently,
+\[
+ g(a)=\sum_m[\log\Gamma(a_m+1)-a_m\log\lambda]+I_{\Z_+^M}(a)+\text{const}.
+\]
+Writing $v=x^{t+1}+u^t$, the update separates:
+\[
+ a_m^{t+1}=\argminop_{c\in\Z_+}
+ \log\Gamma(c+1)-c\log\lambda+\frac{\rho}{2}(c-v_m)^2.
+\]
+Only a small range of $c$ needs evaluation at low collision. An EM-style rate update is
+$\lambda^+=M^{-1}\sum_ma_m$.
+
+\subsection{Multinomial and fixed/soft load updates}
+
+The terms $-\log(K!)+K\log M+(K-\mu_K)^2/(2\sigma_K^2)$ couple all coordinates through $K$. The implementation
+groups variables into ODMA blocks and enumerates a finite state set $\mathcal A_q$ for each. For state $s\in\mathcal
+A_q$, record its local count $k_q(s)=\one^Ts$ and local cost. A dynamic programme computes
+\[
+ D_q(k)=\min_{\substack{s_1\in\mathcal A_1,\ldots,s_q\in\mathcal A_q\\
+ \sum_{j=1}^qk_j(s_j)=k}}
+ \sum_{j=1}^qJ_j(s_j).
+\]
+Oracle-$K$ chooses $D_Q(K_a)$. Soft-$K$ chooses
+\[
+ K^\star=\argminop_k D_Q(k)-\log(k!)+k\log M+\frac{(k-\mu_K)^2}{2\sigma_K^2}.
+\]
+Backtracking returns one state per block. This enforces the cached-domain total-count logic exactly, but the cache itself
+may exclude the truth.
+
+\subsection{Penalty and acceleration variants}
+
+Residual balancing, spectral-$\rho$, SRA-$\rho$, and Anderson acceleration all modify optimisation dynamics. They do
+not change the statistical objective or remove the restricted-state assumption. Primal and dual residuals are
+\[
+ r^{t+1}=x^{t+1}-a^{t+1},\qquad s^{t+1}=\rho_t(a^{t+1}-a^t).
+\]
+Residual balancing increases $\rho$ if $\|r\|$ dominates and decreases it if $\|s\|$ dominates. Spectral and SRA
+variants estimate local curvature from successive residual/dual differences. Anderson extrapolates the fixed-point
+map. These variants were retained as diagnostics rather than evidence of a different decoder class.
+
+\section{Decoder family 3: NNOMP}
+
+NNOMP uses the same global dictionary but treats the count vector as a sparse nonnegative coefficient vector. Starting
+with $S_0=\varnothing$ and $r^0=y$, iteration $t$ selects
+\[
+ j_t=\argmaxop_{j\notin S_t}\Re\{\phi_j^Hr^t\},\qquad S_{t+1}=S_t\cup\{j_t\}.
+\]
+It then refits all selected coefficients:
+\[
+ x_{S_{t+1}}=\argminop_{x\ge0}\|y-\Phi_{S_{t+1}}x\|_2^2,
+ \qquad r^{t+1}=y-\Phi_{S_{t+1}}x_{S_{t+1}}.
+\]
+The count output is obtained by nonnegative integer projection, normally with total $K_a$. NNOMP-OracleK stops after
+the known mass/support budget has been met. It is therefore a clear support-search baseline, but it is not a non-oracle
+or Bayes-optimal URA receiver. Greedy selection also makes it sensitive to correlation tails and to several active
+columns explaining the same residual direction.
+
+\section{Decoder family 4: VAMP}
+
+VAMP alternates a separable denoiser and a linear Gaussian estimator. For pseudo-observation
+\[
+ r_1=a+\mathcal N(0,\gamma_1^{-1}I),
+\]
+the Bernoulli-Gaussian implementation used
+\[
+ p(a_m)=(1-\rho)\delta_0+\rho\mathcal N(0,\sigma_x^2)
+\]
+or a nonnegative discrete Poisson denoiser. The denoiser returns $x_1=g_1(r_1,\gamma_1)$ and average sensitivity
+\[
+ \alpha_1=M^{-1}\operatorname{tr}\left(\frac{\partial g_1}{\partial r_1}\right).
+\]
+Extrinsic conversion gives
+\[
+ \gamma_2=\gamma_1\frac{\alpha_1}{1-\alpha_1},
+ \qquad r_2=\frac{x_1-\alpha_1r_1}{1-\alpha_1}.
+\]
+The linear module is
+\[
+ x_2=\left(\sigma_{\rm eff}^{-2}\Phi^H\Phi+\gamma_2I\right)^{-1}
+ \left(\sigma_{\rm eff}^{-2}\Phi^Hy+\gamma_2r_2\right).
+\]
+Its average sensitivity $\alpha_2$ produces
+\[
+ \gamma_1^+=\gamma_2\frac{\alpha_2}{1-\alpha_2},
+ \qquad r_1^+=\frac{x_2-\alpha_2r_2}{1-\alpha_2}.
+\]
+SVD makes the linear update practical at the tested scale. EM variants update $\rho$, $\sigma_x^2$, Poisson $\lambda$,
+and noise variance. The algorithm is best justified for suitable large random matrix ensembles; the ODMA dictionary
+does not automatically satisfy those assumptions, and this implementation is VAMP-like rather than a paper-specific
+state-evolution claim.
+
+\section{Decoder family 5: block MAP, block coordinate MAP, and SIC}
+
+Independent BlockMAP projects the matched observation onto each ODMA support and chooses
+\[
+ \widehat a_q=\argminop_{a\in\mathcal A_q}
+ \frac{\beta}{2}\|P_q^H\bar y-C_q^Ta\|_2^2-\log p(a).
+\]
+It ignores interference from other blocks and is therefore a local diagnostic.
+
+Block coordinate MAP instead maintains $\widehat y=\sum_qP_qC_q^Ta_q$. Removing block $q$ gives
+\[
+ r^{(-q)}=\bar y-\widehat y+P_qC_q^Ta_q.
+\]
+For candidate $s\in\mathcal A_q$, $K_{-q}=\sum_{j\ne q}\one^Ta_j$, and $k_q(s)=\one^Ts$, its score is
+\begin{align*}
+ J_q(s)&=\frac{\beta}{2}\|P_q^Hr^{(-q)}-C_q^Ts\|_2^2+sum_v\log(s_v!)\\
+ &\quad-\log((K_{-q}+k_q(s))!)+(K_{-q}+k_q(s))\log M
+ +\frac{(K_{-q}+k_q(s)-\mu_K)^2}{2\sigma_K^2}.
+\end{align*}
+Choose $s_q^\star=\argminop_{s\in\mathcal A_q}J_q(s)$ and update
+\[
+ \widehat y\leftarrow\widehat y+P_qC_q^T(s_q^\star-a_q).
+\]
+The soft-$K$ variant forms $q_q(s)\propto\exp[-J_q(s)/T]$ and averages the implied conditional total counts to update
+$\mu_K$. This is pseudo-EM because the block distributions are conditional replacements, not independent marginals.
+
+SIC uses the same residual principle but makes hard high-confidence decisions, subtracts their waveforms, and repeats.
+It can reduce interference after a correct decision, but error propagation makes its result strongly ordering-dependent.
+
+\subsection{Map from equations to retained implementation names}
+
+The decoder registry preserves the following distinctions. They are useful when reading old plots or logs:
 \begin{itemize}
- \item a canonical count-aware experiment, where repeated messages are legitimate;
- \item low-collision large-alphabet comparisons, where set recovery is a close approximation;
- \item oracle-support tests, where the active indices are given but their counts still need estimation.
+ \item \textbf{Graph-BP:} the turbo-scheduled block EP algorithm with cavity-by-omission and Poisson/noise EM updates from
+ Report 1.
+ \item \textbf{ADMM-Poisson / ADMM-Multinom:} the common ADMM split with, respectively, independent-Poisson or softened
+ multinomial load penalties.
+ \item \textbf{ADMM-KDP-OracleK / ADMM-KDP-SoftK:} the same split with the block-state dynamic programme evaluated at known
+ total load or selected under a soft load prior.
+ \item \textbf{ADMM-KDP-SpectralRho / Anderson / SRA:} soft-load KDP with a different penalty adaptation or fixed-point
+ acceleration; these change dynamics, not the statistical target.
+ \item \textbf{BlockCD-OracleK / BlockCD-SoftK:} sequential discrete block replacement under a tight oracle load prior or a
+ damped pseudo-EM load estimate.
+ \item \textbf{VAMP-BG-OracleK:} Bernoulli-Gaussian VAMP whose activity moments are derived from the true load.
+ \item \textbf{VAMP-BG-EMRho / EMRhoSigma / EMAll:} successively learn activity probability, slab variance, and noise inside
+ the VAMP approximation.
+ \item \textbf{VAMP-Poisson-EM:} replaces the continuous active slab by a discrete nonnegative Poisson-count denoiser.
+ \item \textbf{BlockMAP:} independent per-block exact search inside its cached state domain; it ignores cross-block interference.
+ \item \textbf{NNOMP / NNOMP-OracleK:} greedy global support selection with a non-oracle stopping rule or the true load budget.
+ \item \textbf{SIC:} global matched-filter cancellation with BIC stopping and no oracle load.
 \end{itemize}
 
-Bound overlays and empirical decoders answer different questions. A Polyanskiy-style achievability curve is a coding
-benchmark under its own collision convention; it is not an expected NNOMP curve and must not be used to certify an
-implementation merely because the numbers are close.
+The common equations above show which differences alter the posterior approximation and which only alter optimiser
+behaviour. This prevents a long list of decoder labels from appearing to be a long list of independent physical models.
 
-\section{Explicit dense versus ODMA experiments}
+\section{Metrics and collision convention}
 
-Jobs 001--008 and 013--014 used 50 seeds, NNOMP-OracleK, target PUPE $\le0.05$, and matched $(B,n,K_a)$ for dense and
-ODMA codebooks. The gap was small in easy regimes and grew sharply as support recovery became compressed.
+For true and estimated counts with equal total mass,
+\[
+ \operatorname{PUPE}(a,\widehat a)=1-\frac{1}{K_a}\sum_{m=1}^{M}\min(a_m,\widehat a_m).
+\]
+This becomes the missed-set fraction when counts are binary, while remaining correct when payload collisions occur.
+At small $B$, support-only evaluation is insufficient. Polyanskiy-style achievability curves use their own collision
+convention and are coding benchmarks, not expected performance curves for any decoder above.
 
-\begin{table}[h]
+\section{Dense versus ODMA and the oracle-support control}
+
+Jobs 001--008 and 013--014 used matched $(B,n,K_a)$, 50 seeds, NNOMP-OracleK, and target PUPE $\le0.05$. Representative
+required $E_b/N_0$ values are:
+\begin{table}[ht]
 \centering
 \small
 \begin{tabular}{@{}lrrrr@{}}
@@ -73,51 +292,40 @@ $B=12,n=512,K_a=52$ & $2.19$ & $11.56$ & $6.44$ & unbracketed \\
 $B=12,n=256,K_a=17$ & $2.19$ & $9.12$ & $5.75$ & $5.56$ \\
 \bottomrule
 \end{tabular}
-\caption{Required $E_b/N_0$ in dB for PUPE $\le0.05$. ODMA arrangements use different local lengths/placement counts;
-the purpose is to show the practical gap, not to rank a universal ODMA parameter.}
+\caption{Required $E_b/N_0$ in dB. ODMA columns use different placement arrangements; the table demonstrates a
+practical algorithmic gap, not a universal ordering of every ODMA design.}
 \end{table}
 
-Increasing $B$ at fixed $n$ reduced repeated-message ambiguity while preserving the dense--ODMA separation. Reducing
-$n$ at $B=12$ amplified the gap. Thus the effect was not explained by the collision-heavy behaviour of very small
-alphabets.
-
-\section{Oracle-support decomposition}
-
-The decisive control supplies the active support $S=\{m:a_m>0\}$ and solves
+The decisive experiment supplies the true support $S=\supp(a)$ and solves only
 \[
- \widehat a_S=\arg\min_{x\ge0}\|y-\Phi_Sx\|_2^2,
+ \widehat a_S=\argminop_{x\ge0}\|y-\Phi_Sx\|_2^2,
 \]
-followed by integer projection. This removes the combinatorial search while retaining active-column conditioning,
-interference, noise, and multiplicity fitting.
+followed by integer/total-mass projection. This removes support search but preserves noise, interference, active-column
+conditioning, and multiplicity estimation.
 
-\begin{table}[h]
+\begin{table}[ht]
 \centering
 \small
 \begin{tabularx}{\textwidth}{@{}lYY@{}}
 \toprule
-Geometry & Mean oracle ODMA-minus-dense gap & Contrast with practical decoder \\
+Geometry & Mean oracle ODMA-minus-dense gap & Non-oracle contrast \\
 \midrule
 $B=12,n=2048$ & $0.05$--$0.11$ dB & Practical gap reaches $2+$ dB at high load \\
 $B=12,n=512$ & $0.10$, $0.12$, $0.28$ dB & NNOMP support loss is about $5$--$6$ dB \\
 $B=12,n=256$ & $0.08$, $-0.01$, $0.03$ dB & NNOMP support loss is about $6$--$7$ dB \\
 \bottomrule
 \end{tabularx}
-\caption{Jobs 012, 016, and 017. Each range/list spans the tested ODMA arrangements.}
+\caption{Jobs 012, 016, and 017. The true support is an explicit oracle.}
 \end{table}
 
-\evidence{Measured result. The true support is an explicit oracle; this is not an achievable receiver.}
+\evidence{Measured result. In the tested low-collision $B=12$ regimes, the active ODMA columns were nearly as easy as
+dense columns to fit once their identities were known. Most of the observed NNOMP gap arose while locating support.}
 
-The active ODMA columns were not substantially worse than active dense columns once their identities were known. The
-large observed penalty under NNOMP therefore arose mainly during support selection. This conclusion is robust across the
-tested $n$, but it is neither an information-theoretic converse nor proof that every ODMA-aware decoder must suffer the
-same gap.
+This is not an information-theoretic proof that ODMA has no geometric penalty, nor evidence that an ideal ODMA decoder
+must close the gap. It is a causal result about the tested matrices and recovery pipeline. It redirected the work from
+adding increasingly elaborate inference updates to changing the searchable codebook family itself.
 
-\section{What this changed}
-
-The experiment redirected the project from adding ODMA message updates to asking which codebook structures are easy to
-search. The resulting requirements were: retain many distinguishable global supports; distribute row energy and overlap
-rather than reuse a tiny mask bank; and expose forward/adjoint operations without storing a dense $n\times2^B$ matrix.
-The next stage introduced one factorised algebra for dense, ODMA, product, and sectioned constructions, with exact
-gradients through its continuous factors.
+Report 3 therefore starts from the unrestricted explicit global matrix, derives a factorisation that contains dense,
+sparse-global, product, ODMA, and sectioned codebooks, and asks which restrictions preserve the good global landscape.
 
 \end{document}

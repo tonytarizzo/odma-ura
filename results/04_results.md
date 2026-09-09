@@ -1107,5 +1107,43 @@ column is projected to unit energy after each step.
 The 20 rows use two seeds and both decoders. Each receives 120 epochs, compared with 80 for D0 and 20 for D1 in job
 `028`. Initial/final geometry and complete loss curves are saved. The primary analysis is fixed versus joint performance,
 then selected hash versus iid at matched support. This remains a small-`B` model-class test because learned amplitudes
-and the global decoder still have a `2^B` axis. Local invariant, smoke, and six-row mini tests pass; no HPC result is yet
-recorded.
+and the global decoder still have a `2^B` axis. All 20 summaries and checkpoints are present and the strict joint-only
+merge passes. Mean PUPE over 8/12 dB and all loads is:
+
+| `T` | Decoder | iid sparse | selected hash | selected minus iid |
+|---:|---|---:|---:|---:|
+| 16 | D0 | 0.37343 | 0.37315 | -0.00028 |
+| 16 | D1 | 0.35872 | 0.34837 | -0.01034 |
+| 32 | D0 | 0.34879 | 0.35141 | +0.00261 |
+| 32 | D1 | 0.32854 | 0.33103 | +0.00249 |
+
+Within two-seed precision, the affine support restriction causes no important loss relative to arbitrary sparse support
+when amplitudes and decoder co-adapt. The fixed and joint jobs used different training budgets, so they do not by
+themselves estimate the causal gain from amplitude learning. Job `030` supplies that matched comparison.
+
+---
+
+## 19. Compact Prototype Amplitude Frontier (`030`, pending)
+
+The hash skeleton removes exponential support storage, but jobs `028--029` still attach one free amplitude vector to
+every message. Job `030` replaces that table by
+
+```text
+u_J(w) = P_J w in GF(2)^J,
+alpha(w) = V[:,u_J(w)] / ||V[:,u_J(w)]||,
+Phi[tR+h_t(w),w] = alpha_t(w).
+```
+
+The `P_J` maps are prefixes of one invertible binary matrix. Hence the amplitude model classes are nested: `J=0` is
+one shared table profile, while `J=B` assigns an arbitrary profile to every message and numerically reproduces the old
+selected-hash amplitude endpoint. Fixed runs train only D0/D1; learned runs jointly train `V` and the decoder from the
+same initial `V`. Support hashes and projections remain discrete fixed designs.
+
+The pending 48-row bank fixes `B=14,n=256,T=32`, sweeps `J in {0,2,4,8,14}`, uses D0/D1 and two seeds, and adds fixed
+equal and Rademacher controls. Every run has a 120-epoch ceiling and restores the best checkpoint, stopping after five
+validation epochs without improvement. Local algebra and smoke tests pass. A 12-run `B=8` mini-grid improved held-out
+loss in every fixed/learned, D0/D1, and `J=0,4,8` case while retaining unit energy. No HPC PUPE result is recorded yet.
+
+This experiment isolates amplitude model-class loss. Although a `B=100,n=256,T=64,J=8` generator produces requested
+unit-energy columns without allocating a global codebook, current D0/D1 still score all messages. Scalable candidate
+proposal remains the next separate inverse problem.

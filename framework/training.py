@@ -20,6 +20,7 @@ import torch
 from .channel import matched_filter_collapse, sample_batch
 from .core import DecoderOutput, URABatch
 from .decoders import oracle_k_omp
+from .early_stopping import EarlyStopping
 from .encoder import Encoder
 from .losses import (coherence_penalty, count_mse_loss, power_penalty,
                      row_load_penalty)
@@ -38,7 +39,7 @@ def matched_filter_surrogate(encoder: Encoder, Y: torch.Tensor, H: torch.Tensor)
 
 @dataclass
 class TrainConfig:
-    epochs: int = 5
+    epochs: int = 120
     batches_per_epoch: int = 50
     batch_size: int = 32
     lr: float = 1e-3
@@ -52,8 +53,11 @@ class TrainConfig:
     log_every: int = 1
     eval_batches: int = 8
     eval_max_list_size: int | None = None
+    early_stopping_patience: int = 5
+    early_stopping_min_delta: float = 0.0
     surrogate: str = "matched_filter"
     progress: list[dict] = field(default_factory=list)
+    early_stopping: dict = field(default_factory=dict)
 
 
 SURROGATES: dict[str, SurrogateFn] = {"matched_filter": matched_filter_surrogate}
@@ -90,16 +94,51 @@ def total_loss(encoder: Encoder, batch: URABatch, surrogate: SurrogateFn,
 
 def train(encoder: Encoder, counts_sampler, validation_counts_sampler, fading_sampler,
            ebn0_db: float, cfg: TrainConfig,
-           generator: torch.Generator | None = None) -> TrainConfig:
+           generator: torch.Generator | None = None, validation_generator: torch.Generator | None = None,
+           validation_fading_sampler=None) -> TrainConfig:
     """Train `encoder` in place. The same `cfg` object is returned with the
     `progress` list filled in for the caller's bookkeeping."""
+    if cfg.eval_batches <= 0:
+        raise ValueError("eval_batches must be positive because validation loss controls early stopping")
     surrogate = SURROGATES[cfg.surrogate]
     opt = make_optimiser(encoder, cfg)
     total_steps = max(cfg.epochs * cfg.batches_per_epoch, 1)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(
         opt, T_max=total_steps, eta_min=cfg.lr * cfg.lr_min_factor)
+    stopper = EarlyStopping(cfg.early_stopping_patience, cfg.early_stopping_min_delta)
+    val_generator = validation_generator if validation_generator is not None else generator
+    val_fading = validation_fading_sampler if validation_fading_sampler is not None else fading_sampler
+    validation_generator_state = val_generator.get_state().clone() if val_generator is not None else torch.random.get_rng_state().clone()
 
-    step = 0
+    def fixed_validation_stream(fn):
+        shared_generator = val_generator is generator
+        training_state = generator.get_state().clone() if shared_generator and generator is not None else None
+        global_training_state = torch.random.get_rng_state().clone() if val_generator is None else None
+        if val_generator is not None:
+            val_generator.set_state(validation_generator_state)
+        else:
+            torch.random.set_rng_state(validation_generator_state)
+        reset = getattr(validation_counts_sampler, "reset", None)
+        if reset is not None:
+            reset()
+        result = fn()
+        if training_state is not None:
+            generator.set_state(training_state)
+        if global_training_state is not None:
+            torch.random.set_rng_state(global_training_state)
+        return result
+
+    def validation_loss() -> float:
+        total = 0.0
+        encoder.eval()
+        with torch.no_grad():
+            for _ in range(cfg.eval_batches):
+                batch = sample_batch(encoder, cfg.batch_size, validation_counts_sampler, val_fading, ebn0_db, val_generator)
+                loss, _ = total_loss(encoder, batch, surrogate, cfg)
+                total += float(loss.detach())
+        encoder.train()
+        return total / cfg.eval_batches
+
     for epoch in range(cfg.epochs):
         epoch_parts: dict[str, float] = {}
         for _ in range(cfg.batches_per_epoch):
@@ -112,23 +151,27 @@ def train(encoder: Encoder, counts_sampler, validation_counts_sampler, fading_sa
             opt.step()
             encoder.apply_constraints()
             sched.step()
-            step += 1
             for k, v in parts.items():
                 epoch_parts[k] = epoch_parts.get(k, 0.0) + v
         avg = {k: v / cfg.batches_per_epoch for k, v in epoch_parts.items()}
-        eval_summary = evaluate(encoder, counts_sampler=validation_counts_sampler,
-                                  fading_sampler=fading_sampler,
-                                  ebn0_db=ebn0_db, num_batches=cfg.eval_batches,
-                                  batch_size=cfg.batch_size,
-                                  max_list_size=cfg.eval_max_list_size,
-                                  generator=generator)
-        record = {"epoch": epoch + 1, "lr": float(opt.param_groups[0]["lr"]),
+        val_loss = fixed_validation_stream(validation_loss)
+        eval_summary = fixed_validation_stream(
+            lambda: evaluate(encoder, counts_sampler=validation_counts_sampler, fading_sampler=val_fading,
+                             ebn0_db=ebn0_db, num_batches=cfg.eval_batches, batch_size=cfg.batch_size,
+                             max_list_size=cfg.eval_max_list_size, generator=val_generator))
+        record = {"epoch": epoch + 1, "lr": float(opt.param_groups[0]["lr"]), "validation_loss": val_loss,
                    **avg, **{f"eval_{k}": v for k, v in eval_summary.items()}}
         cfg.progress.append(record)
+        should_stop = stopper.update(val_loss, epoch + 1, {"encoder": encoder})
         if cfg.log_every and (epoch + 1) % cfg.log_every == 0:
-            keys = ["loss", "loss_dec", "eval_pupe", "eval_f1", "eval_l1_err"]
+            keys = ["loss", "loss_dec", "validation_loss", "eval_pupe", "eval_f1", "eval_l1_err"]
             shown = "  ".join(f"{k}={record.get(k, float('nan')):.4f}" for k in keys)
             print(f"epoch {epoch + 1:3d}  lr={record['lr']:.2e}  {shown}")
+        if should_stop:
+            break
+    restored = stopper.restore({"encoder": encoder}) if stopper.enabled else False
+    encoder.apply_constraints()
+    cfg.early_stopping = stopper.summary(len(cfg.progress), restored)
     return cfg
 
 

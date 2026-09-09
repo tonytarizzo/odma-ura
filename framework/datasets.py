@@ -106,4 +106,10 @@ def make_dataset_sampler(dataset: CountDataset, split: str, batch_size: int,
         index += 1
         return counts, active
 
+    def reset() -> None:
+        nonlocal index
+        index = 0
+
+    sample.reset = reset
+
     return sample

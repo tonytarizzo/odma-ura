@@ -322,12 +322,7 @@ class FactorAttentionISTANet(UnrolledBernoulliPGD):
 
     @staticmethod
     def _factor_ids(encoder: Encoder) -> tuple[torch.Tensor, torch.Tensor]:
-        if len(encoder.components) != 1:
-            q = torch.zeros(encoder.num_codewords, dtype=torch.long, device=encoder.device)
-            return q, torch.arange(encoder.num_codewords, device=encoder.device)
-        comp = encoder.components[0]
-        atoms = comp.msg_to_atom
-        return comp.atom_q[atoms], comp.atom_v[atoms]
+        return encoder.message_factor_ids()
 
     def forward(self, encoder: Encoder, Y: torch.Tensor, H: torch.Tensor,
                 num_active: int | torch.Tensor,

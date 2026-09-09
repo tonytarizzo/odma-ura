@@ -449,6 +449,15 @@ class Encoder(nn.Module):
         """Map a count vector a to the noiseless transmitted signal y = Phi a."""
         return self.matvec(counts)
 
+    def message_factor_ids(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return D1's pattern/value labels for every global message."""
+        if len(self.components) != 1:
+            return (torch.zeros(self.num_codewords, dtype=torch.long, device=self.device),
+                    torch.arange(self.num_codewords, dtype=torch.long, device=self.device))
+        component = self.components[0]
+        atoms = component.msg_to_atom
+        return component.atom_q[atoms], component.atom_v[atoms]
+
     def apply_constraints(self) -> None:
         items: list[tuple[str, torch.Tensor, str]] = []
         for i, c in enumerate(self.components):
