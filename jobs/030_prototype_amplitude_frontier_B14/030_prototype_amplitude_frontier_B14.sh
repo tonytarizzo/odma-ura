@@ -1,7 +1,7 @@
 #!/bin/bash
 #PBS -l walltime=48:00:00
 #PBS -l select=1:ncpus=8:mem=64gb
-#PBS -J 1-48
+#PBS -J 1-64
 #PBS -N ura030_amp_frontier
 
 set -euo pipefail

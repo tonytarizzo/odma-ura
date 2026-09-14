@@ -13,6 +13,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
+GAUSSIAN_LABEL_BITS = (0, 2, 4, 8, 10, 12, 14)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-root", type=Path, required=True)
@@ -99,7 +102,7 @@ def plot_frontier(rows: list[dict], path: Path) -> None:
             value = next(row for row in rows if row["decoder"] == decoder and row["amplitude_init"] == init)
             ax.errorbar(value["J"], value["mean_pupe_8_12db"], yerr=value["seed_standard_error"],
                         marker=marker, capsize=3, linestyle="none", label=f"fixed {init}")
-        ax.set(title=decoder.upper(), xlabel="amplitude-label bits J", xticks=[0, 2, 4, 8, 14])
+        ax.set(title=decoder.upper(), xlabel="amplitude-label bits J", xticks=GAUSSIAN_LABEL_BITS)
         ax.grid(alpha=0.25); ax.legend(fontsize=8)
     axes[0].set_ylabel("mean PUPE at 8 and 12 dB (lower is better)")
     fig.suptitle("Selected-hash amplitude model-class frontier, B=14, n=256, T=32")
@@ -115,7 +118,7 @@ def plot_epochs(rows: list[dict], path: Path) -> None:
                               key=lambda row: row["J"])
             ax.plot([row["J"] for row in selected], [row["mean_epochs_run"] for row in selected],
                     linestyle=linestyle, marker=marker, label=f"{decoder.upper()} {mode}")
-    ax.set(xlabel="amplitude-label bits J", ylabel="mean epochs run", xticks=[0, 2, 4, 8, 14], ylim=(0, 125))
+    ax.set(xlabel="amplitude-label bits J", ylabel="mean epochs run", xticks=GAUSSIAN_LABEL_BITS, ylim=(0, 125))
     ax.grid(alpha=0.25); ax.legend(fontsize=8); fig.tight_layout(); fig.savefig(path, dpi=180); plt.close(fig)
 
 
@@ -128,7 +131,7 @@ def main() -> None:
     plot_epochs(merged, args.out_dir / "early_stopping_epochs.png")
     comparisons = []
     for decoder in ("d0", "d1"):
-        for J in (0, 2, 4, 8, 14):
+        for J in GAUSSIAN_LABEL_BITS:
             fixed = next(row for row in merged if row["decoder"] == decoder and row["mode"] == "fixed"
                          and row["amplitude_init"] == "gaussian" and row["J"] == J)
             learned = next(row for row in merged if row["decoder"] == decoder and row["mode"] == "learned"
