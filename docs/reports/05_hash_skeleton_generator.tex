@@ -1,278 +1,194 @@
 \documentclass[11pt]{article}
-\newcommand{\ReportShortTitle}{Generated sparse-global direction}
-\newcommand{\ReportUpdated}{9 September 2026}
+\newcommand{\ReportShortTitle}{Generated supports and amplitudes}
+\newcommand{\ReportUpdated}{18 September 2026}
 \input{report_style}
 
 \begin{document}
-\ProjectReport{From explicit sparse codebooks to generated supports}
-{Preserving the broad $L=1$ model class while attacking storage and inverse search}{5 of 5}
-{Jobs 027 and 029 complete; job 028 partial; amplitude job 030 pending on HPC}
+\ProjectReport{Generating a sparse global codebook}
+{Support evidence and coordinate-wise amplitude generation}{5}
+{Support tests complete. Coordinate-amplitude job 031 locally checked; HPC results pending.}
 
-\section{Research philosophy at the current frontier}
+\section{What we are trying to preserve}
 
-The strongest empirical lead remains the global $L=1$ codebook, not the sectioned outer-code route. The desired method
-should therefore remove the exponential implementation cost without unnecessarily replacing that broad family by one
-specific tree or parity construction. This is a methodological principle rather than a claim that restrictions can
-always be avoided:
-\begin{enumerate}
- \item begin from the unrestricted explicit object whose behaviour is understood;
- \item identify redundancy or invariance empirically and algebraically;
- \item impose the smallest tractable structure that removes the bottleneck;
- \item compare that restriction against the broader parent family before adding another;
- \item distinguish compact forward generation from scalable inverse decoding.
-\end{enumerate}
-If a restriction is eventually necessary, it should enter because an experiment or proof justifies it, not because a
-named construction makes implementation convenient.
-
-\section{The explicit result to preserve}
-
-A $B$-bit payload has $M=2^B$ possible values. In the explicit one-component model,
+A $B$-bit message chooses one of $M=2^B$ columns of a common codebook:
 \[
- \Phi=[\phi_0,\ldots,\phi_{M-1}]\in\R^{n\times M},
- \qquad y=\Phi a+z=\sum_{m=0}^{M-1}a_m\phi_m+z,
- \qquad \|\phi_m\|_2=1.
+ \Phi=[\phi(w_0),\ldots,\phi(w_{M-1})]\in\R^{n\times M},\qquad
+ y=\Phi a+z=\sum_{k=1}^{K}\phi(w_k)+z,\qquad \|\phi(w)\|_2^2=1.
 \]
-Job 027 fixed $B=12,n=256$ and swept exact support size
-\[
- s\in\{256,192,128,96,64,48,32,24,16,12,8,6,4,3,2,1\}.
-\]
-Within each seed, supports were nested prefixes of a random ordering and amplitudes were paired before renormalisation.
-Dense and four-mask ODMA controls used the same load/SNR contract.
+Here $a\in\Z_+^M$ counts transmitted messages and sums to $K$. Repeated messages add multiplicity.
+Bits label messages, not channel amplitudes: the transmitted coordinates are real numbers in these experiments.
 
-The strict 72-summary aggregate gives representative high-SNR PUPE:
-\begin{table}[h]
-\centering
+The useful empirical result is that a sparse global matrix can perform close to a dense matrix, whereas a particular
+ODMA support restriction performs substantially worse at the same density. Job 027 at $B=12,n=256$ gave D0 mean
+high-SNR PUPE $0.2935$ for dense, $0.2932$ for arbitrary support size 64, and $0.5363$ for four-mask ODMA with
+the same support size. We seek inexpensive structure that preserves useful codebooks, not sparsity alone.
+
+Storing even just $T$ nonzeros per message costs $T2^B$ values. It cannot reach $B=100$. We therefore replace stored
+columns by a rule $w\mapsto\phi(w)$ and test each restriction against the explicit parent at small $B$.
+D0/D1 provide a common receiver for these comparisons; neither is certified optimal. A compact forward rule does
+not supply a fast inverse for a noisy sum of many messages. That separate problem remains open.
+
+\section{Support: one selected resource in each table}
+
+Partition $n=TR$ coordinates into $T$ tables of $R=2^r$ coordinates. For every message,
+\[
+ h_t(w)=A_tw\oplus b_t,\qquad A_t\in\F_2^{r\times B},\quad b_t\in\F_2^r,\qquad
+ \rho_t(w)=tR+\operatorname{integer}(h_t(w)).
+\]
+$\F_2$ means binary arithmetic, with XOR as addition. Tables are indexed $t=0,\ldots,T-1$.
+Every message uses one position per table: support size $T$, density $1/R$.
+These tables are not independently chosen payload sections; each hash can depend on all $B$ bits.
+
+One-per-table masks restrict all size-$T$ masks, and affine hashes further restrict message-to-table assignments.
+Neither concession is proved free. Independent uniform table choices have expected pair overlap $T/R=T^2/n$,
+matching independent uniform size-$T$ supports. Equal means do not guarantee equal tails or performance.
+
+We impose two exact binary rank conditions:
+\[
+ \operatorname{rank}_{\F_2}(A_t)=r,\qquad
+ \operatorname{rank}_{\F_2}\begin{bmatrix}A_0\\\vdots\\A_{T-1}\end{bmatrix}=B.
+\]
+The first gives equal bin populations across all messages. The second ensures distinct messages have distinct full
+support tuples, requiring $Tr\ge B$. For $d=w\oplus v\ne0$, overlap in table $t$ occurs exactly when $A_td=0$.
+At small $B$, enumerating differences permits selection by overlap tails. Job 031 retains the previous best-of-128
+hash search. This exhaustive selection is not a large-$B$ algorithm; large-$B$ forward checks instead sample
+rank-valid banks without enumeration.
+
+\evidence{Jobs 028 and 029 returned their 36 and 20 expected runs. Under joint training at $B=14,n=256$, selected
+hash minus arbitrary sparse PUPE was approximately $-0.0003/-0.0103$ for D0/D1 at $T=16$, and $+0.0026/+0.0025$
+at $T=32$. The support restriction is a reasonable working choice at these tested points, not a universal theorem.}
+
+\section{Amplitude: each coordinate has its own lookup}
+
+Keep the support fixed. Give table $t$ a binary projection and a scalar lookup bank:
+\[
+ P_t\in\F_2^{J\times B},\qquad V\in\R^{T\times2^J},\qquad
+ u_t(w)=\operatorname{integer}(P_tw),\qquad g_t(w)=V_{t,u_t(w)}.
+\]
+One message chooses $T$ scalar entries, generally from different bank columns. Gather and normalize:
+\[
+ g(w)\in\R^T,\qquad \alpha(w)=\frac{g(w)}{\|g(w)\|_2},\qquad
+ \boxed{\phi(w)=\sum_{t=0}^{T-1}\alpha_t(w)e_{\rho_t(w)}}.
+\]
+Positions are distinct, so $\|\phi(w)\|_2^2=\sum_t\alpha_t(w)^2=1$ for every message.
+For the exceptional $g=0$ case the implementation defines $\alpha=e_0$, also unit energy. This is not expected
+with continuous initialization; if reached, actual nonzero support decreases.
+
+For $B=14,n=256,T=32,R=8,J=4$, the support maps have shape $(32,3,14)$, amplitude maps $(32,4,14)$,
+and $V$ has shape $(32,16)$: 512 real amplitude parameters rather than $32\cdot2^{14}=524{,}288$.
+Storage is $O(T(r+J)B+T2^J)$; generating one sparse column costs $O(T(r+J)B+T)$ without visiting other messages.
+
+\subsection{The equivalent explicit matrix}
+
+For explanation only, enumerate all messages. Define one-hot lookup matrices
+\[
+ (S_t)_{jm}=\one\{j=h_t(w_m)\},\quad S_t\in\{0,1\}^{R\times M},\qquad
+ (Q_t)_{um}=\one\{u=u_t(w_m)\},\quad Q_t\in\{0,1\}^{2^J\times M}.
+\]
+The raw amplitude matrix $G\in\R^{T\times M}$ has row $G_{t,:}=V_{t,:}Q_t$.
+For nonzero columns let $c_m=1/\|G_{:,m}\|_2$. Then
+\[
+ \boxed{\Phi=
+ \begin{bmatrix}S_0\diag(G_{0,:})\\ \vdots\\ S_{T-1}\diag(G_{T-1,:})\end{bmatrix}
+ \diag(c)\in\R^{TR\times M}.}
+\]
+$S_t,Q_t,G,\Phi$ are conceptual objects, not required generator storage. The small-$B$ adapter caches row/label
+indices to execute this matrix and its adjoint exactly. Current D0/D1 still score $M$ messages.
+
+\subsection{Learning and remaining restrictions}
+
+$A_t,b_t,P_t$ are fixed discrete choices. Fixed-amplitude runs train only the decoder; joint runs train $V$ too.
+For $g\ne0$, normalization has Jacobian
+\[
+ \frac{\partial\alpha}{\partial g}=\frac{I_T-\alpha\alpha^\top}{\|g\|_2}.
+\]
+The lookup routes gradients into $V_{t,u_t(w)}$. Messages reusing an entry accumulate gradients there; XOR needs
+no derivative. A stored bank column is \emph{not} generally a codeword's amplitude vector, so it must not be
+projected to unit norm after updates.
+
+Scalar reuse is still a restriction: messages sharing $P_tw$ share one raw amplitude, but their other coordinates
+can differ. Each $P_t$ is a prefix of a fixed invertible $B\times B$ basis. Repeating bank entries embeds a $J$-bit
+model in the $(J+1)$-bit model. At $J=B$, each table's label is bijective and arbitrary amplitudes on the chosen
+supports are represented exactly. Model-class equality does not guarantee optimization reaches its best member.
+At fixed $J$, changing the label maps gives a different restricted family, not a guaranteed superset of the previous one.
+
+\section{Algebraic safeguards and initialization}
+
+The projections satisfy the following ranks over $\F_2$:
+\[
+ \operatorname{rank}(P_t)=J,\qquad
+ \operatorname{rank}(P_{\rm stack})=\min(TJ,B),\qquad
+ \operatorname{rank}\begin{bmatrix}A_t\\P_t\end{bmatrix}=\min(B,r+J).
+\]
+These balance each bank's label use, remove avoidable whole-label aliases, and preserve as many amplitude labels
+as possible within each hash bin. When $r+J\le B$, bin and amplitude labels are independent for uniform messages.
+When $r+J>B$, full independence is impossible.
+
+For $d=w\oplus v$, sharing both a resource and its raw amplitude entry requires $A_td=P_td=0$.
+The joint kernel has dimension $B-\operatorname{rank}[A_t;P_t]$, so maximal rank minimizes this alias set.
+It does not minimize every codeword correlation: different bank entries can have similar values and normalization
+couples all tables.
+
+Coordinate labels also avoid a shared-factor rank bound. With one common lookup $Q$, the raw matrix $G=VQ$
+has real rank at most $\min(T,2^J)$. Different $Q_t$ need not obey that bound: $T=32,J=4$ can allow amplitude
+rank 32 rather than at most 16. Nonzero-column normalization preserves this rank. The old \emph{physical} matrix
+$\Phi$ need not have rank at most 16, however: table-specific support masking changes that argument.
+
+\subsection{Why center and balance a small bank?}
+
+Only $2^J$ Gaussian draws populate each table. At $J=4$, its sample mean has standard deviation $1/4$; its
+sample energy also fluctuates. Reusing that short bank does not average away the table-specific bias. Initialize by
+\[
+ \mu_t=2^{-J}\sum_uV_{tu},\qquad
+ s_t^2=2^{-J}\sum_u(V_{tu}-\mu_t)^2,\qquad
+ V_{tu}\leftarrow(V_{tu}-\mu_t)/s_t.
+\]
+Each raw bank now has mean zero and mean-square one. Full-rank labels make these exact averages over uniform
+messages too. Individual magnitudes still vary. Subsequent codeword normalization need not preserve exact
+table-energy equality, so row energy remains a measured diagnostic.
+
+This is an \emph{initialization}, not an ongoing constraint: learned banks can change means and energy allocation.
+The motivation is finite-bank bias and observed geometry, not a claim that all optimal encoders are balanced.
+A preliminary two-seed frozen-D0 probe gave PUPE about $0.4322$ for balanced coordinate $J=4$ versus $0.4306$
+for unrestricted amplitudes on its restricted four-cell grid. It motivates matched training, not a non-inferiority claim.
+
+Useful physical geometry is broader than binary ranks: balanced row energy, small harmful correlation tails,
+well-conditioned active-column Gram matrices, and separation between different $K$-message sums.
+Since $M\gg n$, $\Phi$ cannot have full column rank. Full row rank and isolated-message injectivity alone cannot
+certify multiuser recovery.
+
+\newpage
+\section{Job 031: test amplitudes before changing the receiver}
+
+Keep $B=14,n=256,T=32$, selected supports, global D0/D1, and paired message/noise streams fixed.
+Three seeds and two decoders give 72 rows:
+\begin{center}
 \small
-\begin{tabular}{@{}lrrr@{}}
+\begin{tabularx}{\textwidth}{@{}p{0.46\textwidth}Y@{}}
 \toprule
-Family/support & Density $s/256$ & D0 & D1 \\
+Cases per seed and decoder & Question \\
 \midrule
-Dense & 1 & .2935 & .2030 \\
-Sparse global $s=64$ & .25 & .2932 & .2256 \\
-Sparse global $s=48$ & .1875 & .2975 & .2188 \\
-Sparse global $s=32$ & .125 & .3051 & .2276 \\
-Sparse global $s=24$ & .09375 & .3120 & .2399 \\
-Sparse global $s=16$ & .0625 & .3312 & .2323 \\
-Sparse global $s=8$ & .03125 & .3984 & .2813 \\
-Sparse global $s=4$ & .015625 & .5171 & .3994 \\
-Four-mask ODMA & .25 & .5363 & .4884 \\
+Coordinate $J=4,8,10$, balanced; fixed and joint & How much sharing preserves the unrestricted reference? \\
+Coordinate $J=4$, raw; fixed and joint & Does initialization explain a low-$J$ penalty? \\
+Shared-label $J=4$, raw and balanced; fixed & Are separate labels helpful beyond balancing alone? \\
+Unrestricted $J=14$, raw; fixed and joint & Matched-budget parent with the same normalization/optimization. \\
 \bottomrule
-\end{tabular}
-\caption{Job 027 mean PUPE over 8/12 dB and $K_a=9,17,26,30$. Lower is better.}
-\end{table}
+\end{tabularx}
+\end{center}
+Job 030 remains available as historical evidence, not the proposed route. All new rows use at most 120 epochs,
+patience five on deterministic validation loss, and best-checkpoint restoration including epoch zero.
+Spectral calibration uses a fixed starting vector. Fixed and joint runs have equal maximum data budgets but may
+stop at different epochs.
 
-D0 remains nearly flat through $s\approx48$; at $s=32$ it is only 0.0116 above dense. D1 at $s=16$ is 0.0293 above
-dense in the strict aggregate, but D1 had only 20 epochs versus 80 for D0 and shows more two-seed noise. At equal density
-$s=64$, arbitrary sparse global beats ODMA by 0.2431 PUPE for D0 and 0.2628 for D1.
+Compare each family with its same-seed, same-decoder, same-training-mode parent. Report all load/SNR cells,
+the 8/12-dB aggregate, paired seed gaps, stopping epochs, and pre/post geometry.
+Three seeds are useful replication, not a guarantee that small gaps are absent. Do not average away high-load failures.
 
-The repaired seed-2702 full-density endpoints are not a clean nested paired comparison because resampling one exact-zero
-Gaussian draw changed random-number consumption. The intermediate supports retain the intended pairing and carry the
-main frontier conclusion.
+\evidence{Local checks cover endpoint equality, nesting, binary ranks, forward/adjoint equality, gradients,
+checkpoint round trips, exact energy, and sampled $B=100$ generation. Twelve smoke paths and fixed/joint
+D0/D1 mini learning runs pass. These validate execution and early learning only; HPC results are pending.}
 
-\evidence{Measured job 027. It demonstrates a forgiving explicit sparse-global model class under current D0/D1. It
-does not remove $2^B$ storage or scoring, and D1 is not established as optimally trained.}
-
-\section{Why counting available supports is insufficient}
-
-There are $\binom ns$ unsigned size-$s$ masks. For $n=256$,
-\[
- \log_2\binom{256}{21}\gtrsim100,
- \qquad
- \log_2\binom{256}{24}\approx111.36.
-\]
-Thus support labels alone can in principle distinguish $2^{100}$ messages around $s=21$--24. This does not solve the
-communication problem. A useful family must also have balanced rows, controlled pair intersections and signed
-correlations, separation between sums of $K_a$ columns, and a receiver that can propose likely messages without
-enumerating all $2^B$ labels.
-
-Job 027 shows this distinction directly. All 4096 support/sign patterns remain distinct through $s=4$, but performance
-degrades much earlier. As $s$ falls from 32 to 8, sampled correlation q99.9 rises from about 0.256 to 0.479 and the
-fraction of rows occupied by a $K_a=30$ active set falls from 0.982 to 0.613. At $s=1$, the namespace itself finally
-collapses: only 256 supports and 512 real signed directions exist.
-
-The conservative procedural target $s=24$ is therefore a rate/geometry starting point, not a $B=100$ feasibility
-claim. $s=21$ is an aggressive combinatorial boundary. Neither number supplies an inverse algorithm.
-
-\section{Generator--proposer specification}
-
-Write a message as $w\in\{0,1\}^B$. A procedural compact encoder replaces stored columns by
-\[
- S_\theta(w)=\{\rho_0(w),\ldots,\rho_{s-1}(w)\},
-\]
-\[
- \phi_\theta(w)=\sum_{t=0}^{s-1}\alpha_t(w)e_{\rho_t(w)},
- \qquad \sum_t|\alpha_t(w)|^2=1.
-\]
-The payload bits are binary inputs to the generator; the transmitted nonzero values $\alpha_t$ may be real or complex.
-
-Forward generation is only half of a scalable code:
-\[
- \operatorname{codeword}_\theta(w)\longrightarrow\phi_\theta(w),
-\]
-\[
- \operatorname{pro}(y)\longrightarrow\mathcal C(y),
- \qquad |\mathcal C(y)|\ll2^B,
-\]
-where the candidate list should contain the active messages with high recall. Distinct generated descriptions provide
-isolated-message injectivity only. The inverse search must work in noise and in a multiuser superposition; otherwise
-the receiver still tries $2^B$ messages.
-
-The desired tests are therefore not only PUPE. They include proposal recall, candidate-list size, runtime/memory,
-unit-energy error, row balance, support repetition, pair overlap/correlation, active-set Gram spectra, $K$-sum
-separation, and complete-message recovery after the proposer.
-
-\section{Master table/bin hash skeleton}
-
-Let $n=TR$: divide resources into $T$ disjoint tables with $R$ rows each. Choose one row in every table:
-\[
- \rho_t(w)=tR+h_t(w),\qquad h_t(w)\in\{0,\ldots,R-1\}.
-\]
-With phase/sign decoration $\xi_t(w)$,
-\[
- \boxed{g(w)=\frac{1}{\sqrt T}\sum_{t=0}^{T-1}\xi_t(w)e_{tR+h_t(w)}.}
-\]
-If $|\xi_t(w)|=1$, then $\|g(w)\|_2^2=1$ exactly. Two codewords have inner product
-\[
- \langle g(w),g(v)\rangle=\frac{1}{T}\sum_{t=0}^{T-1}
- \mathbf 1\{h_t(w)=h_t(v)\}\xi_t(w)^*\xi_t(v).
-\]
-Hashes control overlap and balance; phases can cancel the signed sum. The restriction changes the support family from all
-$\binom nT$ masks to $R^T$ one-per-table masks. Its rate condition is
-\[
- B\le T\log_2R=T\log_2(n/T).
-\]
-Expected pair overlap under uniform table choices is $T/R=T^2/n$, matching the first-order value for two independent
-size-$T$ supports. Tail geometry can still differ, so it must be measured against arbitrary sparse supports.
-
-\section{Binary affine hash family}
-
-When $R=2^r$, let
-\[
- h_t(w)=A_tw\oplus b_t,\qquad
- A_t\in\F_2^{r\times B},\quad b_t\in\F_2^r.
-\]
-$\F_2$ means arithmetic on bits: addition is XOR. Full row rank of each $A_t$ makes every table exactly balanced. Full
-column rank of the stacked matrix
-\[
- A_{\rm stack}=[A_0^T\ \cdots\ A_{T-1}^T]^T\in\F_2^{Tr\times B}
-\]
-makes the complete hash tuple injective, because
-\[
- A_{\rm stack}w=A_{\rm stack}v\Longrightarrow A_{\rm stack}(w\oplus v)=0
- \Longrightarrow w=v.
-\]
-For difference $d=w\oplus v$, the two supports collide in table $t$ exactly when $A_td=0$. At small $B$, enumerating
-all nonzero $d$ gives the exact overlap spectrum. Job 028 selects the best of 128 random full-rank banks by worst and
-tail collision counts.
-
-The matrices $A_t,b_t$ are fixed discrete design parameters, not gradient-trained. They can be randomly sampled,
-searched, or designed algebraically. Keeping their rank constraints exact is more important than forcing them into a
-continuous relaxation. The phase/amplitude rule and downstream decoder can still be learned.
-
-\section{Connection back to the explicit factorisation}
-
-At $B=14$, every generated support can be materialised without changing D0/D1. Define
-\[
- (P_t)_{jm}=\mathbf 1\{j=h_t(w_m)\},\qquad
- D_t=\diag(\alpha_{t0},\ldots,\alpha_{t,M-1}).
-\]
-Then
-\[
- \Phi=
- \begin{bmatrix}P_0D_0\\P_1D_1\\\vdots\\P_{T-1}D_{T-1}\end{bmatrix}
- \in\R^{TR\times2^B},
- \qquad
- \Phi_{tR+j,m}=\alpha_{tm}\mathbf 1\{j=h_t(w_m)\}.
-\]
-This is an $L=1$ global matrix with generated support, not the section-count representation of Report 4. D0/D1 retain
-their unchanged residual and adjoint operations. The small-$B$ experiment therefore asks a clean question: does this
-support restriction damage the promising explicit landscape before a new proposer is built?
-
-\section{What is learnable without breaking the skeleton}
-
-If $S\in\{0,1\}^{n\times M}$ is the fixed materialised support and $V$ contains trainable amplitudes,
-\[
- \Phi=S\odot V,
- \qquad
- \frac{\partial\mathcal L}{\partial V}=S\odot\frac{\partial\mathcal L}{\partial\Phi}.
-\]
-The mask makes all off-support gradients zero. Projection after every optimiser step,
-\[
- \phi_m\leftarrow\frac{\phi_m}{\|\phi_m\|_2},
-\]
-guarantees unit power for the final learned codebook. Dense controls use the same projection.
-
-The original certification stores amplitudes per message. To remove that second exponential object, choose one
-invertible $Q\in\F_2^{B\times B}$ and let $P_J$ be its first $J$ rows. Define
-\[
- u_J(w)=P_Jw\in\F_2^J,\qquad V\in\R^{T\times2^J},\qquad
- \alpha_J(w)=\frac{V_{:,u_J(w)}}{\|V_{:,u_J(w)}\|_2}.
-\]
-The transmitted column is
-\[
- \boxed{\phi_J(w)=\sum_{t=0}^{T-1}\alpha_{J,t}(w)e_{tR+h_t(w)}},\qquad
- \|\phi_J(w)\|_2^2=1.
-\]
-Thus the saved generator contains $A,b,P_J,V$ and needs $T2^J$ amplitude values rather than $T2^B$. At $J=0$, all
-messages share one learned table profile. At $J=B$, $P_B=Q$ is bijective, so $V$ assigns an arbitrary amplitude vector
-to every message and recovers the old model class. Because the $P_J$ are prefixes, any $J$-bit bank can be copied into
-the two halves of a $(J+1)$-bit bank; hence these classes are genuinely nested.
-
-The support maps $A,b$ and label map $P_J$ remain fixed discrete designs. In a learned run, gradients from every message
-with label $u$ accumulate into $V_{:,u}$ through the column normalisation; in a fixed run, $V$ is a buffer and only the
-decoder trains. This gives a paired test of amplitude adaptation without changing support. It also guarantees deployment
-power for messages never sampled in training. A selected-message $B=100,n=256,T=64,J=8$ regression test generates
-columns without allocating a $2^{100}$ object. Current D0/D1 still allocate such a message axis, so forward scalability
-does not establish inverse scalability.
-
-\section{Jobs 028--030 and their causal decision gates}
-
-Job 028 fixes $B=14,n=256$, $T\in\{16,32\}$, D0/D1, and two seeds. It compares:
-\begin{enumerate}
- \item iid arbitrary sparse support;
- \item balanced random one-per-table support;
- \item random affine binary hashes;
- \item collision-spectrum-selected affine hashes;
- \item dense context.
-\end{enumerate}
-The sequence isolates the cost of tables, then linear/XOR structure, then offline hash selection. Fixed Gaussian
-amplitudes are paired across sparse families and normalised exactly.
-
-Job 029 jointly trains amplitudes and the chosen decoder for 120 epochs on dense, iid sparse, and selected-hash supports
-at $T=16,32$. It records pre/post geometry and full loss curves. This separates a fixed-amplitude or under-training floor
-from a limitation of the support skeleton. It is still a small-$B$ model-class test because the learned amplitudes and
-D0/D1 states are message-indexed. All 20 rows returned. Selected hash and iid sparse differ by less than 0.011 PUPE in
-every matched aggregate, so no important hash penalty is visible at current precision. Fixed and joint runs used
-different training budgets, so they do not isolate the value of amplitude learning; job 030 makes that comparison fair.
-
-Job 030 fixes the selected $T=32$ hash and sweeps $J\in\{0,2,4,8,14\}$ at $B=14,n=256$. Every $J$ has a fixed-$V$
-row and a matched jointly learned-$V$ row for D0/D1 and two seeds. Fixed equal-amplitude and Rademacher controls are
-included. All rows have a 120-epoch ceiling, stop after five validation epochs without improvement, and restore the
-best checkpoint. This isolates amplitude model-class loss before candidate proposal is introduced.
-
-The decision order is deliberately conservative:
-\begin{enumerate}
- \item if balanced tables are materially worse than iid sparse, reject or revise the table restriction;
- \item if tables survive but affine hashes fail, retain the skeleton and change the generator family;
- \item if selected hashes match iid support, find the smallest $J$ that matches the $J=B$ amplitude endpoint;
- \item only then introduce a proposer and measure proposal recall separately from final PUPE;
- \item keep exact small-$B$ materialisation as a permanent regression reference.
-\end{enumerate}
-
-\evidence{Local tests verify exact support size, unit energy, $\F_2$ ranks, support injectivity, nested amplitude classes,
-the unrestricted $J=B$ endpoint, gradients only into $V$, and finite fixed/joint D0/D1 paths. A 12-run $B=8$ mini-grid
-improved held-out loss in every tested case. No job-030 HPC performance result is recorded yet.}
-
-\section{Current claim and boundary}
-
-The project has evidence that a broad sparse-global $L=1$ family can be much sparser than dense without reproducing the
-ODMA penalty. It has a compact candidate support skeleton whose forward map is injective and unit-energy by
-construction. It now has a compact nested amplitude family, but no HPC evidence yet showing which $J$ preserves the
-unrestricted endpoint, and no high-recall sub-exhaustive inverse proposer for noisy multiuser sums.
-
-That boundary is the research opportunity. The next successful design should look like the favourable explicit global
-model to the channel, but like a compact generator and searchable algebra to the implementation. This preserves the
-general direction without mistaking storage compression, isolated-message invertibility, or local section decoding for
-complete scalable URA.
-
+The next decision is whether coordinate-wise scalar reuse retains the useful explicit-codebook performance.
+Only afterwards should a scalable inverse be added and its separate recovery loss measured.
+No sign-only, mutual-information, or new decoder construction is part of this batch.
 \end{document}

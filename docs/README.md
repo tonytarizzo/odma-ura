@@ -19,7 +19,7 @@ the Markdown ledgers when the exact run-level audit trail is needed.
    algebra, and the failure analysis from jobs `023--026`.
 5. [`reports/05_hash_skeleton_generator.pdf`](reports/05_hash_skeleton_generator.pdf) — why the explicit sparse result
    from completed job `027` motivates a generated, searchable `L=1` replacement; the table/hash algebra; and the fixed
-   and joint-learning tests `028--029`, followed by the compact amplitude frontier in job `030`.
+   and joint-learning tests `028--029`, followed by coordinate-wise amplitude generation and job `031`.
 
 The `.tex` source for each report sits beside its PDF. `report_style.tex` is the shared formatting preamble.
 
@@ -39,14 +39,14 @@ variant for the present method.
 
 [`CURRENT_STATE.md`](CURRENT_STATE.md) is a concise, neutral context document suitable for starting a new conversation.
 It distinguishes verified observations, interpretations, limitations, and open research choices. It is the authoritative
-summary after the complete job-`027` audit and implementation of jobs `028--030`.
+summary through the completed jobs `028--030` and the locally checked coordinate-amplitude batch `031`.
 
 ## Detailed evidence
 
 - [`../results/03_results.md`](../results/03_results.md) records jobs `001--017`, including explicit dense/ODMA sweeps
   and oracle-support controls.
-- [`../results/04_results.md`](../results/04_results.md) records jobs `018--030`, implementation checks, returned-job
-  audits, numerical tables, and interpretation limits. Job `029` is complete, job `028` is partial, and job `030` is pending.
+- [`../results/04_results.md`](../results/04_results.md) records jobs `018--031`, implementation checks, returned-job
+  audits, numerical tables, and interpretation limits. Jobs `028--030` have returned; job `031` HPC results are pending.
 - [`EXPERIMENT_BANK.md`](EXPERIMENT_BANK.md) records current experiment contracts and latest job status.
 - [`../jobs/README.md`](../jobs/README.md) records private HPC operation, submission, and merge commands.
 

@@ -193,7 +193,7 @@ one larger explicit payload while retaining iid sparse controls.
 
 ### `028_hash_skeleton_B14`
 
-- Status: implemented and locally certified; 18/36 HPC summaries and checkpoints are present.
+- Status: all 36 expected HPC summaries and checkpoints are present; support comparisons are retained as the current design basis.
 - Scale: `B=14,n=256`, training `K=7--22`, evaluation `K in {7,15,22,26}`, and the established
   `Eb/N0 in {-4,0,4,8,12}` dB grid.
 - Sparse supports: `T in {16,32}`, giving `(R,r)=(16,4)` and `(8,3)` under `n=TR`, `R=2^r`.
@@ -233,10 +233,10 @@ support structure rather than amplitude co-adaptation as the remaining limitatio
 
 ### `030_prototype_amplitude_frontier_B14`
 
-- Status: implemented and locally certified; the 48-row HPC bank is pending.
+- Status: all 64 manifest rows returned, including the J=10/12 extension. Retained as the historical whole-vector-sharing test.
 - Fixed object: the same selected affine support hash `A,b` at `B=14,n=256,T=32`.
 - Amplitude classes: `u_J=P_Jw`, `V in R^(T x 2^J)`, and `J in {0,2,4,8,14}`. Prefix projections make the model
-  classes nested; `J=0` shares one table profile and `J=14` recovers arbitrary per-message amplitudes.
+  classes nested; the extended grid includes J=10/12. `J=0` shares one table profile and `J=14` recovers arbitrary per-message amplitudes.
 - Training comparison: every Gaussian `J` has a fixed-`V` row (decoder only) and a paired learned-`V` row (joint
   amplitude/decoder training). `A,b,P_J` are always fixed. Equal `J=0` and Rademacher `J=14` are fixed controls.
 - Energy: normalising each column of `V` in the forward rule guarantees unit energy for every message, including unseen
@@ -246,6 +246,23 @@ support structure rather than amplitude co-adaptation as the remaining limitatio
 - Boundary: the saved generator contains only `A,b,P_J,V`, but the `B=14` adapter builds runtime message lookups because
   current D0/D1 remain global. This is an amplitude model-class frontier, not a scalable inverse experiment.
 
-Decision rule: first measure fixed versus learned at each `J`; then find the smallest `J` statistically consistent with
-the unrestricted `J=B` endpoint. A gap in full-message D0/D1 is amplitude model-class loss. Candidate-proposal loss is
-deliberately deferred so the two causes cannot be confused.
+Outcome: compression did not convincingly preserve performance. For J=4 versus J=14, fixed D0 PUPE is 0.5399 versus
+0.3586; joint D0 is 0.4987 versus 0.3606. D1 also retains a gap. These are realized training/receiver results, not proof
+that every optimizer or decoder must suffer that gap. Candidate proposal was not part of these tests.
+
+### `031_coordinate_amplitude_frontier_B14`
+
+- Status: implemented; algebra, 12 smoke paths and four B=8 learning checks pass. HPC performance pending.
+- Change: each table uses its own label `P_t w`, sharing scalar entries of V rather than whole amplitude vectors.
+  Gather then normalize each message. J=B remains the unrestricted fixed-support endpoint.
+- Design: full-rank labels, maximum stacked rank and maximum local joint support/label rank. Center/unit-RMS banks
+  at initialization only; train V freely thereafter. No discrete map learning and no new decoder.
+- 72 rows: coordinate J=4/8/10 balanced, coordinate J=4 raw, and J=14 raw parents, each fixed/joint; shared J=4
+  raw/balanced fixed controls; D0/D1; three seeds. B=14,n=256,T=32 throughout.
+- Budget: 120 epochs maximum, 100 batches/epoch of 8, validation patience 5, best checkpoint including epoch zero.
+  Deterministic spectral calibration; separate paired train/validation/evaluation streams.
+- Decision: compare same-seed parent gaps per load/SNR, bank initialization effects and fixed/joint results.
+  Report seed spread and geometry; do not infer non-inferiority from an overlapping aggregate alone.
+- Boundary: compact generation including B=100 is tested; global D0/D1 are still exponential. Inversion is deferred.
+
+Commands and manifest: [`jobs/031_coordinate_amplitude_frontier_B14/README.md`](../jobs/031_coordinate_amplitude_frontier_B14/README.md).

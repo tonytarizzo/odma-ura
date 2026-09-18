@@ -137,69 +137,33 @@ the degradation region, while correlation tails rise and active users occupy few
 This remains an explicit `M=4096` result. Sparse columns are stored in dense tensors and normal D0/D1 score all messages.
 It identifies a forgiving model class, not a scalable implementation.
 
-## Active next stage: generated hash skeleton
+## Generated support: current working design
 
-Job `028_hash_skeleton_B14` is implemented and locally certified; 18 of 36 HPC rows are currently present. It tests whether
-the arbitrary size-`T` sparse support can be restricted to exactly one resource in each of `T` disjoint tables without
-losing the useful explicit-global performance. With `R=n/T=2^r`, the compact candidate is
+Jobs `028` and `029` are complete (36/36 and 20/20 runs). At `B=14,n=256,T=16/32`, selected affine-hash
+supports are close to arbitrary sparse supports under the tested D0/D1 conditions. We retain one resource per table,
+`row_t=tR+integer(A_t w+b_t mod 2)`, with full local rank for bin balance and stacked rank B for support-tuple
+injectivity. This supports using the skeleton, not a claim of universally optimal geometry. The small-B best-of-128
+selection enumerates XOR differences; the large-B forward check only samples rank-valid maps.
 
-```text
-h_t(w) = A_t w + b_t mod 2,
-row_t(w) = tR + integer(h_t(w)),
-A_t in GF(2)^(r x B), b_t in GF(2)^r.
-```
+## Amplitudes: coordinate-wise sharing under test
 
-Every `A_t` has rank `r` for exact bin balance, and the stacked matrix has rank `B` for an injective complete support
-tuple. An exact small-`B` collision score enumerates every nonzero XOR difference `d` and measures how many tables obey
-`A_t d=0`; the selected family chooses the best of 128 random full-rank banks.
+Job `030` is complete, including J=10/12 extensions (64 manifest runs). Whole-vector sharing lost performance as J fell;
+that implementation remains for historical reproduction, not the main next direction.
 
-The injective capacity is `T log2(n/T)` bits. Thus job `028`'s `T=16/32` choices are valid for `B=14`; at `B=100,n=256`,
-one valid choice is `T=64,R=4`. A local test builds only that compact hash state, checks rank, and generates a few
-selected-message supports. It is a regression check against a hidden `2^B` encoder axis, not a decoding result.
+Job `031_coordinate_amplitude_frontier_B14` instead uses
+`g_t(w)=V[t,integer(P_t w)]`, with a separate fixed `P_t in GF(2)^(J x B)` per table and
+`V in R^(T x 2^J)`. Gather T entries and normalize each message: `alpha=g/||g||`.
+J=B recovers arbitrary amplitudes on fixed supports. Binary rank checks prevent avoidable label aliases; centering and
+unit-RMS scaling balance each bank row at initialization only. Learning can subsequently change those statistics.
 
-The 36-row `B=14,n=256` manifest compares, at `T=16` and `T=32`, four fixed-amplitude families: iid arbitrary sparse,
-balanced random tables, random binary linear hash, and geometry-selected binary linear hash. Dense is a contextual
-reference. D0/D1, loads, SNRs, training budgets, Gaussian amplitudes, and held-out data are paired as far as the family
-comparison permits. The sequential causal questions are table constraint, then linearity, then offline selection.
+The 72-row batch tests coordinate J=4/8/10, raw-versus-balanced J=4, fixed-versus-joint learning, and matched J=14 parents,
+with shared-J4 diagnostic controls, D0/D1 and three seeds. All use at most 120 epochs, patience five, deterministic
+calibration/validation and best-checkpoint restoration including epoch zero. Local operator/gradient/energy tests,
+12 smoke paths, B=14 row execution and four small learning runs pass; HPC performance is pending.
 
-Only the support rule is compact at this stage. The `B=14` adapter materialises `Phi` so the existing global D0/D1
-comparison remains valid; Gaussian amplitude decorations still have one value per message, and scalable candidate
-proposal/inversion is deliberately deferred. A favourable result would justify solving those two problems for this
-skeleton. An unfavourable balanced-table result would reject the restriction before decoder complexity is added.
-
-Local verification covers exact support and unit energy, GF(2) ranks, support injectivity, procedural/materialised
-equality, paired amplitudes, offline selection, all family/decoder paths at `B=8`, and reduced-training D0/D1 rows at the
-actual `B=14` manifest size. These are execution checks, not recovery results.
-
-Job `029_joint_encoder_decoder_B14` is complete (20/20 summaries and checkpoints). It learns dense amplitudes, or amplitudes on
-a fixed iid/hash support, jointly with D0 or D1. A gradient mask keeps sparse zeros exact and post-step projection keeps
-every column at unit energy. The focused 20-row bank uses only dense, iid sparse, and selected hash at `T=16,32`, two
-seeds, and 120 epochs. Selected hash and iid sparse are effectively tied under joint learning: their mean high-SNR PUPE
-differs by `-0.0003` (D0) and `-0.0103` (D1) at `T=16`, and `+0.0026` (D0) and `+0.0025` (D1) at `T=32`.
-This supports the hash restriction but does not isolate the benefit of amplitude learning because the earlier fixed runs
-used different decoder budgets. The learned sparse amplitudes are still stored per message.
-
-## Active amplitude stage
-
-Job `030_prototype_amplitude_frontier_B14` replaces the remaining per-message amplitude table by
-
-```text
-u_J(w) = P_J w in GF(2)^J,
-alpha(w) = V[:,u_J(w)] / ||V[:,u_J(w)]||,
-V in R^(T x 2^J).
-```
-
-The rows of every `P_J` are prefixes of one fixed invertible binary matrix, so the amplitude classes are nested from one
-shared table profile (`J=0`) to arbitrary per-message amplitudes (`J=B`). The selected support hash `A,b` and the label
-map `P_J` remain fixed. Each Gaussian `J` has a fixed-`V` run, which trains only D0/D1, and a matched learned-`V` run,
-which jointly trains `V` and the decoder. Unit-energy normalisation is part of the forward map and is reprojected after
-updates, so it holds for every message, not just sampled training messages.
-
-The 48-row pending bank uses `B=14,n=256,T=32`, `J in {0,2,4,8,14}`, D0/D1, and two seeds, plus fixed equal and
-Rademacher controls. All epoch-based framework training now defaults to a 120-epoch ceiling, deterministic validation,
-patience five, and restoration of the best validation checkpoint. Algebraic tests include equivalence of `J=B` to the
-old unrestricted amplitude endpoint and selected-column generation at `B=100,n=256,T=64,J=8` without a global
-message tensor. Current D0/D1 still score all `2^B` messages; job `030` tests amplitude model-class loss, not inversion.
+The procedural encoder has no global message axis and generates sampled B=100 columns with exact energy. The
+certification adapter and current D0/D1 still score all `2^B` messages. Scalable noisy multiuser inversion remains open.
+See Report 5 for the matrix algebra and `jobs/031_coordinate_amplitude_frontier_B14/README.md` for the exact contract.
 
 ## Files to inspect next
 

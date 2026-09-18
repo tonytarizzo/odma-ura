@@ -1123,27 +1123,54 @@ themselves estimate the causal gain from amplitude learning. Job `030` supplies 
 
 ---
 
-## 19. Compact Prototype Amplitude Frontier (`030`, pending)
+## 19. Compact Prototype Amplitude Frontier (`030`, complete)
 
-The hash skeleton removes exponential support storage, but jobs `028--029` still attach one free amplitude vector to
-every message. Job `030` replaces that table by
+All 64 manifest rows returned, including J=10/12 extensions, with summaries and checkpoints. The shared-vector model
+`alpha(w)=V[:,P_J w]/||V[:,P_J w]||` is retained for historical reproduction. At J=B it is the unrestricted
+fixed-support amplitude model, but reducing J did not convincingly preserve performance.
 
-```text
-u_J(w) = P_J w in GF(2)^J,
-alpha(w) = V[:,u_J(w)] / ||V[:,u_J(w)]||,
-Phi[tR+h_t(w),w] = alpha_t(w).
-```
+Mean PUPE over 8/12 dB and K=7,15,22,26, two seeds:
 
-The `P_J` maps are prefixes of one invertible binary matrix. Hence the amplitude model classes are nested: `J=0` is
-one shared table profile, while `J=B` assigns an arbitrary profile to every message and numerically reproduces the old
-selected-hash amplitude endpoint. Fixed runs train only D0/D1; learned runs jointly train `V` and the decoder from the
-same initial `V`. Support hashes and projections remain discrete fixed designs.
+| Amplitude labels | D0 fixed | D0 joint | D1 fixed | D1 joint |
+|---|---:|---:|---:|---:|
+| J=4 | 0.53993 | 0.49866 | 0.42301 | 0.41147 |
+| J=14 | 0.35862 | 0.36060 | 0.32787 | 0.33281 |
 
-The pending 48-row bank fixes `B=14,n=256,T=32`, sweeps `J in {0,2,4,8,14}`, uses D0/D1 and two seeds, and adds fixed
-equal and Rademacher controls. Every run has a 120-epoch ceiling and restores the best checkpoint, stopping after five
-validation epochs without improvement. Local algebra and smoke tests pass. A 12-run `B=8` mini-grid improved held-out
-loss in every fixed/learned, D0/D1, and `J=0,4,8` case while retaining unit energy. No HPC PUPE result is recorded yet.
+Joint learning does not eliminate the low-J gap. These are outcomes of the tested training and D0/D1 receivers,
+not proof that the smaller model class contains no useful solution. Job 031 changes the sharing pattern instead
+of treating this as evidence against all amplitude compression. Discrete maps remain fixed and inversion is deferred.
 
-This experiment isolates amplitude model-class loss. Although a `B=100,n=256,T=64,J=8` generator produces requested
-unit-energy columns without allocating a global codebook, current D0/D1 still score all messages. Scalable candidate
-proposal remains the next separate inverse problem.
+## 20. Coordinate-wise Amplitude Generation (`031`, HPC pending)
+
+The next family uses `g_t(w)=V[t,P_t w]` with separate table-specific label maps, followed by exact
+message-wise normalization. It retains T*2^J real parameters, removes compulsory sharing of whole amplitude vectors,
+and recovers arbitrary fixed-support amplitudes at J=B. Centering/unit-RMS initialization is an ablation, not a
+permanent learned constraint. Job 030 is unchanged.
+
+The 72-row manifest at B=14,n=256,T=32 compares coordinate J=4/8/10, raw versus balanced J=4, fixed versus joint
+training and J=14 parents, plus shared-J4 controls. D0/D1 and three seeds use matching maximum training budgets,
+120-epoch ceilings and patience-five validation stopping. See the job README for exact data/receiver assumptions.
+
+Local verification on 18 September 2026:
+
+- Exact tests pass: nested maps, binary ranks, J=B physical-column equivalence, forward/adjoint and gradient equality,
+  checkpoint restoration, fixed-bank identity and per-message energy.
+- B=100,n=256,T=64,J=4 produces sampled columns and gradients without a global message axis; this is not a decoder result.
+- Twelve B=8 smoke paths and reduced-budget actual-B=14 manifest execution complete.
+- Four B=8,n=64,T=8,J=4 mini runs (20 epochs, 10 batches/epoch) reduce deterministic held-out loss:
+
+| Decoder and amplitude mode | Epoch-zero loss | Best validation loss | Evaluation mean PUPE |
+|---|---:|---:|---:|
+| D0 fixed | 3.70074 | 3.07795 | 0.53646 |
+| D0 joint | 3.70074 | 3.07904 | 0.54297 |
+| D1 fixed | 3.70092 | 0.33012 | 0.18099 |
+| D1 joint | 3.70092 | 0.32870 | 0.17578 |
+
+The staged commit was exported and tested independently of unrelated local decoder changes. Mini evaluation covers
+K=3/6 and 4/8 dB, 32 frames per cell. D0 remains undertrained; these numbers establish
+learning behavior, not comparative performance or an advantage from joint learning. The new adapter fixes the power
+iteration starting vector so changing spectral-calibration randomness cannot contaminate validation stopping.
+
+Decision: inspect matched parent gaps at every load/SNR, initialization ablations, seed variability, learning curves,
+and geometry before deciding whether compact coordinate sharing preserved the explicit reference. No job-031 HPC
+performance claim is made yet.

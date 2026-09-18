@@ -2,6 +2,13 @@
 
 This folder contains runnable experiment drivers rather than conventional unit tests. Most scripts are intended to be run from the repository root with `uv run python -m tests.<script_name> ...` and write plots or JSON summaries under `results/`.
 
+## Coordinate-wise amplitude generation (job 031)
+
+Coordinate-amplitude checks: `framework_coordinate_amplitude_test.py` certifies maps, operators, gradients and energy;
+`framework_coordinate_amplitude_learning.py` runs 12 smoke paths or four short learning cases with `--mini`;
+`framework_coordinate_amplitude_merge.py` audits and plots the completed job-031 batch. Its manifest and commands are
+in `jobs/031_coordinate_amplitude_frontier_B14/README.md`. None tests a scalable inverse proposer.
+
 ## `__init__.py`
 
 Marks `tests/` as a Python package so the scripts can be run with `python -m tests.<name>` and can import shared helpers from one another.

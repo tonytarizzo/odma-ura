@@ -32,6 +32,7 @@ from framework.pipeline import (dense_component_specs, odma_component_specs,
                                 product_all_pairs_component_specs, sparse_global_component_specs)  # noqa: E402
 from framework.prototype_amplitudes import (AMPLITUDE_INITIALIZATIONS,
                                             build_prototype_hash_encoder)  # noqa: E402
+from framework.coordinate_amplitudes import build_coordinate_hash_encoder  # noqa: E402
 from tests.framework_sparsity_diagnostics import analyse_encoder_sparsity  # noqa: E402
 
 
@@ -46,7 +47,7 @@ def parse_int_grid(text: str) -> list[int]:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--encoder", choices=["product_fixed", "product_learned", "dense_fixed", "dense_learned",
-                                                   "odma_fixed", "sparse_global_fixed", "hash_prototype",
+                                                   "odma_fixed", "sparse_global_fixed", "hash_prototype", "hash_coordinate",
                                                    *HASH_SKELETON_FAMILIES],
                    default="product_fixed")
     p.add_argument("--decoder", choices=["d0", "d1", "ista"], default="d0")
@@ -60,9 +61,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--hash-search-candidates", type=int, default=128,
                    help="offline binary-hash candidates scored for hash_linear_selected_fixed")
     p.add_argument("--amplitude-label-bits", type=int, default=0,
-                   help="J in the compact amplitude label P_J w (hash_prototype only)")
+                   help="J in the compact amplitude label (hash_prototype or hash_coordinate)")
     p.add_argument("--amplitude-init", choices=AMPLITUDE_INITIALIZATIONS, default="gaussian",
                    help="prototype-bank initialization (hash_prototype only)")
+    p.add_argument("--amplitude-map", choices=["coordinate", "shared"], default="coordinate")
+    p.add_argument("--amplitude-balance-init", action="store_true", help="center/unit-RMS each bank row at initialization only")
     p.add_argument("--learn-encoder", action="store_true",
                    help="learn codeword amplitudes; sparse/hash families retain their generated support")
     p.add_argument("--joint-train", action="store_true",
@@ -133,6 +136,13 @@ def build_experiment_encoder(args: argparse.Namespace, gen: torch.Generator):
                    payload_bits=int(args.payload_bits))
     learn_C = args.encoder.endswith("learned") or bool(getattr(args, "learn_encoder", False))
     construction_metadata = None
+    if args.encoder == "hash_coordinate":
+        if args.amplitude_init != "gaussian":
+            raise ValueError("coordinate amplitude experiments use Gaussian initialization")
+        support = int(args.sparse_support) if args.sparse_support is not None else max(spec.n // int(args.Q), 1)
+        return build_coordinate_hash_encoder(spec, support, int(args.seed), int(args.amplitude_label_bits), learn_C,
+                                             args.amplitude_balance_init, args.amplitude_map == "shared",
+                                             int(args.hash_search_candidates)), k_min, k_max
     if args.encoder == "hash_prototype":
         support = int(args.sparse_support) if args.sparse_support is not None else max(spec.n // int(args.Q), 1)
         return build_prototype_hash_encoder(spec, support, int(args.seed), int(args.amplitude_label_bits), learn_C,
@@ -204,6 +214,8 @@ def train_phase(name: str, encoder, decoder, parameters, counts_sampler, fading_
     opt = torch.optim.Adam(parameters, lr=float(args.lr), weight_decay=float(args.weight_decay))
     stopper = EarlyStopping(int(args.early_stopping_patience), float(args.early_stopping_min_delta))
     modules = {"encoder": encoder, "decoder": decoder}
+    initial_total, initial_parts = validation_loss(encoder, decoder, k_min, k_max, fading_sampler, args, validation_seed)
+    stopper.update(initial_total, 0, modules)
     progress = []
     for epoch in range(1, epochs + 1):
         sums = {"support": 0.0, "count": 0.0, "symmetry": 0.0, "total": 0.0}
@@ -233,7 +245,9 @@ def train_phase(name: str, encoder, decoder, parameters, counts_sampler, fading_
             break
     restored = stopper.restore(modules) if stopper.enabled else False
     encoder.apply_constraints()
-    return progress, stopper.summary(len(progress), restored)
+    summary = stopper.summary(len(progress), restored)
+    summary.update({"initial_validation_loss": initial_total, "initial_validation": initial_parts})
+    return progress, summary
 
 
 def evaluate_one(encoder, decoder, K: int, ebn0_db: float, args: argparse.Namespace,
