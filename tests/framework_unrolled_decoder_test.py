@@ -36,12 +36,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--num-antennas", type=int, default=2)
     p.add_argument("--ebn0-db", type=float, default=4.0)
     p.add_argument("--num-layers", type=int, default=8)
-    p.add_argument("--epochs", type=int, default=120)
+    p.add_argument("--epochs", type=int, default=200)
     p.add_argument("--batches-per-epoch", type=int, default=25)
     p.add_argument("--batch-size", type=int, default=32)
     p.add_argument("--eval-batches", type=int, default=8)
     p.add_argument("--validation-batches", type=int, default=8)
-    p.add_argument("--early-stopping-patience", type=int, default=5)
+    p.add_argument("--early-stopping-patience", type=int, default=10)
     p.add_argument("--early-stopping-min-delta", type=float, default=0.0)
     p.add_argument("--lr", type=float, default=1e-2)
     p.add_argument("--lambda-count", type=float, default=0.1)
@@ -132,6 +132,19 @@ def main(argv: list[str] | None = None) -> None:
     def learned_fn(enc, Y, H, K, noise_var=None): return model(enc, Y, H, K, noise_var=noise_var)
     def nnomp_fn(enc, Y, H, K, noise_var=None): return oracle_k_omp(enc, Y, H, K, noise_var=noise_var)
 
+    def fixed_validation_loss() -> float:
+        val_gen = torch.Generator().manual_seed(int(args.seed) + 300_000)
+        val_sampler = uniform_counts_generator(encoder.spec.num_active, encoder.spec.num_codewords, val_gen, encoder.device)
+        model.eval(); total = 0.0
+        with torch.no_grad():
+            for _ in range(int(args.validation_batches)):
+                batch = sample_batch(encoder, int(args.batch_size), val_sampler, fading_sampler,
+                                     float(args.ebn0_db), val_gen)
+                out = model(encoder, batch.Y, batch.H, batch.num_active, noise_var=batch.noise_var)
+                loss, _ = decoder_loss(out, batch.counts, args.lambda_count, args.lambda_symmetry)
+                total += float(loss)
+        return total / int(args.validation_batches)
+
     matched = evaluate_decoder(encoder, matched_filter_decoder, counts_sampler, fading_sampler,
                                args.ebn0_db, args.eval_batches, args.batch_size, gen)
     nnomp = evaluate_decoder(encoder, nnomp_fn, counts_sampler, fading_sampler,
@@ -142,6 +155,8 @@ def main(argv: list[str] | None = None) -> None:
     print(f"matched filter: L1={matched.get('l1_acc', float('nan')):.4f} PUPE={matched.get('pupe', float('nan')):.4f}")
     print(f"NNOMP oracleK : L1={nnomp.get('l1_acc', float('nan')):.4f} PUPE={nnomp.get('pupe', float('nan')):.4f}")
 
+    initial_validation_loss = fixed_validation_loss()
+    stopper.update(initial_validation_loss, 0, {"decoder": model})
     progress = []
     t0 = time.time()
     for epoch in range(1, int(args.epochs) + 1):
@@ -156,16 +171,7 @@ def main(argv: list[str] | None = None) -> None:
             opt.step()
             for k, v in parts.items():
                 parts_sum[k] = parts_sum.get(k, 0.0) + v
-        val_gen = torch.Generator().manual_seed(int(args.seed) + 300_000)
-        val_sampler = uniform_counts_generator(encoder.spec.num_active, encoder.spec.num_codewords, val_gen, encoder.device)
-        model.eval(); val_loss = 0.0
-        with torch.no_grad():
-            for _ in range(int(args.validation_batches)):
-                batch = sample_batch(encoder, int(args.batch_size), val_sampler, fading_sampler, float(args.ebn0_db), val_gen)
-                out = model(encoder, batch.Y, batch.H, batch.num_active, noise_var=batch.noise_var)
-                loss, _ = decoder_loss(out, batch.counts, args.lambda_count, args.lambda_symmetry)
-                val_loss += float(loss)
-        val_loss /= int(args.validation_batches)
+        val_loss = fixed_validation_loss()
         learned = evaluate_decoder(encoder, learned_fn, counts_sampler, fading_sampler,
                                    args.ebn0_db, args.eval_batches, args.batch_size, gen)
         rec = {"epoch": epoch, "validation_loss": val_loss,
@@ -184,6 +190,7 @@ def main(argv: list[str] | None = None) -> None:
 
     restored = stopper.restore({"decoder": model}) if stopper.enabled else False
     stopping = stopper.summary(len(progress), restored)
+    stopping["initial_validation_loss"] = initial_validation_loss
     payload = {"args": vars(args), "matched_filter": matched, "nnomp_oracle_k": nnomp,
                "progress": progress, "early_stopping": stopping, "wall_s": time.time() - t0}
     (out_dir / "summary.json").write_text(json.dumps(payload, indent=2, default=str))

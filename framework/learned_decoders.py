@@ -32,6 +32,35 @@ def _mass_normalize(x: torch.Tensor, K: torch.Tensor) -> torch.Tensor:
     return x * K.to(x.dtype).unsqueeze(1) / x.sum(dim=1, keepdim=True).clamp_min(1e-12)
 
 
+def _bernoulli_cardinality_projection(logits: torch.Tensor, K: torch.Tensor,
+                                      num_iters: int = 40) -> tuple[torch.Tensor, torch.Tensor]:
+    """Add one logit shift per sample so the Bernoulli means sum exactly to ``K``."""
+    if logits.ndim != 2:
+        raise ValueError(f"logits must have shape (B, M), got {tuple(logits.shape)}")
+    if K.shape != (logits.shape[0],):
+        raise ValueError(f"K must have shape ({logits.shape[0]},), got {tuple(K.shape)}")
+    if bool(torch.any(K <= 0)) or bool(torch.any(K >= logits.shape[1])):
+        raise ValueError("Bernoulli cardinality projection requires 0 < K < M")
+    target = K.to(logits.dtype).unsqueeze(1)
+    with torch.no_grad():
+        detached = logits.detach()
+        margin = logits.new_tensor(40.0)
+        low = -torch.amax(detached, dim=1, keepdim=True) - margin
+        high = -torch.amin(detached, dim=1, keepdim=True) + margin
+        for _ in range(int(num_iters)):
+            mid = 0.5 * (low + high)
+            mass = torch.sigmoid(detached + mid).sum(dim=1, keepdim=True)
+            low = torch.where(mass < target, mid, low)
+            high = torch.where(mass < target, high, mid)
+        shift = 0.5 * (low + high)
+    base = logits + shift
+    probabilities = torch.sigmoid(base)
+    correction = (probabilities.sum(dim=1, keepdim=True) - target) / (
+        probabilities * (1.0 - probabilities)).sum(dim=1, keepdim=True).clamp_min(torch.finfo(logits.dtype).eps)
+    shifted = base - correction
+    return shifted, torch.sigmoid(shifted)
+
+
 def _effective_noise(noise_var: float | torch.Tensor | None, H: torch.Tensor, dtype: torch.dtype) -> torch.Tensor:
     h_energy = torch.sum(torch.abs(H) ** 2, dim=1).real.clamp_min(1e-12)
     if noise_var is None:
@@ -161,6 +190,131 @@ class UnrolledBernoulliPGD(nn.Module):
         hard = hard_project_batch(a.detach(), K).to(device=a.device)
         return DecoderOutput(counts=hard, meta={"soft_counts": a, "support_logits": layer_logits[-1],
                              "layer_logits": layer_logits, "decoder": "unrolled_bernoulli_pgd",
+                             "noise_effective": noise_eff.detach()})
+
+
+class UnrolledEffectiveChannelPGD(nn.Module):
+    """D2: global known-K Bernoulli PGD with an analytic effective scalar channel.
+
+    For ``G = Phi^H Phi``, ``d_j = G_jj`` and ``s_j = sum_k Re(G_jk)^2`` are
+    computed through the small realified frame operator; the ``M x M`` Gram
+    matrix is never formed. Conditional interference is approximated by
+    ``mean(v_-j) * (s_j - d_j^2)``. Within the diagonal-covariance model this
+    is exact when the other coordinate errors are uncorrelated and have equal
+    variance; exact-K dependence and iterative observation reuse violate that
+    idealisation. This class deliberately retains a global message axis;
+    candidate-restricted and M-free variants belong to the next decoder stage.
+    The nominal gradient step cancels from the Gaussian likelihood ratio, so
+    the implementation works directly with ``g_j + d_j a_j`` and requires no
+    spectral-norm estimate. For complex observations the decoder uses
+    ``Re(Phi^H r)``, so circular complex noise contributes half of its total
+    complex variance.
+    """
+
+    def __init__(self, num_layers: int = 10, init_damping: float = 0.05,
+                 geometry_chunk_size: int = 1024) -> None:
+        super().__init__()
+        if num_layers <= 0:
+            raise ValueError(f"num_layers must be positive, got {num_layers}")
+        if geometry_chunk_size <= 0:
+            raise ValueError(f"geometry_chunk_size must be positive, got {geometry_chunk_size}")
+        self.num_layers = int(num_layers)
+        self.geometry_chunk_size = int(geometry_chunk_size)
+        self.raw_tau_scale = nn.Parameter(torch.full((num_layers,), _inv_softplus(1.0)))
+        self.raw_damping = nn.Parameter(torch.full((num_layers,), _sigmoid_logit(init_damping)))
+        self._geometry_cache: tuple[int, torch.device, torch.dtype, torch.Tensor, torch.Tensor] | None = None
+
+    def clear_geometry_cache(self) -> None:
+        """Clear cached fixed-codebook geometry after any out-of-band encoder mutation."""
+        self._geometry_cache = None
+
+    def _gram_geometry(self, encoder: Encoder) -> tuple[torch.Tensor, torch.Tensor]:
+        cacheable = not any(parameter.requires_grad for parameter in encoder.parameters())
+        cached = self._geometry_cache
+        if cacheable and cached is not None:
+            owner, device, dtype, diagonal, row_energy = cached
+            if owner == id(encoder) and device == encoder.device and dtype == encoder.dtype:
+                return diagonal, row_energy
+        frame = None
+        diagonal_chunks = []
+        for start in range(0, encoder.num_codewords, self.geometry_chunk_size):
+            indices = torch.arange(start, min(start + self.geometry_chunk_size, encoder.num_codewords), device=encoder.device)
+            columns = encoder.message_columns(indices)
+            diagonal_chunks.append(torch.sum(torch.abs(columns) ** 2, dim=0).real)
+            decision = torch.cat([columns.real, columns.imag], dim=0) if columns.is_complex() else columns
+            contribution = decision @ decision.transpose(-1, -2)
+            frame = contribution if frame is None else frame + contribution
+        diagonal = torch.cat(diagonal_chunks)
+        row_energy_chunks = []
+        assert frame is not None
+        for start in range(0, encoder.num_codewords, self.geometry_chunk_size):
+            indices = torch.arange(start, min(start + self.geometry_chunk_size, encoder.num_codewords), device=encoder.device)
+            columns = encoder.message_columns(indices)
+            decision = torch.cat([columns.real, columns.imag], dim=0) if columns.is_complex() else columns
+            row_energy_chunks.append(torch.sum(decision * (frame @ decision), dim=0))
+        row_energy = torch.cat(row_energy_chunks)
+        row_energy = torch.maximum(row_energy, diagonal.square())
+        if cacheable:
+            self._geometry_cache = (id(encoder), encoder.device, encoder.dtype, diagonal.detach(), row_energy.detach())
+        return diagonal, row_energy
+
+    @staticmethod
+    def _effective_variance(variance: torch.Tensor, diagonal: torch.Tensor, row_energy: torch.Tensor,
+                            noise_eff: torch.Tensor,
+                            complex_observation: bool) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        M = variance.shape[1]
+        other_mean = (variance.sum(dim=1, keepdim=True) - variance) / float(M - 1)
+        off_diagonal_energy = (row_energy - diagonal.square()).clamp_min(0.0)
+        interference = other_mean * off_diagonal_energy.unsqueeze(0)
+        real_noise_factor = 0.5 if complex_observation else 1.0
+        physical = real_noise_factor * noise_eff.unsqueeze(1) * diagonal.unsqueeze(0)
+        return physical + interference, physical, interference
+
+    def forward(self, encoder: Encoder, Y: torch.Tensor, H: torch.Tensor,
+                num_active: int | torch.Tensor,
+                noise_var: float | torch.Tensor | None = None) -> DecoderOutput:
+        y = matched_filter_collapse(Y, H)
+        dtype = y.real.dtype
+        K = active_count_vector(num_active, y.shape[0], y.device)
+        if bool(torch.any(K >= encoder.num_codewords)):
+            raise ValueError("D2's negligible-collision Bernoulli model requires K < M")
+        noise_eff = _effective_noise(noise_var, H, dtype)
+        diagonal, row_energy = self._gram_geometry(encoder)
+        diagonal = diagonal.to(dtype).clamp_min(torch.finfo(dtype).eps)
+        row_energy = row_energy.to(dtype)
+        rho = (K.to(dtype) / float(encoder.num_codewords)).unsqueeze(1)
+        a = rho.expand(y.shape[0], encoder.num_codewords)
+        variance = a * (1.0 - a)
+        prior_logit = torch.log(rho) - torch.log1p(-rho)
+        layer_logits, layer_evidence, layer_variances, layer_statistics = [], [], [], []
+        last_physical = last_interference = None
+        for t in range(self.num_layers):
+            residual = y - encoder.matvec(a.to(encoder.dtype))
+            gradient = encoder.rmatvec(residual).real.to(dtype)
+            analytic_tau, physical, interference = self._effective_variance(
+                variance, diagonal, row_energy, noise_eff, y.is_complex())
+            tau = torch.nn.functional.softplus(self.raw_tau_scale[t]) * analytic_tau
+            tau = tau.clamp_min(tau.new_tensor(1e-12))
+            statistic = gradient + diagonal.unsqueeze(0) * a
+            evidence = diagonal.unsqueeze(0) * (statistic - 0.5 * diagonal.unsqueeze(0)) / tau
+            logits, proposal = _bernoulli_cardinality_projection(prior_logit + evidence, K)
+            damping = torch.sigmoid(self.raw_damping[t])
+            a = damping * a + (1.0 - damping) * proposal
+            variance = a * (1.0 - a)
+            layer_logits.append(logits); layer_evidence.append(evidence); layer_variances.append(tau)
+            layer_statistics.append(statistic)
+            last_physical, last_interference = physical, interference
+        hard = hard_project_batch(a.detach(), K).to(device=a.device)
+        return DecoderOutput(counts=hard, meta={"soft_counts": a, "support_logits": layer_logits[-1],
+                             "layer_logits": layer_logits, "layer_evidence_logits": layer_evidence,
+                             "layer_effective_variances": layer_variances,
+                             "layer_decision_statistics": layer_statistics,
+                             "effective_variance": layer_variances[-1], "physical_variance": last_physical,
+                             "interference_variance": last_interference, "column_energy": diagonal,
+                             "gram_row_energy": row_energy, "cardinality_residual": a.sum(dim=1) - K.to(dtype),
+                             "decoder": "unrolled_effective_channel_pgd", "prior": "bernoulli_known_K",
+                             "variance_model": "gram_row_energy_mean_field_off_diagonal",
+                             "decision_statistic": "interference_cancelled_real_adjoint",
                              "noise_effective": noise_eff.detach()})
 
 

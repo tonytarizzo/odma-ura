@@ -398,6 +398,8 @@ class Encoder(nn.Module):
     interface to the channel and decoders.
     """
 
+    global_message_axis_present = True
+
     def __init__(self, components: list[ProductComponent], spec: URASpec) -> None:
         super().__init__()
         if not components:
@@ -431,6 +433,13 @@ class Encoder(nn.Module):
         out = self.components[0].explicit_matrix()
         for c in self.components[1:]:
             out = out + c.explicit_matrix()
+        return out
+
+    def message_columns(self, indices: torch.Tensor) -> torch.Tensor:
+        """Construct selected global columns without materialising all ``M`` columns."""
+        out = self.components[0].message_columns(indices)
+        for component in self.components[1:]:
+            out = out + component.message_columns(indices)
         return out
 
     def matvec(self, a: torch.Tensor) -> torch.Tensor:
@@ -477,9 +486,7 @@ class Encoder(nn.Module):
         with torch.no_grad():
             for start in range(0, self.num_codewords, int(chunk_size)):
                 idx = torch.arange(start, min(start + int(chunk_size), self.num_codewords), device=self.device)
-                cols = self.components[0].message_columns(idx)
-                for c in self.components[1:]:
-                    cols = cols + c.message_columns(idx)
+                cols = self.message_columns(idx)
                 total += float(torch.sum(torch.abs(cols) ** 2).cpu())
         value = total / float(self.num_codewords)
         if use_cache:

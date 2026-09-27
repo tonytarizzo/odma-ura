@@ -266,3 +266,32 @@ that every optimizer or decoder must suffer that gap. Candidate proposal was not
 - Boundary: compact generation including B=100 is tested; global D0/D1 are still exponential. Inversion is deferred.
 
 Commands and manifest: [`jobs/031_coordinate_amplitude_frontier_B14/README.md`](../jobs/031_coordinate_amplitude_frontier_B14/README.md).
+
+### `032_published_baselines`
+
+- Status: implemented/audited; earlier 22-path checks and six new joint D2–D4 mini cases pass. All lower validation
+  loss; PUPE does not always improve. Native light-load B=100/128 spot checks pass; no HPC results or
+  paper-curve reproduction claim yet.
+- Question: does the explicit encoder/learned-decoder pair actually outperform complete published schemes at
+  tractable B, or is the current receiver the bottleneck? Hash/amplitude generation is not assumed superior.
+- Four controls per paper: native encoder/native receiver; identical encoder with D0/D1; fixed explicit dense/sparse
+  with D0/D1; jointly learned explicit dense/sparse with D0/D1. Reference rows are reused across papers.
+- Native chains: ODMA–polar SCL/TIN/SIC; dynamic CS header AMP/modulated AMP/CRC/SIC; pinned author CCS-AMP/BP
+  plus two-pass SIC. Small-B adaptations and unspecified author tuning choices are explicit.
+- Pilot: 80 native tuning rows at B=12/14,n=256. Held-out comparison: 192 rows over three seeds, K=7/15/22/26,
+  physical Eb/N0=-4:2:10 dB, 256 frames/cell for distinct and iid messages. Sparse support size 32.
+- All D0–D4 have fixed and joint dense/sparse controls. D3/D4 use 1,024 observation-only matched-filter candidates,
+  never injected truth; misses count in loss and PUPE, but hard membership has no gradient. Training: 200 epochs,
+  patience 10, restore best pair. Proposal recall plots expose the remaining shortlist bottleneck.
+- Energy: exact-unit and nominal/message-dependent families are labelled separately. One default reference:
+  conservative Polyanskiy Gallager-only achievable-error upper bound (not a performance floor). The survey's
+  Gaussian achievability is the same reference; old approximate overlays are not reused as rigorous bounds.
+- Native paper alignment: 36 rows, B100/n30000 for ODMA/dynamic CS, B128/n38400 for CCS, K50/100, two seeds,
+  seven SNRs/family and 128 frames per point; compare 5% PUPE crossings with labelled visual readings of the papers.
+  Dynamic CS has the largest CPU/memory cost. Underspecified native tuning prevents an advance reproduction claim.
+- Audit fixes: candidate loss previously omitted missed messages; dynamic CS previously stopped after FA removal
+  when CRC had no success. Regressions cover both. Source changes during execution now invalidate completion.
+
+Decision: use matched native/matrix decoding to distinguish receiver losses from construction losses. Check native
+validation, energy, local collisions and confidence intervals before claiming a paper was beaten. Commands,
+source-fidelity notes and the full protocol are in [`job 032`](../jobs/032_published_baselines/README.md).

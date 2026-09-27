@@ -133,6 +133,8 @@ class PrototypeAmplitudeBank(nn.Module):
 class ProceduralHashCodebook(nn.Module):
     """M-free forward generator storing only ``A,b,P,V``."""
 
+    global_message_axis_present = False
+
     def __init__(self, A: torch.Tensor, b: torch.Tensor, amplitude_bank: PrototypeAmplitudeBank,
                  n: int) -> None:
         super().__init__()
@@ -188,6 +190,8 @@ class PrototypeHashEncoder(nn.Module):
     The length-M row and label tensors are non-persistent runtime aids required
     by the current global decoders.  They are not part of the saved generator.
     """
+
+    global_message_axis_present = True
 
     def __init__(self, spec: URASpec, codebook: ProceduralHashCodebook, construction_metadata: dict) -> None:
         super().__init__()

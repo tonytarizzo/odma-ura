@@ -1,6 +1,6 @@
 # Research Narrative and Evidence Map
 
-The documentation is arranged as a causal research story rather than a catalogue of files. Read the five reports in
+The documentation is arranged as a causal research story rather than a catalogue of files. Read the six reports in
 order: each retains the algebra, assumptions, failed routes, evidence, and decision that motivated the next stage. Use
 the Markdown ledgers when the exact run-level audit trail is needed.
 
@@ -20,6 +20,9 @@ the Markdown ledgers when the exact run-level audit trail is needed.
 5. [`reports/05_hash_skeleton_generator.pdf`](reports/05_hash_skeleton_generator.pdf) — why the explicit sparse result
    from completed job `027` motivates a generated, searchable `L=1` replacement; the table/hash algebra; and the fixed
    and joint-learning tests `028--029`, followed by coordinate-wise amplitude generation and job `031`.
+6. [`reports/06_decoder_ladder.pdf`](reports/06_decoder_ladder.pdf) — the common known-`K` model and incremental D0--D4
+   algebra: analytic effective-channel calibration, candidate-restricted execution, learned candidate geometry,
+   complexity, losses, and the non-oracle proposer boundary.
 
 The `.tex` source for each report sits beside its PDF. `report_style.tex` is the shared formatting preamble.
 
@@ -40,6 +43,8 @@ variant for the present method.
 [`CURRENT_STATE.md`](CURRENT_STATE.md) is a concise, neutral context document suitable for starting a new conversation.
 It distinguishes verified observations, interpretations, limitations, and open research choices. It is the authoritative
 summary through the completed jobs `028--030` and the locally checked coordinate-amplitude batch `031`.
+The next foundational comparison is [`job 032`](../jobs/032_published_baselines/README.md): complete published
+receiver chains versus matched explicit-codebook receivers, with separate native tuning and held-out tests.
 
 ## Detailed evidence
 

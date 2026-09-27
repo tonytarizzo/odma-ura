@@ -1,0 +1,275 @@
+\documentclass[11pt]{article}
+\newcommand{\ReportShortTitle}{Decoder ladder}
+\newcommand{\ReportUpdated}{10 September 2026}
+\input{report_style}
+
+\begin{document}
+\ProjectReport{Decoder ladder for sparse codebooks}
+{From heuristic global unrolling to calibrated, candidate-local geometric inference}{6 of 6}
+{D0--D4 definitions and test contract; comparative performance evidence pending}
+
+\section{Scope and common model}
+
+After matched-filter combination across receive antennas, all five learned decoders use
+\[
+ y=Ca^\star+z,
+ \qquad C=[c_1,\ldots,c_M]\in\C^{n\times M},
+ \qquad a^\star\in\Z_+^M,
+ \qquad \one^Ta^\star=K.
+\]
+Here $K$ is known to every current decoder. The intended constrained codebooks have unit-energy columns but need not be
+orthogonal. D0--D2 retain the full $M=2^B$ message axis. D3 and D4 instead receive a bounded candidate list and generate
+only its columns. The cost of producing that list is outside those decoders and must be reported separately.
+
+Conditioned on $K$ uniform transmissions, the joint count vector is multinomial and one marginal is
+\[
+ A_m\sim\operatorname{Binomial}(K,1/M).
+\]
+For $K/M\ll1$, collisions are negligible and this reduces to a known-cardinality Bernoulli support model. The Poisson
+law with rate $K/M$ is another discrete approximation to the same marginal, but it allows counts above $K$ and discards
+the fixed-total dependence. D2--D4 therefore use Bernoulli inference; the local section decoder in Report 4 retains its
+exact Binomial count denoiser. A Poisson denoiser remains appropriate when the population size itself is random.
+
+The decoder progression has two branches:
+\begin{align*}
+ \mathrm{D0}&\xrightarrow{\text{global learned context}}\mathrm{D1},\\
+ \mathrm{D0}&\xrightarrow{\text{analytic effective channel}}\mathrm{D2}
+ \xrightarrow{\text{bounded candidates}}\mathrm{D3}
+ \xrightarrow{\text{learned geometry}}\mathrm{D4}.
+\end{align*}
+D1 asks how much an expressive full-message correction can improve performance. D2--D4 instead separate the analytic,
+scalable, and expressive changes so that their effects can be measured.
+
+\section{Common data-consistency step}
+
+Let $a^t$ be the soft estimate at layer $t$. Every decoder preserves the physical forward and adjoint operations
+\[
+ r^t=y-Ca^t,
+ \qquad g^t=\Re\{C^Hr^t\}.
+\]
+Thus gradients pass through the actual transmitted codewords. D0 and D1 form the learned gradient step
+$u^t=a^t+\eta_tg^t$; D2--D4 use a calibrated sufficient statistic derived below. Hard nonnegative integer projection is
+used only for evaluation.
+
+\section{D0: learned scalar calibration}
+
+D0 treats every coordinate as the same scalar channel. It forms one variance proxy per received sample by blending
+residual energy with the known physical noise variance, then uses
+\[
+ \ell_{j}^{t}
+ =\operatorname{clip}_{[-30,30]}\!\left(
+ \gamma_t\frac{u_j^t-1/2}{\tau_t}
+ +\beta_t\log\frac{\rho}{1-\rho}+b_t\right),
+ \qquad \rho=K/M.
+\]
+The proposal is $p_j^t=\sigma(\ell_j^t)$, rescaled so that its total mass is $K$, then damped with the previous state.
+Each layer learns step size, residual/noise mixture, variance scale, evidence gain, prior gain, bias, and damping.
+
+D0 is cheap and supplies the baseline shared by all later decoders. Its limitations are also precise: one scalar
+variance cannot represent codeword-dependent interference; prior gain, evidence gain and temperature are not uniquely
+identified; and multiplying all probabilities to obtain mass $K$ is not a Bernoulli posterior projection.
+
+\section{D1: expressive global correction}
+
+D1 keeps D0 unchanged up to its base logit. A feature vector for message $j$ contains $u_j^t,a_j^t,g_j^t$, the base
+logit, residual/noise statistics, and factor occupancy. A learned analysis map produces a latent $h_j^t$. Fixed-number
+attention slots pool latent context within messages sharing a factor pattern, within messages sharing a local value,
+and across the whole message set. A learned correction is then added:
+\[
+ \ell_j^{t,\mathrm{D1}}=\ell_j^{t,\mathrm{D0}}+\Delta_\theta(h_j^t,\text{pooled context}).
+\]
+The final correction head is initialised to zero, so an untrained D1 equals D0 exactly. Its fixed-slot implementation is
+linear rather than quadratic in $M$, but it still stores and processes all $M$ message states. D1 is therefore an
+expressive small-$B$ benchmark, not the scalable receiver. Its correction can improve ranking, but its logits need not
+remain calibrated likelihood ratios.
+
+\section{D2: analytic effective-channel calibration}
+
+D2 returns to D0 and replaces its scalar variance heuristic. It starts from the prior mean $a_j^0=\rho$, rather than
+D0's zero state, so the initial residual error is mean zero under the Bernoulli approximation. Define the real decision matrix
+\[
+ \bar C=C\quad\text{for real $C$},
+ \qquad
+ \bar C=\begin{bmatrix}\Re C\\ \Im C\end{bmatrix}\quad\text{for complex $C$},
+ \qquad G=\bar C^T\bar C=\Re\{C^HC\}.
+\]
+With $d_j=G_{jj}$, one adjoint coordinate is exactly
+\[
+ g_j^t=d_j(a_j^\star-a_j^t)
+ +\sum_{k\ne j}G_{jk}(a_k^\star-a_k^t)+\bar c_j^T\bar z.
+\]
+Adding back the known self-term gives the decision statistic
+\[
+ \zeta_j^t=g_j^t+d_ja_j^t=d_ja_j^\star+\xi_j^t,
+ \qquad
+ \xi_j^t=\sum_{k\ne j}G_{jk}(a_k^\star-a_k^t)+\bar c_j^T\bar z.
+\]
+Its inactive and active means are $0$ and $d_j$. Under a diagonal, conditionally uncorrelated error approximation, its
+variance is
+\[
+ \omega_{j,t}^{\rm ana}=\nu d_j+\sum_{k\ne j}G_{jk}^2v_k^t,
+ \qquad
+ \nu=\begin{cases}\sigma^2,&\text{real noise},\\ \sigma^2/2,&\text{circular complex noise}.
+ \end{cases}
+\]
+Here $v_k^t=a_k^t(1-a_k^t)$. Equal variances alone do not make this exact: fixed-$K$ projection correlates coordinates,
+and reusing the same observation across layers introduces dependencies unless an extrinsic or Onsager correction is
+available.
+
+The implementation avoids both the full $n\times M$ codebook and the $M\times M$ Gram matrix. Selected columns are
+visited in bounded chunks to accumulate a small real frame. Let
+\[
+ s_j=\sum_kG_{jk}^2
+ =\bar c_j^T(\bar C\bar C^T)\bar c_j,
+ \qquad
+ \bar v_{-j}^t=\frac{1}{M-1}\sum_{k\ne j}v_k^t.
+\]
+The implemented mean-field approximation is
+\[
+ \widehat\omega_{j,t}=\alpha_t\left[\nu d_j+\bar v_{-j}^t(s_j-d_j^2)\right],
+ \qquad \alpha_t>0,
+\]
+where $\alpha_t$ absorbs model mismatch. Under the equal-variance Gaussian channel, the likelihood ratio is
+\[
+ e_{j,t}=\log\frac{p(\zeta_j^t\given A_j=1)}{p(\zeta_j^t\given A_j=0)}
+ =\frac{d_j(\zeta_j^t-d_j/2)}{\widehat\omega_{j,t}}.
+\]
+D2 can equivalently be derived from $u_j^t=a_j^t+\eta g_j^t$: both the separation of its two means and its variance
+scale by $\eta$ and $\eta^2$, so $\eta$ cancels exactly. D2 therefore has no learned step size and requires no spectral
+norm estimate. Its only learned quantities per layer are $\alpha_t$ and damping.
+
+D2 adds the known prior only after computing this evidence. Rather than multiplying probabilities by a common factor,
+it finds the unique scalar $\lambda_t$ satisfying
+\[
+ p_j^t=\sigma\!\left(e_{j,t}+\log\frac{\rho}{1-\rho}+\lambda_t\right),
+ \qquad \sum_jp_j^t=K.
+\]
+This is a product-Bernoulli projection onto the known expected cardinality, not the exact joint fixed-$K$ posterior. It
+keeps every $p_j^t$ in $[0,1]$.
+D2--D4 do not clip their evidence logits. For a uniform prior, the constant $\log(\rho/(1-\rho))$ is absorbed by
+$\lambda_t$; its substantive roles are to initialise $a^0$ and to make the extension to nonuniform extrinsic priors
+explicit.
+D2 remains a global $M$-state reference. Its analytic geometry is cached for a frozen encoder; joint encoder learning
+recomputes the two chunked $O(n^2M)$ frame passes. Its current construction is not a $B=100$ decoder.
+
+\section{D3: candidate-restricted D2}
+
+Let a proposer return $K<Q\ll2^B$ payloads
+\[
+ \mathcal C_b=\{w_{b1},\ldots,w_{bQ}\},
+ \qquad
+ C_b=[\phi(w_{b1}),\ldots,\phi(w_{bQ})]\in\C^{n\times Q}.
+\]
+D3 applies the complete D2 recurrence with $C_b$ and a $Q$-length state. Its current implementation forms the bounded
+$Q\times Q$ candidate Gram once per forward pass; this is independent of $2^B$ but must still be counted. The compact
+hash/amplitude generator from Report 5 constructs each selected column on demand. D3 itself therefore creates neither
+an $n\times2^B$ codebook nor a $2^B$ state. The complete path is $M$-free only with the direct procedural generator; the
+small-$B$ comparison adapter still stores global row and label lookups. Without a calibrated extrinsic proposer prior,
+D3 uses the neutral conditional prior $K/Q$. Proposal scores derived from the same observation cannot simply be added
+as independent evidence without double counting.
+
+The restricted physical model is
+\[
+ y=C_ba_b^\star+\epsilon_b,
+ \qquad
+ \epsilon_b=z+\sum_{w\notin\mathcal C_b}a_w^\star\phi(w).
+\]
+If every active payload is proposed, $\epsilon_b=z$ and D3 isolates the effect of replacing the global axis by a bounded
+candidate axis. If an active payload is absent, no D3 update can recover it; known-cardinality projection can then force
+mass onto a false candidate. Every non-oracle evaluation must therefore report proposal recall and $Q$ before PUPE.
+
+Exhaustive small-$B$ candidates certify equivalence with D2. Oracle-completed lists give a labelled upper bound on
+candidate-conditioned recovery. Neither is evidence of a scalable proposer. D3 becomes a complete scalable receiver
+only when paired with a measured, sub-exhaustive, high-recall proposal algorithm.
+
+\section{D4: learned candidate-geometry correction}
+
+D4 adds expressivity only after D3 has removed the global message axis. Its node features contain the D3 state,
+decision statistic, channel evidence, effective variance, column energy, candidate density and optional proposal score.
+The gradient is omitted because $g_j^t=\zeta_j^t-d_ja_j^t$ is redundant. Every candidate pair has the normalised Gram coefficient
+\[
+ \widetilde G_{ij}=\frac{c_i^Hc_j}{\|c_i\|_2\|c_j\|_2}.
+\]
+For the generated hash family, edge features may additionally contain the fraction of common hash bins and whether the
+two messages share an amplitude-bank label. With node embedding $h_i^t$ and edge feature $e_{ij}$, the implemented
+permutation-equivariant correction has the form
+\[
+ \gamma_{ij}^t=\tanh f_\theta(e_{ij}),
+ \qquad
+ m_i^t=\frac{\sum_{j\ne i}\gamma_{ij}^tV_\theta h_j^t}
+ {\max\{1,\sum_{j\ne i}|\gamma_{ij}^t|\}},
+\]
+\[
+ \widetilde\Delta_{i,t}=o_\theta\!\left(h_i^t+g_\theta(h_i^t,m_i^t,\bar h^t)\right),
+ \qquad
+ \Delta_{i,t}=\widetilde\Delta_{i,t}-\frac1Q\sum_{j=1}^Q\widetilde\Delta_{j,t},
+ \qquad
+ e_{i,t}^{\rm D4}=e_{i,t}^{\rm D3}+\Delta_{i,t},
+\]
+where $\bar h^t$ is global candidate context. The output head $o_\theta$ is bias-free and zero-initialised, so D4
+initially equals D3 exactly. Centering removes the candidate-common logit direction that known-$K$ projection cannot
+identify; without it, BCE could reward a shift that changes neither probabilities nor decisions. Cardinality projection
+and damping then proceed as in D2.
+
+D4 can learn effects missed by the mean-field variance, including signs and interactions of particular correlations.
+It can also overfit to candidate-list composition, destroy evidence calibration, or spend $O(Q^2)$ work learning an
+effect already captured analytically. D4 is therefore the performance-oriented candidate benchmark; D3 is its causal
+control.
+
+\section{Training objective}
+
+D0 and D1 historically use class-balanced support BCE with a Smooth-L1 count auxiliary. D2 and D3 train their analytic
+pre-prior channel evidence; D4 trains the corrected pre-prior discriminant, which need not remain a calibrated LLR:
+\[
+ \mathcal L_{\rm ev}
+ =\frac12\frac{1}{|S|}\sum_{j\in S}\operatorname{BCE}(e_j,1)
+ +\frac12\frac{1}{|S^c|}\sum_{j\notin S}\operatorname{BCE}(e_j,0),
+\]
+with weighted deep supervision over layers. This prevents the learned variance from cancelling the rare-event prior.
+Let $K_{\mathcal C}=\sum_ja_j^\star$ be the target mass on the represented axis. The count auxiliary is
+\[
+ \mathcal L_{\rm count}
+ =\frac1{\max(K_{\mathcal C},1)}\sum_j\operatorname{SmoothL1}(a_j,a_j^\star),
+ \qquad
+ \mathcal L=\mathcal L_{\rm ev}+0.1\mathcal L_{\rm count}.
+\]
+For global or recall-one candidate targets, $K_{\mathcal C}=K$. If the list misses a transmission, D3/D4 still
+project to mass $K$ while the target contains less mass; this deliberate failure diagnostic is not a suitable training
+target. Current candidate-learning checks therefore use oracle-complete lists.
+There is no activity $\ell_1$ penalty. Under the known-$K$ constraint, $a_j\ge0$ and $\one^Ta=K$ already imply
+$\|a\|_1=K$, so such a penalty would be constant.
+
+\section{Complexity and experimental meaning}
+
+Let $\mathcal A(P)$ denote one forward/adjoint pair for $P$ retained columns, $d$ a latent width, $S$ a fixed attention
+slot count, and $T$ the number of unrolled layers.
+\begin{center}
+\footnotesize
+\renewcommand{\arraystretch}{0.92}
+\begin{tabularx}{\textwidth}{@{}lYYY@{}}
+\toprule
+Decoder & State and cost & Learned part & Purpose \\
+\midrule
+D0 & $M$; $O(T[\mathcal A(M)+M])$ & Layer scalars & Scalar PGD baseline \\
+D1 & $M$; D0 $+O[T(Md^2+MSd)]$ & Global correction & Value of full-axis context \\
+D2 & $M$; D0-like; fixed setup $O(n^2M)$ & Scale and damping & Analytic calibration \\
+D3 & $Q$; $O(nQ^2+T[\mathcal A(Q)+Q])$ & D2 scalars & Bounded refinement \\
+D4 & $Q$; D3 $+O[T(Q^2d+Qd^2)]$ & Graph correction & Learned residual geometry \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Comparisons should pair encoder, channel samples, layer count and stopping rule. D2 should have D0-like layer cost after
+geometry setup, fewer parameters and cleaner calibration, but D1 has much greater small-$B$ capacity. D3 should equal
+D2 with exhaustive candidates and approach it as recall tends to one. Any trained D4 gain must justify its runtime and
+calibration cost relative to its exactly equal initial D3 state.
+
+D4 ablations should change one mechanism at a time: exact $\sum_{k\ne j}G_{jk}^2v_k^t$ variance; full covariance or
+Onsager/extrinsic correction; top-$k$ Gram edges; Gram-only versus hash/label features; local LMMSE preconditioning; or
+shared recurrent weights.
+
+\evidence{D0/D1 are established small-$B$ baselines; D2--D4 are an incremental test ladder. Local checks certify
+implementation, not improved performance. Candidate-conditioned decoding is not scalable complete-message recovery
+until its proposer is non-oracle and measured.}
+
+\end{document}

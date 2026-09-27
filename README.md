@@ -17,8 +17,8 @@ range, while a small reused ODMA support bank performs much worse even at equal 
 compatible with the global backend at `L=1`, but the current `L>1` route loses complete-message association as local
 occupancy rises. The `B=128` implementation executes without a `2^B` object and satisfies unit energy, but its current
 local decoder saturates and does not learn useful recovery. The active branch therefore keeps `L=1`: an affine hash
-generates sparse support, and a nested prototype bank now generates amplitudes with tunable complexity. Small-`B`
-tests compare fixed and jointly learned prototypes before any claim about scalable inverse decoding.
+generates sparse support, while compact amplitude generation is still being tested. The next benchmark compares
+complete published receivers with the explicit framework before pursuing further generator restrictions.
 
 ## Start Here
 
@@ -28,16 +28,19 @@ tests compare fixed and jointly learned prototypes before any claim about scalab
 - [`results/03_results.md`](results/03_results.md): explicit dense-versus-ODMA and oracle-support evidence.
 - [`results/04_results.md`](results/04_results.md): detailed framework, decoder, and sectioned-experiment evidence.
 - [`jobs/README.md`](jobs/README.md): private HPC workflow and job commands.
+- [`Job 032`](jobs/032_published_baselines/README.md): published end-to-end comparisons, validation and submission commands.
 
 ## Repository Layout
 
 - `src/`: original ODMA scenario, classical/model-based decoders, sweeps, metrics, and bounds.
-- `framework/`: factorised encoders, hash-skeleton generators, section-domain backend, learned D0/D1 decoders, outer
+- `framework/`: factorised encoders, hash-skeleton generators, section-domain backend, the D0--D4 decoder ladder, outer
   code/BP, training, and analysis.
+- `baselines/`: separate ODMA–polar, dynamic-CS and CCS-AMP native encoder/receiver chains.
+- `benchmarks/`: matched native/explicit comparisons, result checks, plots and labelled bound calculations.
 - `tests/`: executable experiments, merge/plot scripts, smoke tests, and algebraic regression tests.
 - `jobs/`: numbered HPC manifests, scripts, logs, checkpoints, and returned outputs.
 - `results/`: detailed result ledgers and generated local outputs.
-- `docs/reports/`: five supervisor-facing chronological LaTeX reports and their verified PDFs.
+- `docs/reports/`: six supervisor-facing chronological LaTeX reports and their PDFs.
 
 ## Setup
 
@@ -48,7 +51,7 @@ uv sync
 ## Core Verification
 
 ```bash
-uv run python -m compileall src framework tests
+uv run python -m compileall src framework baselines benchmarks tests
 uv run python -m tests.framework_sectioned_refactor_test
 uv run python -m tests.framework_sectioned_energy_test
 uv run python -m tests.framework_hash_skeleton_test

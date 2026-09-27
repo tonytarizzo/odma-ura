@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import torch
 
+from framework.channel import constant_fading
 from framework.core import ComponentSpec, SectionedURASpec
 from framework.losses import sectioned_power_penalty
 from framework.encoder import SubsampledHadamardAtomBank
 from framework.outer_code import triadic_outer_code
 from framework.sectioned import (build_default_scalable_setup, build_orthogonal_sectioned_encoder, build_sectioned_encoder,
-                                 sampled_energy_report)
+                                 outer_code_path_generator, sample_sectioned_batch, sampled_energy_report)
 
 
 def check_close(name: str, actual: torch.Tensor, expected: torch.Tensor, atol: float = 1e-10) -> None:
@@ -85,6 +86,12 @@ def test_complex_channel_symbols() -> None:
         raise AssertionError("payload bits were incorrectly treated as binary channel symbols")
     check_close("complex procedural codeword energy", encoder.path_energies(paths),
                 torch.ones(2, 2, dtype=torch.float64))
+    batch = sample_sectioned_batch(
+        encoder, 2048, outer_code_path_generator(2, code, torch.Generator().manual_seed(56)),
+        constant_fading(1, torch.complex128), 3.0, torch.Generator().manual_seed(57))
+    empirical_noise = torch.mean(torch.abs(batch.Y - batch.Y_clean) ** 2).detach()
+    if abs(float(empirical_noise / batch.noise_var) - 1.0) > 0.04:
+        raise AssertionError("complex sectioned AWGN does not match the declared total complex variance")
 
 
 def test_implicit_hadamard_bank_and_b128_energy() -> None:

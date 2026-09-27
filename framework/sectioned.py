@@ -446,8 +446,9 @@ def sample_sectioned_batch(encoder: SectionedEncoder, batch_size: int,
     Y_clean = y.unsqueeze(-1) * H.unsqueeze(1)
     noise_var = ebn0_db_to_noise_var(ebn0_db, encoder.spec.payload_bits, encoder.spec.energy_per_codeword)
     if encoder.dtype.is_complex:
+        # Complex torch.randn is already normalised so E|z|^2 = 1.
         noise = torch.randn(Y_clean.shape, dtype=Y_clean.dtype, device=Y_clean.device,
-                            generator=generator) * (noise_var / 2.0) ** 0.5
+                            generator=generator) * noise_var ** 0.5
     else:
         noise = torch.randn(Y_clean.shape, dtype=Y_clean.dtype, device=Y_clean.device,
                             generator=generator) * noise_var ** 0.5

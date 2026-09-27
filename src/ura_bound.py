@@ -1,50 +1,17 @@
-"""Polyanskiy (2017) random-coding achievability bound for the URA GMAC.
+"""LEGACY approximate URA reference curves, retained for historical reproducibility.
 
-Reference: Y. Polyanskiy, "A perspective on massive random-access," ISIT 2017,
-Theorem 1. For K_a users, blocklength n (real d.o.f.), M = 2^B messages, per-user
-target error eps and per-d.o.f. power P, there exists a code with
+Do not label these outputs as rigorous Polyanskiy bounds. The Gallager exponent
+_E_of_t implements Theorem 1, equations (4)--(10), but _q_of_t uses a Gaussian
+approximation for ONE information density, not the minimum over all t-subsets
+required in equation (13). The legacy 'count' substitution K->round(E[D]) also
+has no supplied achievability proof. 'strict' uses 1-E[D]/K, whereas the paper
+counts EVERY user in a duplicate group as an error. Its actual per-user collision
+probability is 1-(1-1/M)^(K-1); C(K,2)/M is a frame-event UNION BOUND, not equality.
 
-    eps <= sum_{t=1}^{T} (t/Ka) * min(p_t, q_t) + p_0 ,
-    p_t = exp(-n E(t)) ,   E(t) = max_{0<=rho,rho1<=1} E0(rho,rho1) - rho1 R2 - rho rho1 t R1 ,
-    R1 = (log M)/n - (log t!)/(n t) ,   R2 = (log C(J, t))/n ,
-
-with E0, a, b, lambda, D as in the paper (eqs. 4-10). Energy-per-bit is
-Eb/N0 = n P / (2 log2 M) (real GMAC, noise N(0,1) per d.o.f.).
-
-We expose THREE variants that differ only in how message collisions (two users
-picking the same message, unavoidable at the small B used here) are treated. A
-structural fact from the proof makes the accounting clean: in each pairwise swap
-test the correctly-decoded users appear in both hypotheses and cancel, so E(t)
-depends only on (t, P') -- never on the interference. The user population enters
-ONLY through R2 = (1/n) log C(J, t) and through the collision floor in p_0.
-
-  variant="canonical" : J = Ka, no collision floor. Polyanskiy as usually plotted
-      (the M -> infinity idealisation: Ka distinct messages, collisions ignored).
-
-  variant="strict"    : J = Ka, plus the finite-M collision floor. Here a collision
-      is an error (Polyanskiy's postulate). We use the *tight* per-user floor
-      1 - E[D]/Ka (one unavoidable loser per repeated message), NOT the paper's
-      scalar C(Ka,2)/M -- that term is P[any collision] and overcounts the per-user
-      rate by ~Ka; it is fine at M=2^100 but wrong as a floor at small B.
-
-  variant="count"     : J = E[D] = M(1-(1-1/M)^Ka) distinct messages, no collision
-      floor. This reflects the count/multiset metric used in this repo, where a
-      detected repeated message is NOT an error: only the *distinct* support must be
-      recovered, so the combinatorial rate is over D distinct messages. The error is
-      dominated by multiplicity-1 (singleton) messages, which carry power P' just
-      like an isolated user, so collision energy-concentration does not lower the
-      requirement -- count therefore sits just below canonical (by the C(D,t) vs
-      C(Ka,t) gap) and well below strict. Ignoring the (favourable) concentration of
-      higher-multiplicity messages makes this a valid achievability upper bound.
-
-We evaluate the full min(p_t, q_t). The q_t (dependence-testing) term dominates at
-the very low rates R = B/n used here; dropping it leaves the bound ~3 dB loose, so
-it is essential. q_t uses the information density i_t = nC_t + (1/2) sum_j g_j with
-C_t = (1/2) ln(1+tP') and, under the true law, g_j = (a_j+Z_j)^2/(1+tP') - Z_j^2,
-a_j ~ N(0,tP'), Z_j ~ N(0,1). Then E[i_t] = nC_t and Var(i_t) = n tP'/(1+tP')
-(derived in closed form), so q_t = min_gamma[ Phi((gamma-nC_t)/sigma) + exp(n(tR1+R2)
-- gamma) ] via the standard normal approximation of i_t (accurate since the optimising
-gamma sits near the mean nC_t).
+Numerics/API below are unchanged so old figures can be reproduced and audited.
+New comparisons use benchmarks/ura_bounds.py: the conservative, valid Gallager
+branch with the original clipping/collision terms and a separately derived
+genie list-Fano converse. Physical real-GMAC Eb/N0 = nP/(2B).
 """
 
 from __future__ import annotations
@@ -69,18 +36,13 @@ def distinct_count(num_codewords: int, num_active: int) -> float:
 
 
 def collision_floor_strict(num_codewords: int, num_active: int) -> float:
-    """Tight per-user strict-PUPE collision floor 1 - E[D]/Ka.
-
-    One user per repeated message is an unavoidable error under the "collision is
-    an error" convention, at any SNR. This is the honest finite-M version of the
-    scalar C(Ka,2)/M that Polyanskiy adds for the M=2^100 regime.
-    """
+    """Legacy 1-E[D]/K statistic; NOT Polyanskiy's collision-as-error floor."""
     Ka = int(num_active)
     return max(0.0, 1.0 - distinct_count(num_codewords, Ka) / Ka)
 
 
 def collision_prob_union(num_codewords: int, num_active: int) -> float:
-    """Polyanskiy's scalar collision term C(Ka,2)/M = P[any collision] (diagnostic)."""
+    """Union bound C(K,2)/M on P[any collision], potentially greater than one."""
     return math.comb(int(num_active), 2) / float(num_codewords)
 
 

@@ -19,14 +19,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from framework.channel import constant_fading, sample_batch, uniform_count_range_generator, uniform_counts_generator  # noqa: E402
+from framework.channel import constant_fading, sample_batch, uniform_count_range_generator  # noqa: E402
 from framework.core import URASpec  # noqa: E402
 from framework.encoder import ComponentConstraints, build_encoder  # noqa: E402
 from framework.early_stopping import EarlyStopping  # noqa: E402
 from framework.hash_skeleton import HASH_SKELETON_FAMILIES, hash_skeleton_component_specs  # noqa: E402
-from framework.learned_decoders import (FactorAttentionISTANet, UnrolledBernoulliPGD,
+from framework.learned_decoders import (FactorAttentionISTANet, UnrolledBernoulliPGD, UnrolledEffectiveChannelPGD,
                                         UnrolledNonnegativeISTA, matched_filter_decoder)  # noqa: E402
-from framework.losses import support_count_loss  # noqa: E402
+from framework.losses import effective_channel_loss, support_count_loss  # noqa: E402
 from framework.metrics import aggregate_metrics, batch_evaluate  # noqa: E402
 from framework.pipeline import (dense_component_specs, odma_component_specs,
                                 product_all_pairs_component_specs, sparse_global_component_specs)  # noqa: E402
@@ -50,7 +50,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                                                    "odma_fixed", "sparse_global_fixed", "hash_prototype", "hash_coordinate",
                                                    *HASH_SKELETON_FAMILIES],
                    default="product_fixed")
-    p.add_argument("--decoder", choices=["d0", "d1", "ista"], default="d0")
+    p.add_argument("--decoder", choices=["d0", "d1", "d2", "ista"], default="d0")
     p.add_argument("-B", "--payload-bits", type=int, default=12)
     p.add_argument("--n", type=int, default=128)
     p.add_argument("--Q", type=int, default=4)
@@ -84,13 +84,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--train-ebn0-min", type=float, default=-4.0)
     p.add_argument("--train-ebn0-max", type=float, default=12.0)
     p.add_argument("--eval-ebn0", type=parse_float_grid, default=parse_float_grid("-4,0,4,8,12"))
-    p.add_argument("--encoder-epochs", type=int, default=120)
-    p.add_argument("--decoder-epochs", type=int, default=120)
+    p.add_argument("--encoder-epochs", type=int, default=200)
+    p.add_argument("--decoder-epochs", type=int, default=200)
     p.add_argument("--batches-per-epoch", type=int, default=100)
     p.add_argument("--batch-size", type=int, default=8)
     p.add_argument("--eval-batches", type=int, default=4)
     p.add_argument("--validation-batches", type=int, default=8)
-    p.add_argument("--early-stopping-patience", type=int, default=5)
+    p.add_argument("--early-stopping-patience", type=int, default=10)
     p.add_argument("--early-stopping-min-delta", type=float, default=0.0)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--weight-decay", type=float, default=0.0)
@@ -177,6 +177,8 @@ def make_decoder(args: argparse.Namespace):
     if args.decoder == "d1":
         return FactorAttentionISTANet(hidden_dim=int(args.hidden_dim), pattern_slots=int(args.pattern_slots),
                                       value_slots=int(args.value_slots), global_slots=int(args.global_slots), **common)
+    if args.decoder == "d2":
+        return UnrolledEffectiveChannelPGD(num_layers=int(args.num_layers))
     return UnrolledNonnegativeISTA(**common)
 
 
@@ -185,10 +187,36 @@ def random_ebn0(args: argparse.Namespace, gen: torch.Generator) -> float:
     return float(args.train_ebn0_min + u * (args.train_ebn0_max - args.train_ebn0_min))
 
 
+def decoder_loss(output, counts_true: torch.Tensor, args: argparse.Namespace):
+    if output.meta.get("decoder") == "unrolled_effective_channel_pgd":
+        return effective_channel_loss(output, counts_true, args.lambda_count)
+    return support_count_loss(output, counts_true, args.lambda_count, args.lambda_symmetry)
+
+
+def experiment_count_range_generator(k_min: int, k_max: int, num_codewords: int,
+                                     generator: torch.Generator, device: torch.device,
+                                     distinct: bool):
+    """Use iid URA messages normally and the stated collision-free approximation for D2."""
+    if not distinct:
+        return uniform_count_range_generator(k_min, k_max, num_codewords, generator, device)
+    if k_min <= 0 or k_max < k_min or k_max > num_codewords:
+        raise ValueError(f"invalid distinct-message range [{k_min},{k_max}] for M={num_codewords}")
+
+    def sample(batch_size: int):
+        K = int(torch.randint(k_min, k_max + 1, (1,), generator=generator, device=device).item())
+        active = torch.stack([torch.randperm(num_codewords, generator=generator, device=device)[:K]
+                              for _ in range(batch_size)])
+        counts = torch.zeros(batch_size, num_codewords, dtype=torch.float32, device=device)
+        counts.scatter_(1, active, 1.0)
+        return counts, active
+    return sample
+
+
 def validation_loss(encoder, decoder, k_min: int, k_max: int, fading_sampler,
                     args: argparse.Namespace, seed: int) -> tuple[float, dict[str, float]]:
     gen = torch.Generator().manual_seed(int(seed))
-    sampler = uniform_count_range_generator(k_min, k_max, encoder.num_codewords, gen, encoder.device)
+    sampler = experiment_count_range_generator(k_min, k_max, encoder.num_codewords, gen, encoder.device,
+                                               distinct=args.decoder == "d2")
     sums = {"support": 0.0, "count": 0.0, "symmetry": 0.0, "total": 0.0}
     encoder_was_training, decoder_was_training = encoder.training, decoder.training
     encoder.eval(); decoder.eval()
@@ -197,7 +225,7 @@ def validation_loss(encoder, decoder, k_min: int, k_max: int, fading_sampler,
             batch = sample_batch(encoder, int(args.batch_size), sampler, fading_sampler, random_ebn0(args, gen), gen,
                                  energy_per_codeword=encoder.spec.energy_per_codeword)
             out = decoder(encoder, batch.Y, batch.H, batch.num_active, noise_var=batch.noise_var)
-            _, parts = support_count_loss(out, batch.counts, args.lambda_count, args.lambda_symmetry)
+            _, parts = decoder_loss(out, batch.counts, args)
             for key in sums:
                 sums[key] += float(parts[key].detach())
     encoder.train(encoder_was_training); decoder.train(decoder_was_training)
@@ -225,7 +253,7 @@ def train_phase(name: str, encoder, decoder, parameters, counts_sampler, fading_
             batch = sample_batch(encoder, int(args.batch_size), counts_sampler, fading_sampler, ebn0_db, gen,
                                  energy_per_codeword=encoder.spec.energy_per_codeword)
             out = decoder(encoder, batch.Y, batch.H, batch.num_active, noise_var=batch.noise_var)
-            loss, parts = support_count_loss(out, batch.counts, args.lambda_count, args.lambda_symmetry)
+            loss, parts = decoder_loss(out, batch.counts, args)
             opt.zero_grad(set_to_none=True)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(parameters, float(args.grad_clip))
@@ -252,7 +280,8 @@ def train_phase(name: str, encoder, decoder, parameters, counts_sampler, fading_
 
 def evaluate_one(encoder, decoder, K: int, ebn0_db: float, args: argparse.Namespace,
                  gen: torch.Generator, fading_sampler) -> tuple[dict, dict]:
-    sampler = uniform_counts_generator(K, encoder.num_codewords, gen, encoder.device)
+    distinct = args.decoder == "d2"
+    sampler = experiment_count_range_generator(K, K, encoder.num_codewords, gen, encoder.device, distinct)
     rows_learned, rows_matched = [], []
     collision_batches = []
     decoder.eval()
@@ -268,8 +297,10 @@ def evaluate_one(encoder, decoder, K: int, ebn0_db: float, args: argparse.Namesp
             collision_batches.extend((batch.counts > 1).any(dim=1).to(torch.float32).cpu().tolist())
     actual_Q = encoder.components[0].Q if hasattr(encoder, "components") and len(encoder.components) == 1 else 1
     common = {"K": K, "ebn0_db": ebn0_db, "expected_users_per_pattern": K / actual_Q,
+              "message_sampling": "uniform_without_replacement" if distinct else "iid_uniform_with_replacement",
               "empirical_any_collision": sum(collision_batches) / max(len(collision_batches), 1),
-              "theoretical_any_collision": 1.0 - math.prod(1.0 - i / encoder.num_codewords for i in range(K))}
+              "theoretical_any_collision": 0.0 if distinct else 1.0 - math.prod(
+                  1.0 - i / encoder.num_codewords for i in range(K))}
     return {**common, **aggregate_metrics(rows_learned)}, {**common, **aggregate_metrics(rows_matched)}
 
 
@@ -298,7 +329,9 @@ def main(argv: list[str] | None = None) -> None:
     train_gen = gen if args.train_seed is None else torch.Generator().manual_seed(int(args.train_seed))
     eval_gen = train_gen if args.eval_seed is None else torch.Generator().manual_seed(int(args.eval_seed))
     validation_seed = int(args.validation_seed) if args.validation_seed is not None else int(args.seed) + 300_000
-    train_sampler = uniform_count_range_generator(k_min, k_max, encoder.num_codewords, train_gen, encoder.device)
+    d2_distinct = args.decoder == "d2"
+    train_sampler = experiment_count_range_generator(k_min, k_max, encoder.num_codewords, train_gen, encoder.device,
+                                                     distinct=d2_distinct)
     fading_sampler = constant_fading(encoder.spec.num_antennas, encoder.dtype, encoder.device)
     progress, stopping_summaries, t0 = [], [], time.time()
     diagnostic_requested = bool(args.diagnostic_pairs or args.diagnostic_active_samples
@@ -360,6 +393,7 @@ def main(argv: list[str] | None = None) -> None:
                          "prototype_storage_shape": list(encoder.codebook.amplitude_bank.prototypes.shape)}
     metadata = {"args": vars(args), "K_train": [k_min, k_max], "K_eval": eval_k,
                 "M": encoder.num_codewords, **encoder_shape, "implicit_forward": True,
+                "training_message_sampling": "uniform_without_replacement" if d2_distinct else "iid_uniform_with_replacement",
                 "decoder_knows_K": True, "decoder_knows_noise_variance": True,
                 "receiver_knows_fading": True, "single_antenna_default": True,
                 "early_stopping": stopping_summaries, "wall_s": time.time() - t0}

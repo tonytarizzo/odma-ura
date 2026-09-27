@@ -8,6 +8,9 @@ certification; `framework.sectioned` executes from local section counts only.
 
 from .core import (ComponentSpec, DecoderOutput, OuterBPOutput, PathListOutput, SectionedDecoderOutput,
                    SectionedURABatch, SectionedURASpec, URABatch, URASpec)
+from .candidate_decoders import (BoundedMatchedFilterProposer, CandidateDecoderOutput,
+                                 CandidateRestrictedEffectiveChannelPGD, CandidateSet,
+                                 LearnedCandidateGeometryPGD, candidate_count_targets, candidate_recall)
 from .datasets import CountDataset, DatasetConfig, generate_uniform_count_dataset
 from .encoder import ComponentConstraints, Encoder, LocalAtomBank, ProductComponent, SubsampledHadamardAtomBank, build_encoder
 from .outer_code import (IdentityOuterCode, LinearCheck, OuterCode, OuterFactorGraph,
@@ -22,6 +25,10 @@ from .sectioned import (FixedOrthogonalMixer, SectionedEncoder, build_orthogonal
 __all__ = [
     "ComponentConstraints",
     "ComponentSpec",
+    "BoundedMatchedFilterProposer",
+    "CandidateDecoderOutput",
+    "CandidateRestrictedEffectiveChannelPGD",
+    "CandidateSet",
     "CountDataset",
     "DatasetConfig",
     "DecoderOutput",
@@ -31,6 +38,7 @@ __all__ = [
     "IdentityOuterCode",
     "LinearCheck",
     "LocalAtomBank",
+    "LearnedCandidateGeometryPGD",
     "OuterCode",
     "OuterBPOutput",
     "OuterFactorGraph",
@@ -50,6 +58,8 @@ __all__ = [
     "build_default_scalable_setup",
     "build_orthogonal_sectioned_encoder",
     "build_sectioned_encoder",
+    "candidate_count_targets",
+    "candidate_recall",
     "ccs_amp_paper_outer_code",
     "generate_uniform_count_dataset",
     "outer_code_path_generator",

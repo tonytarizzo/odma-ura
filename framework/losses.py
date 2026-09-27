@@ -63,6 +63,39 @@ def support_count_loss(output, counts_true: torch.Tensor, lambda_count: float = 
     return total, {"support": support, "count": count, "symmetry": symmetry, "total": total}
 
 
+def effective_channel_loss(output, counts_true: torch.Tensor, lambda_count: float = 0.1,
+                           deep_supervision: bool = True) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """Train D2's channel LLR separately from its analytic prior/cardinality update.
+
+    Balanced BCE is applied to the pre-prior evidence, whose population optimum
+    is the class-conditional likelihood ratio. Applying it to D2's posterior
+    logits would instead encourage the learned variance to cancel the rare-event
+    prior. The count term retains the existing PUPE-aligned multiplicity signal.
+    """
+    logits = output.meta["layer_evidence_logits"]
+    if not deep_supervision:
+        logits = logits[-1:]
+    target_counts = counts_true.real
+    target = (target_counts > 0).to(logits[-1].dtype)
+    active = target.sum(dim=1).clamp_min(1.0)
+    inactive = (target.shape[1] - target.sum(dim=1)).clamp_min(1.0)
+    layer_losses = []
+    for layer_logits in logits:
+        per_entry = torch.nn.functional.binary_cross_entropy_with_logits(layer_logits, target, reduction="none")
+        positive = (per_entry * target).sum(dim=1) / active
+        negative = (per_entry * (1.0 - target)).sum(dim=1) / inactive
+        layer_losses.append(0.5 * (positive + negative).mean())
+    weights = torch.arange(1, len(layer_losses) + 1, dtype=target.dtype, device=target.device)
+    support = torch.sum(weights * torch.stack(layer_losses)) / weights.sum()
+    soft = output.meta["soft_counts"]
+    K = target_counts.sum(dim=1).clamp_min(1.0)
+    count = torch.nn.functional.smooth_l1_loss(soft, target_counts.to(soft.dtype), reduction="none").sum(dim=1)
+    count = (count / K.to(count.dtype)).mean()
+    total = support + float(lambda_count) * count
+    zero = support.new_zeros(())
+    return total, {"support": support, "count": count, "symmetry": zero, "total": total}
+
+
 def section_support_count_loss(output, section_counts_true: tuple[torch.Tensor, ...],
                                lambda_count: float = 0.1, deep_supervision: bool = True
                                ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:

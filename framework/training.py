@@ -39,7 +39,7 @@ def matched_filter_surrogate(encoder: Encoder, Y: torch.Tensor, H: torch.Tensor)
 
 @dataclass
 class TrainConfig:
-    epochs: int = 120
+    epochs: int = 200
     batches_per_epoch: int = 50
     batch_size: int = 32
     lr: float = 1e-3
@@ -53,7 +53,7 @@ class TrainConfig:
     log_every: int = 1
     eval_batches: int = 8
     eval_max_list_size: int | None = None
-    early_stopping_patience: int = 5
+    early_stopping_patience: int = 10
     early_stopping_min_delta: float = 0.0
     surrogate: str = "matched_filter"
     progress: list[dict] = field(default_factory=list)
@@ -139,6 +139,8 @@ def train(encoder: Encoder, counts_sampler, validation_counts_sampler, fading_sa
         encoder.train()
         return total / cfg.eval_batches
 
+    initial_validation_loss = fixed_validation_stream(validation_loss)
+    stopper.update(initial_validation_loss, 0, {"encoder": encoder})
     for epoch in range(cfg.epochs):
         epoch_parts: dict[str, float] = {}
         for _ in range(cfg.batches_per_epoch):
@@ -172,6 +174,7 @@ def train(encoder: Encoder, counts_sampler, validation_counts_sampler, fading_sa
     restored = stopper.restore({"encoder": encoder}) if stopper.enabled else False
     encoder.apply_constraints()
     cfg.early_stopping = stopper.summary(len(cfg.progress), restored)
+    cfg.early_stopping["initial_validation_loss"] = initial_validation_loss
     return cfg
 
 

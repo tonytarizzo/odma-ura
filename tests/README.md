@@ -124,14 +124,31 @@ errors, and plots all bridge routes on common `B=12,n=256` PUPE-versus-`Eb/N0` p
 
 ## `framework_product_experiment.py`
 
-Trains and evaluates the job-`021/022` L=1 dense, product, sparse-global, and ODMA families with D0 or D1. Optional
+Trains and evaluates the job-`021/022` L=1 dense, product, sparse-global, and ODMA families with D0, D1, or the
+analytic effective-channel D2. Optional
 bounded-memory sparsity diagnostics materialise `Phi` after evaluation but never its full Gram matrix. `--sparse-nested`
 couples otherwise identically distributed sparse-global codebooks across support sizes for controlled density sweeps.
 The same runner now accepts the four job-`028` support families. Their compact rule is generated separately, then
 materialised only for the `B=14` common-decoder certification. `--learn-encoder --joint-train` jointly optimizes the
 selected decoder and codeword amplitudes; generated sparse supports remain fixed and every column is re-normalized.
 It also supports compact hash prototypes through `--encoder hash_prototype`. Epoch-based training uses a fixed
-validation stream, patience five by default, and restores the best validation checkpoint.
+validation stream, patience five by default, and restores the best validation checkpoint including the epoch-zero
+initialisation. D2 rows sample distinct messages because its Bernoulli state cannot represent multiplicity; the output
+records this collision-free large-`B` approximation explicitly.
+
+## `framework_candidate_decoder_test.py` and `framework_candidate_geometry_test.py`
+
+Certify the candidate-local D3/D4 path. The checks prove exhaustive small-`B` D3 equals D2, generate only bounded
+selected columns at `B=100`, expose candidate misses through recall/targets, and verify D4 is exactly D3 at its
+zero-correction initialization. They also check real and complex nonorthogonal D2/D3 equivalence, decoder/amplitude
+gradients, centred D4 corrections, and D4 permutation equivariance.
+
+## `framework_decoder_ladder_learning.py`
+
+Runs paired smoke or laptop-scale learning checks for D0--D4 on one fixed generated hash/prototype encoder. D0--D2 see
+the full small-`B` alphabet; D3--D4 receive explicitly oracle-complete candidate lists, so their PUPE is conditional and
+does not test candidate search. The laptop preset has a 200-epoch ceiling, patience ten, and restores the best state
+including the untrained epoch-zero checkpoint.
 
 ## `framework_sparsity_diagnostics.py` and `framework_sparsity_diagnostics_test.py`
 
@@ -157,7 +174,9 @@ explicitly marked diagnostic-only.
 
 Certify nested binary projections, the unrestricted `J=B` endpoint, fixed/learned pairing, gradients only into `V`,
 exact unit energy, implicit forward/adjoint equality, and selected-column generation at `B=100` without a global
-message tensor. The stopping test checks the exact five-non-improvement rule and best-state restoration.
+message tensor. The stopping test checks the current patience-ten default, explicit historical patience-five runs,
+epoch-zero candidacy, and best-state
+restoration.
 
 ## `framework_prototype_amplitude_merge.py`
 
@@ -197,6 +216,22 @@ checkout is not vendored because upstream declares no software licence. The `pap
 one-pass core dimensions (`B=128`, `n=38400`, 16-bit sections); the paper curve additionally used a two-pass SIC extension
 whose empirical delta schedule is not present in the public code. The separately labelled `adapted_b100` preset uses a
 Triadic10 graph with ten-bit sections and must not be compared directly with the paper's `B=128` points.
+
+## Published receiver benchmark checks
+
+`uv run python -m tests.published_baselines_test -v` checks polar SCL against tiny exhaustive ML, CRC arithmetic,
+native receiver execution, exact-energy invariants, CCS/author waveform equivalence (including both embedding options),
+dynamic-CS ordering/operators, D0–D4 gradients, D2/full-list D3 equality, collision metrics and the new bound references.
+Noiseless AMP is not assumed universally successful; the original CCS shared-constant-column failure is documented.
+
+`tests.published_baselines_learning` runs the B=6 smoke/mini suite with native chains, matched learned receivers,
+fixed/joint references and observation-only D3/D4 lists. It checks best-state restoration and writes learning/PUPE
+plots. See [`job 032`](../jobs/032_published_baselines/README.md) for commands, budgets and interpretation limits.
+
+`tests.published_comparison_manifest_test` verifies array coverage, frozen budgets, complete pilot selection and
+native/learned profile matching. `tests.published_bounds_test` independently checks the Gallager equations, bound
+components, collision enumeration and an exactly solved single-user example. The main plots show one achievable-error
+upper bound, not an error floor. `--joint-ladder-only --preset mini` checks the six joint D2/D3/D4 paths.
 
 ## `framework_ccs_amp_test.py`
 

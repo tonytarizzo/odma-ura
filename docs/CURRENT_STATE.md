@@ -1,5 +1,25 @@
 # ODMA-URA: Neutral Project Handoff
 
+## Current next experiment: published end-to-end benchmarks
+
+Job [`032`](../jobs/032_published_baselines/README.md) tests the foundation before adding generator restrictions:
+ODMA–polar, dynamic CS and complete two-pass CCS-AMP/BP versus fixed/joint explicit dense and sparse references.
+Each published encoder also feeds the same D0/D1 receivers. All D0–D4 have fixed-encoder and joint-learning
+dense/sparse references. D3/D4 use 1,024 non-oracle full-alphabet matched-filter proposals and record recall.
+Their hard shortlist is not differentiable or guaranteed complete; these are not scalable message searches.
+
+The batch separates an 80-row native-receiver pilot, 192 held-out B=12/14 comparisons, and 36 native B=100/128
+paper-alignment rows (K=50/100, two seeds, seven SNRs/family, 128 frames/point). The implementations are not yet
+verified reproductions of published performance curves. Training defaults are now 200 epochs / patience 10,
+with best-state restoration including epoch zero; archived job contracts are unchanged.
+Native nominal-energy variants are not silently normalized into different codes. Distinct/iid message results,
+collision conventions and physical Eb/N0 are explicitly separated. Historical bound overlays are approximate;
+job 032 plots only a conservative Polyanskiy achievable-error upper bound, not a floor that decoders must stay above.
+The audit corrected candidate losses that omitted rejected true messages and dynamic-CS stopping after FA removal.
+Earlier 22-path checks plus all six new joint D2–D4 mini runs pass; all lower validation loss, but PUPE does not always
+improve. Large-payload light-load checks pass; paper-alignment performance remains pending. The job README records
+the audit, native tuning choices, energy differences and limits on what these comparisons can establish.
+
 ## Research aim
 
 The project asks whether URA codewords can retain the favourable recovery behaviour of a dense random global codebook
@@ -165,16 +185,49 @@ The procedural encoder has no global message axis and generates sampled B=100 co
 certification adapter and current D0/D1 still score all `2^B` messages. Scalable noisy multiuser inversion remains open.
 See Report 5 for the matrix algebra and `jobs/031_coordinate_amplitude_frontier_B14/README.md` for the exact contract.
 
+## Decoder ladder implemented; comparative evidence pending
+
+D0 remains the historical scalar-calibrated global baseline and D1 its expressive full-message correction. D2 replaces
+D0's residual-energy heuristic by an analytic effective variance from physical noise and codebook Gram-row energy,
+then uses an interference-cancelled matched-filter statistic, a Bernoulli likelihood ratio, and an exact
+expected-cardinality projection. The nominal PGD step cancels from this likelihood ratio, so D2 has no step-size or
+spectral-norm pass. It still has an `M=2^B` state, but computes geometry in bounded column chunks without materialising
+the full codebook or its `M x M` Gram matrix. Its mean-field variance is exact only under equal, uncorrelated
+off-coordinate errors; fixed-`K` projection and iterative observation reuse violate that idealisation.
+
+D3 applies exactly the D2 recurrence to a supplied bounded list and generates only those codewords from message bits.
+An exhaustive small-`B` list reproduces D2 numerically, and a `B=100,n=256` test executes without a global message
+axis. This is scalable **conditional refinement**, not a solved candidate search. D4 adds a zero-initialised,
+permutation-equivariant graph correction over candidate Gram, hash-overlap, amplitude-label, state and uncertainty
+features. Its correction is centred over candidates because a shared logit shift is unidentifiable after known-`K`
+projection. It equals D3 before training and costs quadratic work in candidate-list size.
+
+All D0--D4 implementations currently know realised `K`. D2--D4 use the negligible-collision Bernoulli model; the exact
+section-local Binomial denoiser remains available for collision-rich local states. Smoke and laptop checks show finite
+gradients and decreasing validation loss for every decoder, but are implementation checks rather than comparative
+research evidence. These earlier D3/D4 checks use oracle-complete lists and are not proposer results; job 032 adds
+non-oracle full-alphabet matched-filter proposals and counts their misses in PUPE.
+
+In the deterministic `B=6` laptop check, D1, D3 and D4 stopped after 39, 46 and 33 epochs; D0 and D2 were still
+improving at the 120-epoch ceiling. D4 reduced candidate-list validation loss from `0.1377` to `0.1044`, but its final
+PUPE (`0.0885`) was slightly worse than D3 (`0.0807`). This tiny oracle-list run is not a ranking result, but it already
+shows why loss calibration and PUPE must be reported separately.
+
+The complex channel simulators now use `noise_var = E[|z|^2]` consistently. A pre-existing extra factor of one half in
+complex AWGN generation was removed; real-valued experiments are unaffected, while any earlier complex-channel result
+should be rerun before being cited.
+
 ## Files to inspect next
 
-- Narrative: `docs/reports/01_*.pdf` through `05_*.pdf`.
+- Narrative: `docs/reports/01_*.pdf` through `06_*.pdf`.
 - Exact global evidence: `results/03_results.md`.
 - Framework/sectioned evidence: `results/04_results.md`.
 - Current jobs and commands: `docs/EXPERIMENT_BANK.md`, `jobs/README.md`.
-- Core implementation: `framework/hash_skeleton.py`, `framework/prototype_amplitudes.py`, `framework/encoder.py`, `framework/learned_decoders.py`,
+- Core implementation: `framework/hash_skeleton.py`, `framework/prototype_amplitudes.py`, `framework/encoder.py`,
+  `framework/learned_decoders.py`, `framework/candidate_decoders.py`, `framework/candidate_geometry.py`,
   `framework/sectioned.py`, `framework/outer_code.py`, and `framework/outer_decoder.py`.
 
-The five PDFs now form the detailed chronological record; this file is deliberately only a neutral handoff. Report 1
+The six PDFs now form the detailed chronological record; this file is deliberately only a neutral handoff. Report 1
 retains the original BP/EP development, Report 2 the wider decoder algebra and oracle decomposition, Report 3 the full
 explicit framework, Report 4 the scalable sectioned construction and failure, and Report 5 the current generated
-sparse-global direction.
+sparse-global direction. Report 6 defines the D0--D4 ladder and its candidate-search boundary.

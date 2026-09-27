@@ -126,8 +126,9 @@ def sample_batch(encoder: Encoder, batch_size: int,
     energy = empirical_codeword_energy(encoder) if energy_per_codeword is None else float(energy_per_codeword)
     noise_var = ebn0_db_to_noise_var(ebn0_db, encoder.spec.payload_bits, energy)
     if encoder.dtype.is_complex:
+        # Complex torch.randn is already normalised so E|z|^2 = 1.
         noise = torch.randn(Y_clean.shape, dtype=Y_clean.dtype, device=Y_clean.device,
-                             generator=generator) * math.sqrt(noise_var / 2.0)
+                             generator=generator) * math.sqrt(noise_var)
     else:
         noise = torch.randn(Y_clean.shape, dtype=Y_clean.dtype, device=Y_clean.device,
                              generator=generator) * math.sqrt(noise_var)

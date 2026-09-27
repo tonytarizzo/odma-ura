@@ -17,7 +17,7 @@ def _clone_state(module: nn.Module) -> dict[str, torch.Tensor]:
 class EarlyStopping:
     """Stop after ``patience`` validation epochs without a strict improvement."""
 
-    patience: int = 5
+    patience: int = 10
     min_delta: float = 0.0
     best_value: float = float("inf")
     best_epoch: int = 0

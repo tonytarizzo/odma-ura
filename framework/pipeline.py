@@ -172,7 +172,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--save-dataset", action="store_true",
                    help="save the generated/loaded count dataset into --out-dir")
     # training
-    p.add_argument("--epochs", type=int, default=120)
+    p.add_argument("--epochs", type=int, default=200)
     p.add_argument("--batches-per-epoch", type=int, default=50)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--weight-decay", type=float, default=0.0)
@@ -182,7 +182,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--lambda-coherence", type=float, default=0.0)
     p.add_argument("--lambda-row-load", type=float, default=0.0)
     p.add_argument("--eval-batches", type=int, default=8)
-    p.add_argument("--early-stopping-patience", type=int, default=5)
+    p.add_argument("--early-stopping-patience", type=int, default=10)
     p.add_argument("--early-stopping-min-delta", type=float, default=0.0)
     # eval / inference
     p.add_argument("--num-trials", type=int, default=16,
