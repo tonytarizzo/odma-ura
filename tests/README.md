@@ -1,6 +1,15 @@
 # Test And Experiment Scripts
 
-This folder contains runnable experiment drivers rather than conventional unit tests. Most scripts are intended to be run from the repository root with `uv run python -m tests.<script_name> ...` and write plots or JSON summaries under `results/`.
+This folder contains algebraic regression tests and historical experiment drivers. Run modules from the repository
+root with `uv run python -m tests.<script_name>`. Generated results are not versioned.
+
+## Current published comparison (job 032)
+
+Run `uv run python -m unittest tests.published_baselines_test tests.published_bounds_test tests.published_comparison_manifest_test`.
+These check native chains, candidate/metric contracts, manifest completeness and the p_t+q_1 bound. Bound checks include
+an exact Laplace case, shared-noise Monte Carlo, quadrature refinement and collision-limited target reporting.
+`uv run python -m benchmarks.ura_bound_analysis` prepares the independent reference curves; see the job-032 README.
+Older scripts using `src.ura_bound` retain historical approximate overlays, not the current numerical evaluation.
 
 ## Coordinate-wise amplitude generation (job 031)
 
@@ -232,6 +241,10 @@ plots. See [`job 032`](../jobs/032_published_baselines/README.md) for commands, 
 native/learned profile matching. `tests.published_bounds_test` independently checks the Gallager equations, bound
 components, collision enumeration and an exactly solved single-user example. The main plots show one achievable-error
 upper bound, not an error floor. `--joint-ladder-only --preset mini` checks the six joint D2/D3/D4 paths.
+
+`tests.published_native_resume_test` interrupts a native run across cell/batch boundaries, resumes it, checks exact
+per-frame metric agreement and rejects changed source/configuration. Baseline tests also verify float32/float64 cache
+operator and decoded-list equivalence. Job 032's separate checks array tests native ODMA/CCS budgets and dynamic-CS cost.
 
 ## `framework_ccs_amp_test.py`
 

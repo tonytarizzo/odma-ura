@@ -15,7 +15,7 @@ class ComparisonManifestTests(unittest.TestCase):
     def test_generated_manifests_and_array_sizes(self):
         folder = Path("jobs/032_published_baselines")
         generated = runpy.run_path(str(folder / "build_manifest.py"))["manifests"]()
-        for phase, size in (("pilot", 80), ("comparison", 192), ("native", 36)):
+        for phase, size in (("pilot", 80), ("comparison", 192), ("native", 36), ("checks", 20)):
             stored = [json.loads(s) for s in (folder / f"{phase}.jsonl").read_text().splitlines()]
             self.assertEqual(generated[phase], stored)
             self.assertEqual(len(stored), size)
@@ -32,6 +32,10 @@ class ComparisonManifestTests(unittest.TestCase):
         cells = [(r["family"], r["seed"], r["loads"][0], x) for r in native for x in r["eval_ebn0"]]
         self.assertEqual(len(cells), 84)
         self.assertEqual(len(set(cells)), 84)
+        checks = generated["checks"]
+        self.assertEqual(sum(r["family"] == "dynamic_cs" for r in checks), 4)
+        self.assertTrue(all(r["baseline_params"]["cache_dtype"] == "float64"
+                            for r in checks if r["family"] == "dynamic_cs"))
 
     def test_merger_selection_and_safety_checks(self):
         with tempfile.TemporaryDirectory() as directory:

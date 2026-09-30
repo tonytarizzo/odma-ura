@@ -4,9 +4,10 @@ import math
 import unittest
 
 import numpy as np
-from scipy.stats import norm
+from scipy.stats import laplace, norm
 
-from benchmarks.ura_bounds import collision_rates, polyanskiy_gallager, reference_curves
+from benchmarks.ura_bounds import (collision_rates, minimum_information_cdf, polyanskiy_achievability,
+                                   polyanskiy_gallager, q1_bound, reference_curves, required_ebn0)
 from src.ura_bound import _E_of_t
 
 
@@ -30,6 +31,58 @@ def scalar_exponent(power, t, n, b, k, grid):
 
 
 class PublishedBoundsTests(unittest.TestCase):
+    def test_single_user_information_cdf_has_exact_laplace_case(self):
+        # At n=2, diagonalizing the Gaussian information-density quadratic form
+        # gives log(1+P') + sqrt(P'/(1+P')) * Laplace(0,1).
+        p = .7
+        center, scale = math.log1p(p), math.sqrt(p / (1 + p))
+        gamma = center + scale * np.array([-2, -1, 0, 1, 2])
+        actual = minimum_information_cdf(gamma, p, 2, 1, order=384)
+        np.testing.assert_allclose(actual, laplace.cdf(gamma, loc=center, scale=scale), atol=3e-5)
+
+    def test_user_minimum_matches_shared_noise_monte_carlo(self):
+        rng = np.random.default_rng(32701)
+        n, p, k, samples = 16, .6, 5, 30000
+        center = n / 2 * math.log1p(p)
+        gamma = center - math.sqrt(n * p / (1 + p))
+        hits = 0
+        for _ in range(samples // 1000):
+            z = rng.standard_normal((1000, 1, n))
+            x = math.sqrt(p) * rng.standard_normal((1000, k, n))
+            information = center + .5 * (((x + z) ** 2).sum(-1) / (1 + p) - (z ** 2).sum(-1))
+            hits += int((information.min(1) <= gamma).sum())
+        expected = float(minimum_information_cdf(gamma, p, n, k, order=192))
+        self.assertLess(abs(hits / samples - expected), 5 * math.sqrt(expected * (1 - expected) / samples))
+        single = float(minimum_information_cdf(gamma, p, n, 1, order=192))
+        self.assertGreater(abs(expected - (1 - (1 - single) ** k)), .01)
+
+    def test_quadrature_refinement_and_q1_threshold_optimization(self):
+        for n, p, k in [(64, .2, 3), (30000, .008, 50)]:
+            gamma = n / 2 * math.log1p(p) - 2 * math.sqrt(n * p / (1 + p))
+            coarse = minimum_information_cdf(gamma, p, n, k, order=96)
+            fine = minimum_information_cdf(gamma, p, n, k, order=192)
+            self.assertLess(abs(coarse - fine), 4e-6)
+        result = q1_bound(6, 64, 1, .2)
+        gamma = np.linspace(6 * math.log(2), 20, 501)
+        values = minimum_information_cdf(gamma, .2, 64, 1) + np.exp(6 * math.log(2) - gamma)
+        self.assertLessEqual(result["value"], values.min() + 1e-7)
+
+    def test_q1_reference_never_worsens_gallager_control(self):
+        for b, n, k, snr in [(6, 64, 1, 0), (6, 64, 3, 4), (14, 256, 7, 3), (100, 30000, 50, .5)]:
+            row = polyanskiy_achievability(b, n, k, snr, details=True)
+            self.assertLessEqual(row["upper_bound"], row["gallager_only_upper_bound"] + 1e-12)
+            self.assertAlmostEqual(row["unclipped_upper_bound"],
+                                   row["coding_term"] + row["clipping_term"] + row["collision_union_term"])
+        self.assertLess(polyanskiy_achievability(6, 64, 1, 0), .95)
+
+    def test_required_energy_reports_collision_limitation_without_fabricating_crossing(self):
+        result = required_ebn0(12, 256, 26, target=.05)
+        self.assertEqual(result["status"], "collision_correction_exceeds_target")
+        self.assertIsNone(result["ebn0_db"])
+        result = required_ebn0(6, 64, 1, target=.1, grid=11, power_grid=11)
+        self.assertEqual(result["status"], "crossing")
+        self.assertAlmostEqual(polyanskiy_achievability(6, 64, 1, result["ebn0_db"], grid=11, power_grid=11), .1, delta=.001)
+
     def test_gallager_exponent_matches_independent_scalar_equations(self):
         for b, n, k, power in [(6, 64, 3, .25), (14, 256, 7, .15), (100, 30000, 50, .01)]:
             ts = np.array([1, max(1, k // 2), k])

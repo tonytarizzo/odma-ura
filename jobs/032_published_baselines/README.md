@@ -4,6 +4,51 @@
 An explicit codebook with a trained receiver is not assumed optimal. A poor small-B adaptation is not evidence that
 the published large-B scheme is poor.
 
+## Current decision — 30 September 2026
+
+The **80/80 pilot and 24/36 native rows** returned and passed provenance/grid/metric checks. The remaining 12 native
+rows are all dynamic CS, with no completed SNR cell in the pulled snapshot. No main-comparison results have returned.
+The pilot selection is ready, but **run `032_checks.sh` next, not the 192-row comparison yet**.
+
+Native mean-PUPE 5% crossing brackets are ODMA K50 `(0,0.25]`, K100 `(0.5,0.75]`; CCS K50 `(2,2.25]`, K100 `(2.5,3]` dB.
+These are grid brackets, not confidence intervals. K50 agrees reasonably with the prior paper readings; K100 needs review.
+At ODMA K100,0.5 dB, 66/128 frames were still recovering messages when the ten-round cap stopped them. Two selected
+difficult frames improved from 51%/48% PUPE to 1%/2% when allowed to finish at round 18. Eight unselected replay frames
+improved from mean 3.50% to 2.63%. These are diagnostic replays, not a corrected aggregate curve.
+
+The separate **20-row checks array** leaves the original three manifests and completed outputs unchanged:
+
+| Rows | Check | Budget and purpose |
+|---|---|---|
+| 1–4, 9–12 | ODMA K100: cap30 at 0.25/0.5/0.75 dB; cap60 at 0.5 dB | Two original seeds, 64 frames; isolate truncation and check cap30 |
+| 5–8, 13–16 | CCS K100,2.5 dB: AMP40 with SIC fractions 0.5/0.7/0.9; AMP80 with 0.7 | Two original seeds, 16 frames; targeted receiver-budget diagnostic |
+| 17–20 | Dynamic CS K50/100,1.5/2.5 dB, double-precision cached banks | Four frames each; measure native runtime/behaviour before a large rerun |
+
+ODMA/CCS replays preserve the original batch size and message/noise sequence. Four-frame dynamic checks are runtime
+diagnostics, not a reproduction curve or a paired subset of the original eight-frame batches. Analyze variants separately
+with `analyse_checks.py`, not the ordinary seed-pooling merger. Pilot scores are tuning data; small-B error floors do not
+yet establish explicit-codebook superiority. The matched D0/D1 stage is still needed to separate receiver and encoder losses.
+
+### Dynamic-CS cost and the bounded optimization
+
+The author's thesis, Chapter 9, p.132, identifies matrix multiplication as the dominant receiver cost and gives
+`O(2^Bp N1 + max_l 2^(Bl/S) Nl Ka)` (iteration/slot factors suppressed). It explicitly states higher complexity than
+its ODMA comparator; it does not report a runtime that validates our 60-hour jobs.
+Our native banks are 3000×262144 and 9000×32768. Previously float32 caches were converted repeatedly for float64
+matrix products. The checks opt into float64 caches (8.65 GB combined; the 8 GB limit is **per bank**) and construct
+them in blocks to bound temporary memory. Matrix entries, equations, thresholds, precision of AMP state and candidate
+policy are unchanged. A laptop 2048×8192,50-column forward/transpose microbenchmark improved from median 0.104 s
+to 0.028 s (3.7×, five repetitions), with identical outputs. This is not a native end-to-end HPC speedup claim.
+
+Only the new checks array enables atomic per-frame checkpoints and progress logs. Resubmitting its same row resumes
+under identical source/configuration, or skips a completed row. Each cell's metrics are rebuilt without duplicate frames.
+Old empty native outputs cannot be resumed retrospectively. Training resume is not added. Keep code unchanged during
+active jobs; source fingerprints intentionally reject mixed implementations.
+
+Verification: 32 baseline/bound/manifest/resume tests pass; all three follow-up families pass small-B row smoke checks.
+The 28-path B6 smoke suite completes and all 24 learned paths reduce validation loss. These are execution checks, not
+native-scale validation of the new settings. Native dynamic-CS full memory/runtime checks remain the purpose of rows 17–20.
+
 ## Comparisons
 
 For each of ODMA–polar, dynamic CS, and CCS-AMP:
@@ -148,19 +193,36 @@ then sufficient frames and matching the paper's settings/curve, not merely passi
 ## Bounds
 
 The survey's Gaussian achievability reference and Polyanskiy's bound are the **same reference**, not independent curves.
-Plots now show **one** reference: the conservative **Gallager branch** of Polyanskiy Theorem 1, not its tighter
-`min(p_t,q_t)` calculation. It says `optimal PUPE <= achievable-error upper bound`, not `decoder PUPE >= bound`.
-For example, at B=1,K=1,0 dB, antipodal signalling has exact error Q(√2)≈0.07865 and beats our bound by over 3×.
-At B=6,n=64,K=1,0 dB the conservative curve is 1: being below it is unsurprising and not evidence of near-optimality.
-Independent scalar equation tests, collision enumeration and a single-user exact solution check pass. Saved bound
-metadata decomposes coding, energy-clipping and collision terms. Its code class has norm <=1, not necessarily norm=1.
-The weak derived Fano converse remains a diagnostic function but is no longer plotted. Legacy `src/ura_bound.py`
-outputs remain numerically unchanged: its old q-term normal approximation omitted the required subset minimum and
-must not be relabelled as a rigorous bound. No earlier experimental PUPE values were changed.
+Plots show **one** reference: all Gallager `p_t` terms plus `q_1`, following the original numerical recipe. The latter
+integrates the shared-noise minimum over users; it is not an independent-user/normal approximation. This remains an
+achievable-error upper bound, not a converse: `optimal PUPE <= bound` does not imply `decoder PUPE >= bound`.
+Prepared analysis covers B6/12/14/100/128. At B6,n64,K1,0 dB the bound is about 0.930, while a 20,000-frame single-user
+exact-ML diagnostic achieved 0.170; small-B looseness remains real. Paper Fig.1 visual alignment is within 0.084 dB;
+grid/quadrature refinement changed tested thresholds by at most 0.060 dB. These checks are numerical, not a new theorem.
+At B12,K22/26 iid the collision correction alone exceeds 5%, so this bound cannot certify that target.
+Legacy `src/ura_bound.py` is unchanged and must not be relabelled as rigorous. The unused weak Fano helper was removed.
+To regenerate in an empty output directory: `uv run python -m benchmarks.ura_bound_analysis --out results/032_bounds`.
 
 ## Commands
 
-From the HPC repository root, prepare the environment and the unvendored author dependency once:
+**Next submission**, after updating an idle/isolated HPC checkout (the CCS author dependency already exists):
+
+```bash
+git pull --ff-only origin main
+module load miniforge/3
+uv sync --python python
+qsub jobs/032_published_baselines/032_checks.sh
+```
+
+Inspect returned checks, including partial sets:
+
+```bash
+uv run python jobs/032_published_baselines/analyse_checks.py --allow-incomplete
+```
+
+The comparison command below is **deferred until these checks are reviewed and receiver budgets finalized**.
+Do not resubmit the original pilot/native arrays merely to run the checks. For a fresh installation only, prepare
+the environment and the unvendored author dependency once:
 
 ```bash
 uv sync
@@ -169,7 +231,8 @@ git -C .cache/CCS-AMP-Code checkout 92080d85408d5d19a123d1d61ba76ec6f15451a5
 qsub jobs/032_published_baselines/032_pilot.sh
 ```
 
-If that checkout already exists, skip the clone and verify its commit. After all pilot rows finish:
+If that checkout already exists, skip the clone and verify its commit. After checks are reviewed, generate selection
+from the already completed pilot and submit the main comparison:
 
 ```bash
 uv run python -m benchmarks.ura_merge --manifest jobs/032_published_baselines/pilot.jsonl --results jobs/032_published_baselines/results/pilot --select-pilot
@@ -190,8 +253,9 @@ uv run python -m benchmarks.ura_merge --manifest jobs/032_published_baselines/co
 ```
 
 Local checks: `bash jobs/032_published_baselines/local_smoke.sh` and `bash jobs/032_published_baselines/local_mini.sh`.
-Outputs must be empty/new; the runner refuses to overwrite or combine old results. For a partial failed row, move that
-row's directory aside before rerunning just its array index. Manifests are generated by `build_manifest.py`.
+Original-phase outputs must be empty/new; the runner refuses to overwrite or combine old results. The checks phase
+alone supports resumable native frames: resubmit just the affected index, e.g. `qsub -J 17 jobs/032_published_baselines/032_checks.sh`.
+Manifests are generated by `build_manifest.py`.
 The merger checks declared parameters and default budgets, source versions, initial matrices and shared pilot
 selection provenance; an under-budget or differently configured run cannot count as a completed comparison row.
 The first 156 comparison row indices are preserved; joint D2–D4 rows are appended at 157–192. Budgets and candidate

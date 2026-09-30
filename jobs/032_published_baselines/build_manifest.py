@@ -70,8 +70,28 @@ def manifests():
                            "baseline_params": params, "eval_frames": 64, "eval_ebn0": snrs[start:start+3],
                            "eval_sampling": ["iid"], "paper_reference": reference,
                            "purpose": "native-dimension paper-alignment check; reproduction remains unverified"})
+    checks = []
+    for seed in (3251, 3252):
+        for cap, snr in ((30, .25), (30, .5), (30, .75), (60, .5)):
+            checks.append({"name": f"odma_cap{cap}_snr{snr}_s{seed}", "variant": f"cap{cap}",
+                           "B": 100, "n": 30000, "seed": seed, "family": "odma_polar", "mode": "native", "decoder": "native",
+                           "loads": [100], "eval_ebn0": [snr], "eval_sampling": ["iid"], "eval_frames": 64,
+                           "baseline_params": {"prefix_bits": 13, "code_length": 512, "crc_bits": 16,
+                                               "list_size": 128, "max_iterations": cap}})
+        for iterations, fraction in ((40, .5), (40, .7), (40, .9), (80, .7)):
+            checks.append({"name": f"ccs_amp{iterations}_sic{fraction}_s{seed}", "variant": f"amp{iterations}_sic{fraction}",
+                           "B": 128, "n": 38400, "seed": seed, "family": "ccs_amp", "mode": "native", "decoder": "native",
+                           "loads": [100], "eval_ebn0": [2.5], "eval_sampling": ["iid"], "eval_frames": 16,
+                           "baseline_params": {"amp_iterations": iterations, "sic_fraction": fraction,
+                                               "list_extra": 10, "non_dc_embedding": False}})
+    for k, snr in product((50, 100), (1.5, 2.5)):
+        checks.append({"name": f"dynamic_cached64_K{k}_snr{snr}", "variant": "cached64",
+                       "B": 100, "n": 30000, "seed": 3251, "family": "dynamic_cs", "mode": "native", "decoder": "native",
+                       "loads": [k], "eval_ebn0": [snr], "eval_sampling": ["iid"], "eval_frames": 4,
+                       "baseline_params": {"profile": "native100", "detection_threshold": 6.0, "cache_bytes": 8_000_000_000,
+                                           "cache_dtype": "float64", "amp_iterations": 40, "global_iterations": 2, "list_size": 3}})
     return {phase: [{**DEFAULTS, **row} for row in rows]
-            for phase, rows in (("pilot", pilot), ("comparison", comparison), ("native", native))}
+            for phase, rows in (("pilot", pilot), ("comparison", comparison), ("native", native), ("checks", checks))}
 
 
 def main():

@@ -269,9 +269,12 @@ Commands and manifest: [`jobs/031_coordinate_amplitude_frontier_B14/README.md`](
 
 ### `032_published_baselines`
 
-- Status: implemented/audited; earlier 22-path checks and six new joint D2–D4 mini cases pass. All lower validation
-  loss; PUPE does not always improve. Native light-load B=100/128 spot checks pass; no HPC results or
-  paper-curve reproduction claim yet.
+- Status (30 September): pilot 80/80 and native 24/36 returned and checked; all 12 missing native rows are dynamic CS.
+  No main-comparison results yet. Pilot selection is ready; the 192-row comparison is deferred until native checks.
+- Follow-up: 20 separate `checks` rows test ODMA cap30/60 (8), CCS AMP/SIC budgets (8), and dynamic-CS runtime (4).
+  Native ODMA K100,0.5 dB had 66/128 frames still progressing at its ten-round cap; paired local replays confirm harm.
+  Float64 dynamic-CS caches avoid repeated casts with unchanged operators (3.7× laptop matrix microbenchmark, not an
+  end-to-end native speedup). The new checks save/resume atomic per-frame checkpoints; old outputs remain unchanged.
 - Question: does the explicit encoder/learned-decoder pair actually outperform complete published schemes at
   tractable B, or is the current receiver the bottleneck? Hash/amplitude generation is not assumed superior.
 - Four controls per paper: native encoder/native receiver; identical encoder with D0/D1; fixed explicit dense/sparse
@@ -283,9 +286,10 @@ Commands and manifest: [`jobs/031_coordinate_amplitude_frontier_B14/README.md`](
 - All D0–D4 have fixed and joint dense/sparse controls. D3/D4 use 1,024 observation-only matched-filter candidates,
   never injected truth; misses count in loss and PUPE, but hard membership has no gradient. Training: 200 epochs,
   patience 10, restore best pair. Proposal recall plots expose the remaining shortlist bottleneck.
-- Energy: exact-unit and nominal/message-dependent families are labelled separately. One default reference:
-  conservative Polyanskiy Gallager-only achievable-error upper bound (not a performance floor). The survey's
-  Gaussian achievability is the same reference; old approximate overlays are not reused as rigorous bounds.
+- Energy: exact-unit and nominal/message-dependent families remain separate. The analysis now uses Polyanskiy's
+  p_t+q_1 achievable-error upper bound (the original numerical recipe, not a converse). The shared-noise minimum
+  is integrated, not replaced by independent users or a normal proxy. B6/12/14/100/128 curves are prepared separately
+  from simulations. B12,K22/26 iid cannot certify 5% because its collision correction already exceeds that target.
 - Native paper alignment: 36 rows, B100/n30000 for ODMA/dynamic CS, B128/n38400 for CCS, K50/100, two seeds,
   seven SNRs/family and 128 frames per point; compare 5% PUPE crossings with labelled visual readings of the papers.
   Dynamic CS has the largest CPU/memory cost. Underspecified native tuning prevents an advance reproduction claim.

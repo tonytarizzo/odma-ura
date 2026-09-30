@@ -130,8 +130,7 @@ def plot_panel(points, curves, title, out_path, bounds, metric="pupe"):
             xs = sorted({p["ebn0_db"] for p in chosen if p["K"] == k})
             b, n, sampling = chosen[0]["B"], chosen[0]["n"], chosen[0]["sampling"]
             ref = reference_curves(b, n, k, xs, distinct=sampling == "distinct")
-            ax.plot(xs, ref["polyanskiy_gallager_achievability"], "k--", linewidth=1,
-                    label="Polyanskiy achievable-error upper bound (loose; not a floor)")
+            ax.plot(xs, ref["polyanskiy_achievability"], "k--", linewidth=1, label=ref["achievability_label"])
         ax.set(title=f"K={k}", xlabel="Physical Eb/N0 (dB)",
                ylabel="PUPE" if metric == "pupe" else "True-message candidate recall", ylim=(-.02, 1.02))
         ax.grid(alpha=.2)

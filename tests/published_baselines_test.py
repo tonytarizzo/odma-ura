@@ -12,7 +12,7 @@ from baselines import make_baseline, message_bits, message_indices, run
 from baselines.ccs_amp import CCSAMPBaseline
 from baselines.dynamic_cs import DynamicCSBaseline, _SignBank
 from baselines.polar import PolarCode, _RELIABILITY, append_crc, polar_transform
-from benchmarks.ura_bounds import collision_rates, list_fano_converse, polyanskiy_gallager
+from benchmarks.ura_bounds import collision_rates, polyanskiy_achievability, polyanskiy_gallager
 from benchmarks.ura_comparison import (DEFAULTS, forward, frame_metrics, learned_batch, make_decoder, make_encoder,
                                        materialize, objective)
 
@@ -120,6 +120,24 @@ class PublishedBaselineTests(unittest.TestCase):
             tested += 1
         self.assertGreater(tested, 100)
 
+    def test_dynamic_double_cache_preserves_operator_and_receiver(self):
+        a = _SignBank(37, 300, 34, cache_bytes=1_000_000)
+        b = _SignBank(37, 300, 34, cache_bytes=1_000_000, cache_dtype="float64")
+        np.testing.assert_array_equal(a._cache, b._cache)
+        for transpose in (False, True):
+            x = self.rng.normal(size=(29 if transpose else 290, 5))
+            np.testing.assert_allclose(a.multiply(x, 29, 290, transpose), b.multiply(x, 29, 290, transpose), atol=1e-12)
+        self.assertIsNone(_SignBank(37, 300, 34, cache_bytes=50_000, cache_dtype="float64")._cache)
+        old = DynamicCSBaseline(8, 128, 31)
+        new = DynamicCSBaseline(8, 128, 31, cache_dtype="float64")
+        for _ in range(4):
+            truth = message_bits(self.rng.choice(256, 3, replace=False), 8)
+            y = old.encode(truth).sum(0) + .05*self.rng.normal(size=128)
+            da, ma = old.decode(y, 3, .05**2)
+            db, mb = new.decode(y, 3, .05**2)
+            np.testing.assert_array_equal(da, db)
+            self.assertEqual(ma, mb)
+
     def test_run_contract_ignores_truth(self):
         baseline = make_baseline("odma_polar", 8, 128, 15)
         bits = message_bits([23], 8)
@@ -204,7 +222,7 @@ class PublishedBaselineTests(unittest.TestCase):
     def test_bounds(self):
         collisions = collision_rates(14, 26)
         self.assertAlmostEqual(collisions["per_user_duplicate_probability"], 1 - (1 - 2 ** -14) ** 25)
-        for function in (polyanskiy_gallager, list_fano_converse):
+        for function in (polyanskiy_gallager, polyanskiy_achievability):
             values = [function(12, 256, 7, snr) for snr in [-6, 0, 6, 12]]
             self.assertTrue(all(0 <= x <= 1 for x in values))
             self.assertTrue(all(a >= b - 1e-10 for a, b in zip(values, values[1:])), values)

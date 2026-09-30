@@ -13,7 +13,7 @@ from benchmarks.ura_comparison import run_experiment
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--phase", choices=("pilot", "comparison", "native"), default=os.environ.get("URA_PHASE", "pilot"))
+    parser.add_argument("--phase", choices=("pilot", "comparison", "native", "checks"), default=os.environ.get("URA_PHASE", "pilot"))
     parser.add_argument("--index", type=int, default=int(os.environ.get("PBS_ARRAY_INDEX", "1")))
     parser.add_argument("--selected", type=Path, default=Path(__file__).with_name("results") / "pilot" / "selected.json")
     parser.add_argument("--out-root", type=Path, default=Path(__file__).with_name("results"))
@@ -40,7 +40,9 @@ def main():
         choice = selected["profiles"][config["selected_profile"]]
         config["baseline_params"] = choice["baseline_params"]
         config["profile_selection"] = choice
-    run_experiment(config, args.out_root / args.phase / config["name"])
+    # The follow-up array is restartable; old pilot/native/comparison outputs remain untouched.
+    run_experiment(config, args.out_root / args.phase / config["name"],
+                   native_checkpoint=args.phase == "checks", resume=args.phase == "checks")
 
 
 if __name__ == "__main__": main()

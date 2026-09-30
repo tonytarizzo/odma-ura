@@ -8,17 +8,20 @@ Each published encoder also feeds the same D0/D1 receivers. All D0–D4 have fix
 dense/sparse references. D3/D4 use 1,024 non-oracle full-alphabet matched-filter proposals and record recall.
 Their hard shortlist is not differentiable or guaranteed complete; these are not scalable message searches.
 
-The batch separates an 80-row native-receiver pilot, 192 held-out B=12/14 comparisons, and 36 native B=100/128
-paper-alignment rows (K=50/100, two seeds, seven SNRs/family, 128 frames/point). The implementations are not yet
-verified reproductions of published performance curves. Training defaults are now 200 epochs / patience 10,
-with best-state restoration including epoch zero; archived job contracts are unchanged.
-Native nominal-energy variants are not silently normalized into different codes. Distinct/iid message results,
-collision conventions and physical Eb/N0 are explicitly separated. Historical bound overlays are approximate;
-job 032 plots only a conservative Polyanskiy achievable-error upper bound, not a floor that decoders must stay above.
-The audit corrected candidate losses that omitted rejected true messages and dynamic-CS stopping after FA removal.
-Earlier 22-path checks plus all six new joint D2–D4 mini runs pass; all lower validation loss, but PUPE does not always
-improve. Large-payload light-load checks pass; paper-alignment performance remains pending. The job README records
-the audit, native tuning choices, energy differences and limits on what these comparisons can establish.
+Returned on 30 September: all 80 pilot rows and 24/36 native rows (ODMA and CCS), with matching provenance and complete
+metrics. Dynamic CS's 12 rows have no saved SNR cell yet. Pilot selection is ready; the 192-row comparison is deferred.
+ODMA's ten-round cap truncates active recovery at K100; local paired replays confirm lost performance. CCS K100 also
+needs a receiver-tuning check. Neither is a fully verified paper reproduction. Next: the separate **20-row `032_checks`**
+array, covering ODMA cap30/60, focused CCS budgets, and four short native dynamic-CS runtime checks. Dynamic CS can now
+cache in float64 to avoid repeated casts, preserving its exact operator; new checks have resumable per-frame output.
+Original manifests/results are untouched. Main training remains 200 epochs / patience 10 with best-pair restoration.
+
+Bound analysis now uses Polyanskiy's original numerical recipe: all Gallager p_t terms plus q_1, integrating the
+shared-noise user minimum. It remains an achievable-error upper bound, not a converse. Prepared curves cover
+B=6/12/14/100/128; distinct and iid cases remain separate. At B12,K22/26 the iid collision correction exceeds 5%,
+so this bound cannot certify that target. Nominal-energy native codes do not acquire a peak-power guarantee from
+the overlay. See the [job README](../jobs/032_published_baselines/README.md#bounds) for the audit and analysis command.
+Do not pull analysis changes into the HPC checkout while arrays run: source fingerprints include benchmark files.
 
 ## Research aim
 

@@ -253,8 +253,17 @@ def train(config, encoder, decoder, out_dir):
             "early_stopping": stopper.summary(len(history), restored)}
 
 
-def evaluate(config, baseline, encoder, decoder, out_dir):
+def _atomic_json(path, value):
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(value, allow_nan=False) + "\n")
+    temporary.replace(path)
+
+
+def evaluate(config, baseline, encoder, decoder, out_dir, native_progress=False):
     cells = []
+    progress_path = out_dir / "native_progress.json"
+    restored = ([] if not progress_path.exists() else json.loads(progress_path.read_text())) if native_progress else []
+    progress, frame_index = [], 0
     if decoder is not None: decoder.eval()
     for sampling in config["eval_sampling"]:
         for k in config["loads"]:
@@ -269,12 +278,28 @@ def evaluate(config, baseline, encoder, decoder, out_dir):
                     noise = rng.standard_normal((size, config["n"]))
                     variance = noise_variance(config["B"], ebn0)
                     if decoder is None:
-                        for truth, z in zip(bits, noise):
-                            y = baseline.encode(truth).sum(0) + np.sqrt(variance) * z
-                            before = time.perf_counter()
-                            decoded, meta = baseline.decode(y, k, variance)
-                            elapsed += time.perf_counter() - before
-                            frames.append(frame_metrics(truth, decoded)); native_meta.append(meta)
+                        for offset, (truth, z) in enumerate(zip(bits, noise)):
+                            key = [sampling, k, ebn0, start + offset]
+                            if frame_index < len(restored):
+                                record = restored[frame_index]
+                                if record["key"] != key: raise ValueError("Native checkpoint frame ordering differs from this run")
+                            else:
+                                if native_progress:
+                                    print(f"Starting frame {frame_index + 1}: K={k} Eb/N0={ebn0}", flush=True)
+                                y = baseline.encode(truth).sum(0) + np.sqrt(variance) * z
+                                before = time.perf_counter()
+                                decoded, meta = baseline.decode(y, k, variance)
+                                record = {"key": key, "seconds": time.perf_counter() - before,
+                                          "metrics": frame_metrics(truth, decoded), "diagnostics": meta}
+                            elapsed += record["seconds"]
+                            frames.append(record["metrics"]); native_meta.append(record["diagnostics"])
+                            progress.append(record)
+                            if native_progress and frame_index >= len(restored):
+                                _atomic_json(progress_path, progress)
+                                header = record["diagnostics"].get("header_candidates")
+                                print(f"frame {frame_index + 1}: K={k} Eb/N0={ebn0} PUPE={record['metrics']['pupe']:.4f} "
+                                      f"decode={record['seconds']:.2f}s headers={header}", flush=True)
+                            frame_index += 1
                     else:
                         with torch.no_grad():
                             _, y, _ = learned_batch(encoder, bits, noise, ebn0)
@@ -294,12 +319,20 @@ def evaluate(config, baseline, encoder, decoder, out_dir):
                 # Full native diagnostics remain per cell, including search caps and failed CRCs.
                 if native_meta: cell["native_diagnostics"] = native_meta
                 cells.append(cell)
-                with (out_dir / "evaluation.jsonl").open("a") as handle: handle.write(json.dumps(cell, allow_nan=False) + "\n")
+                if native_progress:
+                    # Rebuild derived cell summaries when resuming; never duplicate an already finished cell.
+                    path = out_dir / "evaluation.jsonl"
+                    temporary = path.with_suffix(".tmp")
+                    temporary.write_text("".join(json.dumps(c, allow_nan=False) + "\n" for c in cells))
+                    temporary.replace(path)
+                else:
+                    with (out_dir / "evaluation.jsonl").open("a") as handle: handle.write(json.dumps(cell, allow_nan=False) + "\n")
                 print(f"{config['family']}/{config['decoder']} {sampling} K={k} Eb/N0={ebn0}: PUPE={values.mean():.4f}", flush=True)
+    if frame_index < len(restored): raise ValueError("Native checkpoint contains unexpected extra frames")
     return cells
 
 
-def run_experiment(config, out_dir):
+def run_experiment(config, out_dir, *, native_checkpoint=False, resume=False):
     config = {**DEFAULTS, **config}
     if config["mode"] not in {"fixed", "joint", "native"}:
         raise ValueError("mode must be fixed, joint or native")
@@ -314,13 +347,32 @@ def run_experiment(config, out_dir):
     source_files += sorted(Path("framework").glob("*.py")) + [Path("src/ura_bound.py"), Path("tests/ccs_amp_author.py")]
     source_hashes = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in source_files}
     out_dir = Path(out_dir)
+    if (native_checkpoint or resume) and config["mode"] != "native":
+        raise ValueError("Frame checkpoints/resume are supported only for native evaluation, not training")
+    if resume and not native_checkpoint: raise ValueError("Resume requires native_checkpoint=True")
+    state = {"config": config, "source_sha256": source_hashes}
     if out_dir.exists() and any(out_dir.iterdir()):
-        raise FileExistsError(f"Refusing to mix or overwrite results in {out_dir}; choose a new output directory")
+        path = out_dir / "run_state.json"
+        if not resume or not path.exists():
+            raise FileExistsError(f"Refusing to mix or overwrite results in {out_dir}; choose a new output directory")
+        if json.loads(path.read_text()) != state:
+            raise ValueError("Cannot resume with different configuration or source; use a new output directory")
+        if (out_dir / "summary.json").exists():
+            completed = json.loads((out_dir / "summary.json").read_text())
+            if completed.get("status") != "complete": raise ValueError("Invalid completion summary")
+            print(f"Already complete: {out_dir}", flush=True)
+            return completed
     out_dir.mkdir(parents=True, exist_ok=True)
+    if native_checkpoint: _atomic_json(out_dir / "run_state.json", state)
     torch.set_num_threads(config["threads"])
     torch.manual_seed(config["seed"] + 400_000)
+    setup_started = time.perf_counter()
+    if native_checkpoint: print(f"Building {config['family']} receiver", flush=True)
     baseline = make_baseline(config["family"], config["B"], config["n"], config["seed"],
                              **config.get("baseline_params", {})) if config["family"] in PAPERS else None
+    if native_checkpoint:
+        print(f"Receiver setup: {time.perf_counter()-setup_started:.2f}s; "
+              f"metadata={json.dumps(baseline.metadata())}", flush=True)
     encoder = None if config["decoder"] == "native" else make_encoder(config, baseline)
     if encoder is not None:
         matrix = encoder.explicit_matrix().detach().numpy()
@@ -337,7 +389,7 @@ def run_experiment(config, out_dir):
               "max": float(energies.max()), "std": float(energies.std())}
     decoder = None if encoder is None else make_decoder(config)
     training = None if decoder is None else train(config, encoder, decoder, out_dir)
-    cells = evaluate(config, baseline, encoder, decoder, out_dir)
+    cells = evaluate(config, baseline, encoder, decoder, out_dir, native_progress=native_checkpoint)
     if source_hashes != {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in source_files}:
         raise RuntimeError("Source files changed during this run; refuse a misleading completed-result fingerprint")
     summary = {"status": "complete", "config": config, "revision": revision, "source_sha256": source_hashes,
@@ -354,7 +406,7 @@ def run_experiment(config, out_dir):
     if encoder is not None:
         final_energy = encoder.explicit_matrix().detach().square().sum(0)
         summary["energy_audit_final"] = {"min": float(final_energy.min()), "max": float(final_energy.max())}
-    (out_dir / "summary.json").write_text(json.dumps(summary, indent=2, allow_nan=False) + "\n")
+    _atomic_json(out_dir / "summary.json", summary)
     return summary
 
 

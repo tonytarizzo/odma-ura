@@ -37,11 +37,17 @@ def _crc(bits, width, polynomial):
 class _SignBank:
     """Counter-generated Rademacher entries; prefixes define the shared base matrix."""
 
-    def __init__(self, rows, columns, seed, cache_bytes=16_000_000):
+    def __init__(self, rows, columns, seed, cache_bytes=16_000_000, cache_dtype="float32"):
         self.rows, self.columns, self.seed = int(rows), int(columns), int(seed)
+        if cache_dtype not in {"float32", "float64"}:
+            raise ValueError("cache_dtype must be float32 or float64")
+        dtype = np.dtype(cache_dtype)
         self._cache = None
-        if rows * columns * 4 <= cache_bytes:
-            self._cache = self._generate(np.arange(columns))
+        if rows * columns * dtype.itemsize <= cache_bytes:
+            self._cache = np.empty((rows, columns), dtype=dtype)
+            # Bound construction temporaries; native banks otherwise allocate several huge uint64 arrays.
+            for start in range(0, columns, 256):
+                self._cache[:, start:start + 256] = self._generate(np.arange(start, min(columns, start + 256)))
 
     def _generate(self, columns):
         row = np.arange(self.rows, dtype=np.uint64)[:, None]
@@ -89,7 +95,7 @@ class DynamicCSBaseline:
     def __init__(self, payload_bits, n, seed=0, *, profile="small", prefix_bits=None, data_bits=None, streams=None,
                  crc_bits=None, crc_polynomial=None, first_length=None, slot_lengths=None, amp_iterations=40,
                  global_iterations=2, list_size=None, detection_threshold=2.0, fa_threshold=0.0, damping=1.0,
-                 candidate_budget=None, assembly_budget=100_000, cache_bytes=16_000_000):
+                 candidate_budget=None, assembly_budget=100_000, cache_bytes=16_000_000, cache_dtype="float32"):
         self.payload_bits, self.n, self.seed = int(payload_bits), int(n), int(seed)
         self.profile = profile
         if profile not in {"small", "native100"}:
@@ -136,8 +142,9 @@ class DynamicCSBaseline:
         # Preserve the source's equal per-stream amplitudes, including the header.
         # This is nominal energy: repeated substreams and cross terms make S>1 norms vary.
         self.nominal_raw_energy = self.slot_lengths[0] + self.streams * sum(self.slot_lengths[1:])
-        self._a = _SignBank(self.slot_lengths[0], 1 << self.header_bits, seed + 17011, cache_bytes)
-        self._b = _SignBank(max(self.slot_lengths[1:]), 1 << (max(self.data_bits) // self.streams), seed + 34019, cache_bytes)
+        self.cache_dtype, self.cache_bytes = cache_dtype, int(cache_bytes)
+        self._a = _SignBank(self.slot_lengths[0], 1 << self.header_bits, seed + 17011, cache_bytes, cache_dtype)
+        self._b = _SignBank(max(self.slot_lengths[1:]), 1 << (max(self.data_bits) // self.streams), seed + 34019, cache_bytes, cache_dtype)
 
     def _parts(self, message):
         message = np.asarray(message, dtype=np.uint8)
@@ -311,6 +318,8 @@ class DynamicCSBaseline:
                 "global_iterations": self.global_iterations, "list_size": self.list_size,
                 "detection_threshold": self.detection_threshold, "fa_threshold": self.fa_threshold,
                 "damping": self.damping, "candidate_budget": self.candidate_budget,
+                "cache_dtype": self.cache_dtype, "cache_bytes_per_bank": self.cache_bytes,
+                "cached_bytes": sum(bank._cache.nbytes for bank in (self._a, self._b) if bank._cache is not None),
                 "energy_policy": "exact_unit" if self.streams == 1 else "nominal_unit_multistream_not_peak_constrained",
                 "caveats": ["Independent implementation, not author code or validated paper-curve reproduction.",
                             "CRC polynomial, thresholds and iteration budgets are exposed implementation choices.",

@@ -41,10 +41,10 @@ variant for the present method.
 ## Current handoff
 
 [`CURRENT_STATE.md`](CURRENT_STATE.md) is a concise, neutral context document suitable for starting a new conversation.
-It distinguishes verified observations, interpretations, limitations, and open research choices. It is the authoritative
-summary through the completed jobs `028--030` and the locally checked coordinate-amplitude batch `031`.
-The next foundational comparison is [`job 032`](../jobs/032_published_baselines/README.md): complete published
-receiver chains versus matched explicit-codebook receivers, with separate native tuning and held-out tests.
+It distinguishes verified observations, interpretations, limitations, and open research choices. It covers completed
+jobs `028--030`, the locally checked coordinate-amplitude batch `031`, and partial returns from
+[`job 032`](../jobs/032_published_baselines/README.md). Its pilot is complete; native receiver-budget/runtime checks
+precede the main published-versus-explicit comparison.
 
 ## Detailed evidence
 
