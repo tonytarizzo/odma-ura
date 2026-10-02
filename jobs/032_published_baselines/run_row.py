@@ -40,6 +40,9 @@ def main():
         choice = selected["profiles"][config["selected_profile"]]
         config["baseline_params"] = choice["baseline_params"]
         config["profile_selection"] = choice
+    if "baseline_overrides" in config:
+        # Preserve the original pilot choice; record post-validation receiver budgets separately.
+        config["baseline_params"] = {**config.get("baseline_params", {}), **config["baseline_overrides"]}
     # The follow-up array is restartable; old pilot/native/comparison outputs remain untouched.
     run_experiment(config, args.out_root / args.phase / config["name"],
                    native_checkpoint=args.phase == "checks", resume=args.phase == "checks")

@@ -269,19 +269,21 @@ Commands and manifest: [`jobs/031_coordinate_amplitude_frontier_B14/README.md`](
 
 ### `032_published_baselines`
 
-- Status (30 September): pilot 80/80 and native 24/36 returned and checked; all 12 missing native rows are dynamic CS.
-  No main-comparison results yet. Pilot selection is ready; the 192-row comparison is deferred until native checks.
-- Follow-up: 20 separate `checks` rows test ODMA cap30/60 (8), CCS AMP/SIC budgets (8), and dynamic-CS runtime (4).
-  Native ODMA K100,0.5 dB had 66/128 frames still progressing at its ten-round cap; paired local replays confirm harm.
-  Float64 dynamic-CS caches avoid repeated casts with unchanged operators (3.7× laptop matrix microbenchmark, not an
-  end-to-end native speedup). The new checks save/resume atomic per-frame checkpoints; old outputs remain unchanged.
+- Status (2 October): pilot 80/80, original native 24/36 and follow-up checks 20/20 returned and passed audit.
+  No main results yet; the **174-row comparison is ready**. The 18 dynamic-CS comparison rows are removed, not its
+  implementation or historical manifests/results. Remaining row indices are renumbered.
+- Follow-up findings: ODMA K100,0.5 dB PUPE falls 11.22%→4.58% over the same 128 frames at cap30; cap60 is identical.
+  Main small-B ODMA uses cap30, which cannot truncate productive recovery at K≤26. Pilot winners are unchanged;
+  saved pilot provenance and the explicit receiver-budget override are checked separately. CCS AMP40→80 improves
+  only 6.75%→6.59% over the same 32 diagnostic frames at 37% extra runtime; keep small-B pilot-selected budgets.
+  Dynamic CS finishes but gives 34.5%/48% PUPE at K50/100,2.5 dB (four frames each): defer its validation/debugging.
 - Question: does the explicit encoder/learned-decoder pair actually outperform complete published schemes at
   tractable B, or is the current receiver the bottleneck? Hash/amplitude generation is not assumed superior.
 - Four controls per paper: native encoder/native receiver; identical encoder with D0/D1; fixed explicit dense/sparse
   with D0/D1; jointly learned explicit dense/sparse with D0/D1. Reference rows are reused across papers.
-- Native chains: ODMA–polar SCL/TIN/SIC; dynamic CS header AMP/modulated AMP/CRC/SIC; pinned author CCS-AMP/BP
-  plus two-pass SIC. Small-B adaptations and unspecified author tuning choices are explicit.
-- Pilot: 80 native tuning rows at B=12/14,n=256. Held-out comparison: 192 rows over three seeds, K=7/15/22/26,
+- Main native chains: ODMA–polar SCL/TIN/SIC and pinned author CCS-AMP/BP plus two-pass SIC. ODMA is the primary
+  comparator; CCS alignment remains approximate. Exact-energy block CCS is a separately labelled adaptation.
+- Pilot: 80 native tuning rows at B=12/14,n=256. Held-out comparison: 174 rows over three seeds, K=7/15/22/26,
   physical Eb/N0=-4:2:10 dB, 256 frames/cell for distinct and iid messages. Sparse support size 32.
 - All D0–D4 have fixed and joint dense/sparse controls. D3/D4 use 1,024 observation-only matched-filter candidates,
   never injected truth; misses count in loss and PUPE, but hard membership has no gradient. Training: 200 epochs,

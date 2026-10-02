@@ -31,10 +31,11 @@ def manifests():
                               "loads": [7, 15, 26], "eval_ebn0": [0, 4, 8], "eval_sampling": ["distinct"], "eval_frames": 64})
         for seed in (3201, 3202, 3203):
             base = {"B": b, "n": n, "seed": seed}
-            for family, decoder in product(profiles, ("native", "d0", "d1")):
+            for family, decoder in product(("odma_polar", "ccs_amp", "ccs_block"), ("native", "d0", "d1")):
+                overrides = {"baseline_overrides": {"max_iterations": 30}} if family == "odma_polar" else {}
                 comparison.append({**base, "name": f"B{b}_n{n}_{family}_{decoder}_s{seed}", "family": family,
                                    "decoder": decoder, "mode": "native" if decoder == "native" else "fixed",
-                                   "selected_profile": f"B{b}_n{n}_{family}"})
+                                   "selected_profile": f"B{b}_n{n}_{family}", **overrides})
             for family in ("dense", "sparse"):
                 for mode, decoder in product(("fixed", "joint"), ("d0", "d1")):
                     comparison.append({**base, "name": f"B{b}_n{n}_{family}_{mode}_{decoder}_s{seed}", "family": family,
@@ -42,7 +43,7 @@ def manifests():
                 for decoder in ("d2", "d3", "d4"):
                     comparison.append({**base, "name": f"B{b}_n{n}_{family}_fixed_{decoder}_s{seed}", "family": family,
                                        "decoder": decoder, "mode": "fixed", "support": 32})
-    # Preserve the first 156 row indices; append joint D2--D4 controls.
+    # Joint D2--D4 controls follow the matched comparisons and fixed references.
     for b, seed, family, decoder in product((12, 14), (3201, 3202, 3203), ("dense", "sparse"), ("d2", "d3", "d4")):
         comparison.append({"B": b, "n": 256, "seed": seed, "name": f"B{b}_n256_{family}_joint_{decoder}_s{seed}",
                            "family": family, "decoder": decoder, "mode": "joint", "support": 32})

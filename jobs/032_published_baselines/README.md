@@ -4,54 +4,42 @@
 An explicit codebook with a trained receiver is not assumed optimal. A poor small-B adaptation is not evidence that
 the published large-B scheme is poor.
 
-## Current decision — 30 September 2026
+## Current decision — 2 October 2026
 
-The **80/80 pilot and 24/36 native rows** returned and passed provenance/grid/metric checks. The remaining 12 native
-rows are all dynamic CS, with no completed SNR cell in the pulled snapshot. No main-comparison results have returned.
-The pilot selection is ready, but **run `032_checks.sh` next, not the 192-row comparison yet**.
+**Ready for the 174-row main comparison.** All 80 pilot rows, 24/36 original native rows and all 20 follow-up checks
+returned and passed provenance/grid/metric checks. No main results have returned. ODMA–polar is the primary comparator;
+CCS-AMP is supporting evidence with approximate native alignment. Dynamic CS is excluded from the main array because
+our native implementation remains unvalidated, not because the published method has been shown inferior.
 
-Native mean-PUPE 5% crossing brackets are ODMA K50 `(0,0.25]`, K100 `(0.5,0.75]`; CCS K50 `(2,2.25]`, K100 `(2.5,3]` dB.
-These are grid brackets, not confidence intervals. K50 agrees reasonably with the prior paper readings; K100 needs review.
-At ODMA K100,0.5 dB, 66/128 frames were still recovering messages when the ten-round cap stopped them. Two selected
-difficult frames improved from 51%/48% PUPE to 1%/2% when allowed to finish at round 18. Eight unselected replay frames
-improved from mean 3.50% to 2.63%. These are diagnostic replays, not a corrected aggregate curve.
-
-The separate **20-row checks array** leaves the original three manifests and completed outputs unchanged:
-
-| Rows | Check | Budget and purpose |
+| Follow-up | Returned evidence | Decision |
 |---|---|---|
-| 1–4, 9–12 | ODMA K100: cap30 at 0.25/0.5/0.75 dB; cap60 at 0.5 dB | Two original seeds, 64 frames; isolate truncation and check cap30 |
-| 5–8, 13–16 | CCS K100,2.5 dB: AMP40 with SIC fractions 0.5/0.7/0.9; AMP80 with 0.7 | Two original seeds, 16 frames; targeted receiver-budget diagnostic |
-| 17–20 | Dynamic CS K50/100,1.5/2.5 dB, double-precision cached banks | Four frames each; measure native runtime/behaviour before a large rerun |
+| ODMA K100,0.5 dB | Same 128 frames: PUPE 11.22% at cap10, 4.58% at cap30; cap60 has identical per-frame metrics | Remove premature truncation |
+| CCS K100,2.5 dB | Same 32 frames: AMP40/SIC0.7 gives 6.75%; AMP80 gives 6.59% at 37% higher runtime; SIC0.5/0.9 are worse | No further budget sweep; retain small-B pilot-selected settings |
+| Dynamic CS,2.5 dB | Four frames each: PUPE 34.5% at K50 and 48% at K100; about 186–290 s/frame | Defer debugging; preserve code and historical jobs/results |
 
-ODMA/CCS replays preserve the original batch size and message/noise sequence. Four-frame dynamic checks are runtime
-diagnostics, not a reproduction curve or a paired subset of the original eight-frame batches. Analyze variants separately
-with `analyse_checks.py`, not the ordinary seed-pooling merger. Pilot scores are tuning data; small-B error floors do not
-yet establish explicit-codebook superiority. The matched D0/D1 stage is still needed to separate receiver and encoder losses.
+Corrected ODMA K100 mean-PUPE 5% crossing is `(0.25,0.5]` dB; K50 remains `(0,0.25]`. CCS crossings remain
+K50 `(2,2.25]`, K100 `(2.5,3]`. These are grid brackets, not confidence intervals or verified paper reproductions.
+One ODMA frame was still progressing at cap30 at 0.25 dB, well below the crossing; cap30/60 agree at 0.5 dB.
 
-### Dynamic-CS cost and the bounded optimization
+The small-B comparison explicitly overrides ODMA to **cap30**. With K≤26, each productive round adds a new message,
+so this cap cannot truncate progress. Replaying all nine capped frames in the two selected pilots changes their mean
+PUPE only from `0.31411→0.31385` (B12) and `0.41054→0.41034` (B14). The selected profiles remain the winners, even
+allowing every competitor to correct all errors in its capped frames. No full pilot rerun is needed. Saved pilot
+choices/scores remain historical; `baseline_overrides` records the new receiver budget separately and the merger
+checks the same effective parameters across native/D0/D1 and seeds. No encoder waveform is changed by this override.
 
-The author's thesis, Chapter 9, p.132, identifies matrix multiplication as the dominant receiver cost and gives
-`O(2^Bp N1 + max_l 2^(Bl/S) Nl Ka)` (iteration/slot factors suppressed). It explicitly states higher complexity than
-its ODMA comparator; it does not report a runtime that validates our 60-hour jobs.
-Our native banks are 3000×262144 and 9000×32768. Previously float32 caches were converted repeatedly for float64
-matrix products. The checks opt into float64 caches (8.65 GB combined; the 8 GB limit is **per bank**) and construct
-them in blocks to bound temporary memory. Matrix entries, equations, thresholds, precision of AMP state and candidate
-policy are unchanged. A laptop 2048×8192,50-column forward/transpose microbenchmark improved from median 0.104 s
-to 0.028 s (3.7×, five repetitions), with identical outputs. This is not a native end-to-end HPC speedup claim.
+Pilot/native/checks manifests and completed outputs are unchanged. The comparison removes 18 dynamic-CS rows and
+renumbers the survivors; all dense/sparse D0–D4 controls remain. Analyze follow-up variants with `analyse_checks.py`,
+not the ordinary seed-pooling merger. Dynamic-CS checks use float64 cached banks and resumable per-frame checkpoints;
+their four-frame points are diagnostics, not a reproduction curve. Do not resubmit the original validation arrays.
 
-Only the new checks array enables atomic per-frame checkpoints and progress logs. Resubmitting its same row resumes
-under identical source/configuration, or skips a completed row. Each cell's metrics are rebuilt without duplicate frames.
-Old empty native outputs cannot be resumed retrospectively. Training resume is not added. Keep code unchanged during
-active jobs; source fingerprints intentionally reject mixed implementations.
-
-Verification: 32 baseline/bound/manifest/resume tests pass; all three follow-up families pass small-B row smoke checks.
-The 28-path B6 smoke suite completes and all 24 learned paths reduce validation loss. These are execution checks, not
-native-scale validation of the new settings. Native dynamic-CS full memory/runtime checks remain the purpose of rows 17–20.
+Pre-submission verification: 33 targeted regressions pass, as do six B6 row-runner smokes (ODMA native/D0/D1,
+CCS native, block CCS native, dense joint D2). All three trained smoke paths lower validation loss. These verify
+execution and configuration, not comparative performance. Historical result audits still pass under the updated merger.
 
 ## Comparisons
 
-For each of ODMA–polar, dynamic CS, and CCS-AMP:
+For ODMA–polar and CCS-AMP (including its separately labelled exact-energy block adaptation):
 
 | Test | Encoder | Receiver | What the comparison isolates |
 |---|---|---|---|
@@ -60,7 +48,7 @@ For each of ODMA–polar, dynamic CS, and CCS-AMP:
 | 3 | Dense / independent sparse global, fixed | D0 / D1 | Geometry under the same receiver |
 | 4 | Dense / independent sparse global, jointly learned | D0 / D1 | Gains available from encoder adaptation |
 
-The reference rows are shared across papers, not rerun three times. All D0–D4 have both **fixed-encoder** and
+The reference rows are shared across papers. All D0–D4 have both **fixed-encoder** and
 **joint encoder/receiver** dense/sparse rows. In either mode the receiver is trained. Sparse supports stay fixed;
 joint training learns the nonzero values, with exact unit-column projection after every update.
 D3/D4 receive 1,024 non-oracle matched-filter candidates, never injected truth. This still scans all `2^B` messages.
@@ -74,7 +62,7 @@ Report recall, PUPE and total proposal/refinement runtime; D2 is the full-alphab
   CCS varies 20/40 AMP iterations, SIC cancellation fractions 0.5/0.8, and original/non-DC Hadamard embedding.
   Both dense CCS and an exact-energy block-diagonal adaptation are included. Select one configuration per family/B
   by mean pilot PUPE; the held-out stage uses different construction/data seeds.
-- **Comparison: 192 rows.** `B=12/14,n=256`, seeds 3201–3203; `K=7,15,22,26`; physical `Eb/N0=-4,-2,0,2,4,6,8,10 dB`;
+- **Comparison: 174 rows.** `B=12/14,n=256`, seeds 3201–3203; `K=7,15,22,26`; physical `Eb/N0=-4,-2,0,2,4,6,8,10 dB`;
   256 frames per cell, separately for distinct and iid messages. Sparse support size is 32 (12.5% density).
   Training uses distinct messages, 8 layers, batches of 8, 100 batches/epoch, at most 200 epochs, patience 10,
   fixed validation and restoration of the best encoder/decoder pair, including epoch zero.
@@ -211,39 +199,30 @@ To regenerate in an empty output directory: `uv run python -m benchmarks.ura_bou
 git pull --ff-only origin main
 module load miniforge/3
 uv sync --python python
-qsub jobs/032_published_baselines/032_checks.sh
-```
-
-Inspect returned checks, including partial sets:
-
-```bash
-uv run python jobs/032_published_baselines/analyse_checks.py --allow-incomplete
-```
-
-The comparison command below is **deferred until these checks are reviewed and receiver budgets finalized**.
-Do not resubmit the original pilot/native arrays merely to run the checks. For a fresh installation only, prepare
-the environment and the unvendored author dependency once:
-
-```bash
-uv sync
-git clone https://github.com/vamsi128/CCS-AMP-Code.git .cache/CCS-AMP-Code
-git -C .cache/CCS-AMP-Code checkout 92080d85408d5d19a123d1d61ba76ec6f15451a5
-qsub jobs/032_published_baselines/032_pilot.sh
-```
-
-If that checkout already exists, skip the clone and verify its commit. After checks are reviewed, generate selection
-from the already completed pilot and submit the main comparison:
-
-```bash
 uv run python -m benchmarks.ura_merge --manifest jobs/032_published_baselines/pilot.jsonl --results jobs/032_published_baselines/results/pilot --select-pilot
 qsub jobs/032_published_baselines/032_comparison.sh
 ```
 
-Independent native paper-alignment validation (recommended before making claims against the papers):
+Re-analyze the completed follow-up checks:
 
 ```bash
-qsub jobs/032_published_baselines/032_native.sh
-uv run python -m benchmarks.ura_merge --manifest jobs/032_published_baselines/native.jsonl --results jobs/032_published_baselines/results/native
+uv run python jobs/032_published_baselines/analyse_checks.py
+```
+
+The `--select-pilot` command regenerates selection from the completed pilot, not new simulations. Keep those returned pilot
+summaries on HPC; `selected.json` is generated locally and not tracked in git. For a fresh installation only, prepare
+the unvendored author dependency once:
+
+```bash
+git clone https://github.com/vamsi128/CCS-AMP-Code.git .cache/CCS-AMP-Code
+git -C .cache/CCS-AMP-Code checkout 92080d85408d5d19a123d1d61ba76ec6f15451a5
+```
+
+If that checkout already exists, skip the clone and verify its commit. Analyze the original partial native set
+separately; its ten-round ODMA results are historical, not the corrected follow-up curve:
+
+```bash
+uv run python -m benchmarks.ura_merge --manifest jobs/032_published_baselines/native.jsonl --results jobs/032_published_baselines/results/native --allow-incomplete
 ```
 
 Merge/plot the completed comparison (use `--allow-incomplete` only for an explicitly partial analysis):
@@ -258,6 +237,5 @@ alone supports resumable native frames: resubmit just the affected index, e.g. `
 Manifests are generated by `build_manifest.py`.
 The merger checks declared parameters and default budgets, source versions, initial matrices and shared pilot
 selection provenance; an under-budget or differently configured run cannot count as a completed comparison row.
-The first 156 comparison row indices are preserved; joint D2–D4 rows are appended at 157–192. Budgets and candidate
-losses changed, so do not mix previous comparison outputs with this revision. Native rows replace the old eight-frame
-smoke manifest. Do not pull/edit source files during running jobs; the runner rejects mid-run source changes.
+Comparison indices are now 1–174, with joint D2–D4 at 139–174. Do not reuse old numeric indices or mix outputs from the
+192-row revision. Do not pull/edit source files during running jobs; the runner rejects mid-run source changes.

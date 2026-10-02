@@ -3,18 +3,20 @@
 ## Current next experiment: published end-to-end benchmarks
 
 Job [`032`](../jobs/032_published_baselines/README.md) tests the foundation before adding generator restrictions:
-ODMA–polar, dynamic CS and complete two-pass CCS-AMP/BP versus fixed/joint explicit dense and sparse references.
+ODMA–polar and complete two-pass CCS-AMP/BP versus fixed/joint explicit dense and sparse references.
 Each published encoder also feeds the same D0/D1 receivers. All D0–D4 have fixed-encoder and joint-learning
 dense/sparse references. D3/D4 use 1,024 non-oracle full-alphabet matched-filter proposals and record recall.
 Their hard shortlist is not differentiable or guaranteed complete; these are not scalable message searches.
 
-Returned on 30 September: all 80 pilot rows and 24/36 native rows (ODMA and CCS), with matching provenance and complete
-metrics. Dynamic CS's 12 rows have no saved SNR cell yet. Pilot selection is ready; the 192-row comparison is deferred.
-ODMA's ten-round cap truncates active recovery at K100; local paired replays confirm lost performance. CCS K100 also
-needs a receiver-tuning check. Neither is a fully verified paper reproduction. Next: the separate **20-row `032_checks`**
-array, covering ODMA cap30/60, focused CCS budgets, and four short native dynamic-CS runtime checks. Dynamic CS can now
-cache in float64 to avoid repeated casts, preserving its exact operator; new checks have resumable per-frame output.
-Original manifests/results are untouched. Main training remains 200 epochs / patience 10 with best-pair restoration.
+As of 2 October: all 80 pilot rows, 24/36 original native rows and all 20 follow-up checks returned and passed audit.
+The **174-row comparison is ready**, with no main results yet. ODMA K100,0.5 dB improves from 11.22% to 4.58% PUPE
+on the same 128 frames when cap10 becomes cap30; cap60 is identical. Small-B uses an explicit cap30 override, leaving
+pilot provenance intact. The selected profiles remain best after the affected frames are replayed. Extra CCS iterations
+give little benefit; its small-B pilot settings stay unchanged. ODMA is the primary comparator; CCS native alignment
+remains approximate, not a verified reproduction. Dynamic CS is excluded from the main array: its four-frame checks
+at 2.5 dB give 34.5%/48% PUPE at K50/100 despite finishing. Code and historical jobs/results remain for later diagnosis.
+Main training remains 200 epochs / patience 10 with best-pair restoration. Next: submit `032_comparison.sh`; no more
+native tuning is required for this small-B decision experiment. See the job README for the full command.
 
 Bound analysis now uses Polyanskiy's original numerical recipe: all Gallager p_t terms plus q_1, integrating the
 shared-noise user minimum. It remains an achievable-error upper bound, not a converse. Prepared curves cover

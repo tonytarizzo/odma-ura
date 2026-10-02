@@ -51,9 +51,12 @@ def load_results(manifest, root, allow_incomplete=False):
         c = result["config"]
         if "selected_profile" in c:
             selection = c.get("profile_selection")
-            if not selection or selection.get("baseline_params") != c.get("baseline_params"):
+            if not selection or "baseline_params" not in selection:
                 raise ValueError("Missing or inconsistent pilot selection provenance")
-            profiles[c["selected_profile"]].add(json.dumps(selection, sort_keys=True))
+            expected_params = {**selection["baseline_params"], **c.get("baseline_overrides", {})}
+            if expected_params != c.get("baseline_params"):
+                raise ValueError("Missing or inconsistent pilot selection provenance")
+            profiles[c["selected_profile"]].add(json.dumps([selection, expected_params], sort_keys=True))
         if result["initial_matrix_sha256"]:
             matrices[(c["B"], c["n"], c["seed"], c["family"])].add(result["initial_matrix_sha256"])
     if any(len(choices) != 1 for choices in profiles.values()):

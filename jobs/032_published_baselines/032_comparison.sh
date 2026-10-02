@@ -1,7 +1,7 @@
 #!/bin/bash
 #PBS -l walltime=72:00:00
 #PBS -l select=1:ncpus=8:mem=64gb
-#PBS -J 1-192
+#PBS -J 1-174
 #PBS -N ura032_compare
 
 set -euo pipefail
