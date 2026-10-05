@@ -252,7 +252,9 @@ that every optimizer or decoder must suffer that gap. Candidate proposal was not
 
 ### `031_coordinate_amplitude_frontier_B14`
 
-- Status: implemented; algebra, 12 smoke paths and four B=8 learning checks pass. HPC performance pending.
+- Status (5 October): 72/72 HPC rows pass the strict manifest/checkpoint/grid/energy audit.
+  Balanced coordinate J8 fixed D1 gives mean high-SNR PUPE 0.32683 versus unrestricted 0.32937; jointly trained
+  J8 gives 0.32466 versus 0.32174. Compression is promising under these receivers, not proved lossless.
 - Change: each table uses its own label `P_t w`, sharing scalar entries of V rather than whole amplitude vectors.
   Gather then normalize each message. J=B remains the unrestricted fixed-support endpoint.
 - Design: full-rank labels, maximum stacked rank and maximum local joint support/label rank. Center/unit-RMS banks
@@ -269,9 +271,9 @@ Commands and manifest: [`jobs/031_coordinate_amplitude_frontier_B14/README.md`](
 
 ### `032_published_baselines`
 
-- Status (2 October): pilot 80/80, original native 24/36 and follow-up checks 20/20 returned and passed audit.
-  No main results yet; the **174-row comparison is ready**. The 18 dynamic-CS comparison rows are removed, not its
-  implementation or historical manifests/results. Remaining row indices are renumbered.
+- Status (5 October): **159/174 main rows returned**, all native/D0/D1/D2/D3 groups complete; 9/24 D4 rows returned.
+  Pilot 80/80, original native 24/36 and follow-up checks 20/20 remain the validation record. Dynamic CS is excluded
+  from the main array, not deleted from the repository or historical evidence.
 - Follow-up findings: ODMA K100,0.5 dB PUPE falls 11.22%→4.58% over the same 128 frames at cap30; cap60 is identical.
   Main small-B ODMA uses cap30, which cannot truncate productive recovery at K≤26. Pilot winners are unchanged;
   saved pilot provenance and the explicit receiver-budget override are checked separately. CCS AMP40→80 improves
@@ -301,3 +303,27 @@ Commands and manifest: [`jobs/031_coordinate_amplitude_frontier_B14/README.md`](
 Decision: use matched native/matrix decoding to distinguish receiver losses from construction losses. Check native
 validation, energy, local collisions and confidence intervals before claiming a paper was beaten. Commands,
 source-fidelity notes and the full protocol are in [`job 032`](../jobs/032_published_baselines/README.md).
+
+Returned evidence: at B14,K26,10 dB (distinct messages), PUPE is native ODMA 0.55874, fixed dense D2 0.09831,
+fixed sparse D2 0.13957 and fixed dense D3 0.07943. D2 improves strongly on D1; encoder joint learning is mixed.
+This motivates continuing, but published-codebook D2 controls are needed before attributing the gap to encoder
+geometry. The small-B CCS construction also has exact multiuser aliases; do not extrapolate to its native payload.
+Some D0 high-SNR tails are caused by its count-to-list readout, not the encoder. Re-evaluation is deferred by choice;
+leave those results labelled and do not use them to claim an encoder defect. All original outputs remain unchanged.
+
+### `033_matched_d2`
+
+- Question: does the explicit advantage persist with D2 on published codebooks, and survive hash/amplitude compression?
+- 18 controls: same selected ODMA/CCS/block-CCS codebooks as 032, D2 only; no new tuning or encoder learning.
+- 48 generator rows: selected hash with unrestricted amplitudes (`J=B`) or coordinate J=4/8/10 banks; fixed/joint,
+  B12/14,n256,T32 and seeds 3201/3202/3203. Only V and D2 learn; discrete support/amplitude maps remain fixed.
+- Exact 032 training/evaluation contract; reuse its 24 dense/sparse D2 and 18 native rows. The merger verifies
+  physical-codebook identity for paper controls and permits only the explicitly audited source-file transitions.
+- Plots include the sampling-matched Polyanskiy achievable-error upper bound, not a converse floor. Nominal-energy
+  CCS remains separately labelled; the bound's peak-energy guarantee does not apply to that construction.
+- Checks: procedural/explicit D2 equivalence, gradients, unit energy, endpoint equivalence, manifest/profile pairing;
+  nine B6 smoke paths and four B8 minis pass. All mini validation losses decrease. Production results pending.
+- Boundary: fixed and joint comparisons stay separate; joint explicit references use column projection whereas
+  hash banks use forward normalization. Strong full-alphabet decoding is still exponential, not a scalable inverse.
+
+Commands and interpretation: [`job 033`](../jobs/033_matched_d2/README.md).

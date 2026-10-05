@@ -5,6 +5,11 @@ The forward rule is `g_t(w)=V[t,P_t w]`, then `alpha=g/||g||`, on the same selec
 Only amplitudes and decoder weights may learn; discrete maps remain fixed. This is a full-message D0/D1
 model-class test, not scalable decoding.
 
+**5 October update:** all 72 rows pass the strict audit. Balanced coordinate J8 fixed D1 gives mean 8/12-dB PUPE
+0.32683 versus 0.32937 for unrestricted J14; joint J8 gives 0.32466 versus 0.32174. This motivates the stronger,
+matched D2 test in [033](../033_matched_d2/README.md), not a claim that compression is universally lossless.
+The different sampling, training and legacy noise convention prevent pooling these results with job 032.
+
 ## Manifest
 
 72 rows: `B=14,n=256,T=32`, D0/D1, seeds 2801/2802/2803. Per decoder/seed:
@@ -65,5 +70,4 @@ production row; its explicit budget overrides are for smoke tests and will inten
 Exact tests pass for operator/adjoint equality, gradients, nested projections, J=B endpoint equivalence, fixed versus
 learned initialization, rank checks, checkpoint round trips, zero-vector energy handling, and B=100 sampled generation.
 Twelve B=8 smoke paths and reduced-budget B=14 manifest execution pass. Four B=8 learning runs reduce held-out loss.
-These are implementation checks; **no job-031 HPC performance result exists yet**. Full results should determine whether
-coordinate J=4/8/10 matches its J=14 parent, whether balancing matters, and whether learning closes remaining gaps.
+These were implementation checks before HPC results returned; the 5 October update above records the returned evidence.

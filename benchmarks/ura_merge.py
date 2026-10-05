@@ -15,6 +15,11 @@ from .ura_bounds import reference_curves
 from .ura_comparison import DEFAULTS
 
 
+def family_label(config):
+    family = config["family"]
+    return f"{family}_J{config['amplitude_label_bits']}" if family == "hash_coordinate" else family
+
+
 def load_results(manifest, root, allow_incomplete=False):
     rows = [json.loads(line) for line in Path(manifest).read_text().splitlines() if line.strip()]
     names = [row["name"] for row in rows]
@@ -58,7 +63,7 @@ def load_results(manifest, root, allow_incomplete=False):
                 raise ValueError("Missing or inconsistent pilot selection provenance")
             profiles[c["selected_profile"]].add(json.dumps([selection, expected_params], sort_keys=True))
         if result["initial_matrix_sha256"]:
-            matrices[(c["B"], c["n"], c["seed"], c["family"])].add(result["initial_matrix_sha256"])
+            matrices[(c["B"], c["n"], c["seed"], family_label(c))].add(result["initial_matrix_sha256"])
     if any(len(choices) != 1 for choices in profiles.values()):
         raise ValueError("Native/learned variants or seeds use different selected pilot profiles")
     if any(len(hashes) != 1 for hashes in matrices.values()):
@@ -92,7 +97,7 @@ def aggregate(results):
     for result in results:
         c = result["config"]
         for cell in result["evaluation"]:
-            key = (c["B"], c["n"], cell["sampling"], c["family"], c["mode"], c["decoder"], cell["K"], cell["ebn0_db"])
+            key = (c["B"], c["n"], cell["sampling"], family_label(c), c["mode"], c["decoder"], cell["K"], cell["ebn0_db"])
             grouped[key].append((c["seed"], cell))
     points = []
     for key, values in sorted(grouped.items()):
@@ -152,7 +157,7 @@ def plots(points, out_dir):
         prefix = f"B{b}_n{n}_{sampling}"
         for family in ("odma_polar", "dynamic_cs", "ccs_amp", "ccs_block"):
             if not any(p["family"] == family for p in subset): continue
-            for decoder in ("d0", "d1"):
+            for decoder in ("d0", "d1", "d2"):
                 if not any(p["family"] == family and p["decoder"] == decoder for p in subset): continue
                 curves = {(family, "native", "native"): f"{family}: native receiver",
                           (family, "fixed", decoder): f"{family}: {decoder.upper()}"}
@@ -160,6 +165,12 @@ def plots(points, out_dir):
                 title = f"B={b}, n={n}, {sampling}: {family} vs explicit references"
                 if family == "ccs_amp": title += "\nNominal CCS energy varies by message; no peak-power bound overlay"
                 plot_panel(subset, curves, title, out_dir / f"{prefix}_{family}_{decoder}.png", family != "ccs_amp")
+        if any(p["family"].startswith("hash_") for p in subset):
+            for mode in ("fixed", "joint"):
+                families = ("dense", "sparse", "hash_full", "hash_coordinate_J4", "hash_coordinate_J8", "hash_coordinate_J10")
+                curves = {(family, mode, "d2"): family.replace("_", " ") for family in families}
+                title = f"B={b}, n={n}, {sampling}: {mode} amplitudes, full-alphabet D2"
+                plot_panel(subset, curves, title, out_dir / f"{prefix}_hash_{mode}_d2.png", False)
         for family in ("dense", "sparse"):
             for mode in ("fixed", "joint"):
                 curves = {(family, mode, f"d{i}"): f"D{i}" for i in range(5)}

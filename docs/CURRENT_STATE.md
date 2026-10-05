@@ -1,6 +1,6 @@
 # ODMA-URA: Neutral Project Handoff
 
-## Current next experiment: published end-to-end benchmarks
+## Current decision: matched D2 controls and generator comparison
 
 Job [`032`](../jobs/032_published_baselines/README.md) tests the foundation before adding generator restrictions:
 ODMA–polar and complete two-pass CCS-AMP/BP versus fixed/joint explicit dense and sparse references.
@@ -8,21 +8,25 @@ Each published encoder also feeds the same D0/D1 receivers. All D0–D4 have fix
 dense/sparse references. D3/D4 use 1,024 non-oracle full-alphabet matched-filter proposals and record recall.
 Their hard shortlist is not differentiable or guaranteed complete; these are not scalable message searches.
 
-As of 2 October: all 80 pilot rows, 24/36 original native rows and all 20 follow-up checks returned and passed audit.
-The **174-row comparison is ready**, with no main results yet. ODMA K100,0.5 dB improves from 11.22% to 4.58% PUPE
-on the same 128 frames when cap10 becomes cap30; cap60 is identical. Small-B uses an explicit cap30 override, leaving
-pilot provenance intact. The selected profiles remain best after the affected frames are replayed. Extra CCS iterations
-give little benefit; its small-B pilot settings stay unchanged. ODMA is the primary comparator; CCS native alignment
-remains approximate, not a verified reproduction. Dynamic CS is excluded from the main array: its four-frame checks
-at 2.5 dB give 34.5%/48% PUPE at K50/100 despite finishing. Code and historical jobs/results remain for later diagnosis.
-Main training remains 200 epochs / patience 10 with best-pair restoration. Next: submit `032_comparison.sh`; no more
-native tuning is required for this small-B decision experiment. See the job README for the full command.
+As of 5 October: **159/174 main rows returned**, including every native/D0/D1/D2/D3 group; only D4 is incomplete.
+At B14,K26,10 dB, distinct-message PUPE is 0.55874 for native ODMA, 0.09831 for fixed dense D2 and 0.13957 for
+fixed sparse D2. This supports a small-B explicit-system advantage, but not yet an encoder-only advantage: the
+published codebooks have not had the same D2 receiver. Joint encoder learning gives mixed gains, not a general win.
+D0's count-to-list readout causes some high-SNR tails; retain historical results, label the limitation, and defer
+re-evaluation. It does not invalidate D2 results. ODMA remains the primary comparator, CCS alignment approximate,
+and dynamic CS excluded. The cap30 and selected-profile decisions from the completed native checks remain unchanged.
+
+Next: [`033_matched_d2`](../jobs/033_matched_d2/README.md), 66 rows. Add 18 published-codebook D2 controls and 48
+hash-support runs with unrestricted amplitudes or coordinate J=4/8/10 banks, fixed/joint, B12/14 and three seeds.
+Reuse the 032 dense/sparse D2 and native references. Match its physical noise, messages, seeds, training and evaluation
+budgets exactly (200 epochs maximum, patience 10). Compact generation remains separate from scalable inversion.
 
 Bound analysis now uses Polyanskiy's original numerical recipe: all Gallager p_t terms plus q_1, integrating the
 shared-noise user minimum. It remains an achievable-error upper bound, not a converse. Prepared curves cover
 B=6/12/14/100/128; distinct and iid cases remain separate. At B12,K22/26 the iid collision correction exceeds 5%,
 so this bound cannot certify that target. Nominal-energy native codes do not acquire a peak-power guarantee from
 the overlay. See the [job README](../jobs/032_published_baselines/README.md#bounds) for the audit and analysis command.
+The returned 032 curves now have a bound-overlay script; 033 plots also include the same sampling-matched reference.
 Do not pull analysis changes into the HPC checkout while arrays run: source fingerprints include benchmark files.
 
 ## Research aim
@@ -184,13 +188,16 @@ unit-RMS scaling balance each bank row at initialization only. Learning can subs
 The 72-row batch tests coordinate J=4/8/10, raw-versus-balanced J=4, fixed-versus-joint learning, and matched J=14 parents,
 with shared-J4 diagnostic controls, D0/D1 and three seeds. All use at most 120 epochs, patience five, deterministic
 calibration/validation and best-checkpoint restoration including epoch zero. Local operator/gradient/energy tests,
-12 smoke paths, B=14 row execution and four small learning runs pass; HPC performance is pending.
+12 smoke paths, B=14 row execution and four small learning runs pass. All 72 HPC rows now pass the strict audit.
+At legacy 8/12 dB, fixed D1 coordinate J8 averages 0.32683 PUPE versus 0.32937 for unrestricted J14; joint gives
+0.32466 versus 0.32174. These are encouraging, not a universal equivalence result. Different sampling, training and
+noise conventions prevent direct reuse on 032 curves; 033 supplies the matched D2 test.
 
 The procedural encoder has no global message axis and generates sampled B=100 columns with exact energy. The
 certification adapter and current D0/D1 still score all `2^B` messages. Scalable noisy multiuser inversion remains open.
 See Report 5 for the matrix algebra and `jobs/031_coordinate_amplitude_frontier_B14/README.md` for the exact contract.
 
-## Decoder ladder implemented; comparative evidence pending
+## Decoder ladder: algebra and earlier local checks
 
 D0 remains the historical scalar-calibrated global baseline and D1 its expressive full-message correction. D2 replaces
 D0's residual-energy heuristic by an analytic effective variance from physical noise and codebook Gram-row energy,

@@ -1,6 +1,11 @@
 """Independent equation and interpretation checks for the job-032 reference."""
 
+import hashlib
+import json
 import math
+from pathlib import Path
+import runpy
+import tempfile
 import unittest
 
 import numpy as np
@@ -31,6 +36,19 @@ def scalar_exponent(power, t, n, b, k, grid):
 
 
 class PublishedBoundsTests(unittest.TestCase):
+    def test_overlay_rejects_stale_prepared_bounds(self):
+        loader = runpy.run_path("jobs/032_published_baselines/plot_bound_overlay.py")["load_bound_profiles"]
+        files = ("benchmarks/ura_bounds.py", "benchmarks/ura_bound_analysis.py", "src/ura_bound.py")
+        data = {"source_sha256": {p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files},
+                "profiles": [{"B": 14, "n": 256, "K": 26, "sampling": "distinct", "curve": {}}]}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "summary.json"
+            path.write_text(json.dumps(data))
+            self.assertIn((14, 256, 26, "distinct"), loader(path))
+            data["source_sha256"]["benchmarks/ura_bounds.py"] = "stale"
+            path.write_text(json.dumps(data))
+            with self.assertRaisesRegex(ValueError, "different source"): loader(path)
+
     def test_single_user_information_cdf_has_exact_laplace_case(self):
         # At n=2, diagonalizing the Gaussian information-density quadratic form
         # gives log(1+P') + sqrt(P'/(1+P')) * Laplace(0,1).

@@ -42,16 +42,16 @@ variant for the present method.
 
 [`CURRENT_STATE.md`](CURRENT_STATE.md) is a concise, neutral context document suitable for starting a new conversation.
 It distinguishes verified observations, interpretations, limitations, and open research choices. It covers completed
-jobs `028--030`, the locally checked coordinate-amplitude batch `031`, and partial returns from
-[`job 032`](../jobs/032_published_baselines/README.md). Its pilot is complete; native receiver-budget/runtime checks
-precede the main published-versus-explicit comparison.
+jobs `028--031` and 159/174 main returns from [`job 032`](../jobs/032_published_baselines/README.md).
+[`Job 033`](../jobs/033_matched_d2/README.md) adds matched published-codebook D2 controls and hash/amplitude
+comparisons; local checks pass, production results are pending.
 
 ## Detailed evidence
 
 - [`../results/03_results.md`](../results/03_results.md) records jobs `001--017`, including explicit dense/ODMA sweeps
   and oracle-support controls.
 - [`../results/04_results.md`](../results/04_results.md) records jobs `018--031`, implementation checks, returned-job
-  audits, numerical tables, and interpretation limits. Jobs `028--030` have returned; job `031` HPC results are pending.
+  audits, numerical tables, and interpretation limits. For the latest 031–033 status use `EXPERIMENT_BANK.md`.
 - [`EXPERIMENT_BANK.md`](EXPERIMENT_BANK.md) records current experiment contracts and latest job status.
 - [`../jobs/README.md`](../jobs/README.md) records private HPC operation, submission, and merge commands.
 

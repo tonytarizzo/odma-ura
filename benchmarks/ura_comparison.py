@@ -23,6 +23,7 @@ import torch
 from baselines import make_baseline, message_bits, message_indices
 from framework.candidate_decoders import CandidateRestrictedEffectiveChannelPGD, CandidateSet, LearnedCandidateGeometryPGD
 from framework.core import ComponentSpec, URASpec
+from framework.coordinate_amplitudes import build_coordinate_hash_encoder
 from framework.early_stopping import EarlyStopping
 from framework.encoder import ComponentConstraints, Encoder, build_encoder
 from framework.learned_decoders import FactorAttentionISTANet, UnrolledBernoulliPGD, UnrolledEffectiveChannelPGD
@@ -69,6 +70,12 @@ def make_encoder(config, baseline=None):
     m, learn = 1 << b, config["mode"] == "joint"
     if learn and config["family"] in PAPERS:
         raise ValueError("Do not train away a published encoder's construction")
+    if config["family"] in {"hash_full", "hash_coordinate"}:
+        spec = URASpec(n, m, max(config["loads"]), payload_bits=b)
+        full = config["family"] == "hash_full"
+        return build_coordinate_hash_encoder(
+            spec, int(config["support"]), seed, b if full else int(config["amplitude_label_bits"]), learn,
+            balanced=not full, search_candidates=int(config.get("hash_search_candidates", 128)))
     support = None
     if baseline is not None:
         matrix = materialize(baseline)
@@ -406,6 +413,9 @@ def run_experiment(config, out_dir, *, native_checkpoint=False, resume=False):
     if encoder is not None:
         final_energy = encoder.explicit_matrix().detach().square().sum(0)
         summary["energy_audit_final"] = {"min": float(final_energy.min()), "max": float(final_energy.max())}
+        if hasattr(encoder, "construction_metadata"):
+            summary["encoder_construction"] = encoder.construction_metadata
+            summary["amplitude_diagnostics_final"] = encoder.prototype_diagnostics()
     _atomic_json(out_dir / "summary.json", summary)
     return summary
 

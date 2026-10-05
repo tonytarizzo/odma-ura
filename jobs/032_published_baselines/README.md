@@ -4,12 +4,22 @@
 An explicit codebook with a trained receiver is not assumed optimal. A poor small-B adaptation is not evidence that
 the published large-B scheme is poor.
 
-## Current decision — 2 October 2026
+## Current decision — 5 October 2026
 
-**Ready for the 174-row main comparison.** All 80 pilot rows, 24/36 original native rows and all 20 follow-up checks
-returned and passed provenance/grid/metric checks. No main results have returned. ODMA–polar is the primary comparator;
-CCS-AMP is supporting evidence with approximate native alignment. Dynamic CS is excluded from the main array because
-our native implementation remains unvalidated, not because the published method has been shown inferior.
+**159/174 main rows returned:** all native/D0/D1/D2/D3 groups and 9/24 D4 runs. The completed rows pass
+configuration/source/grid checks. At B14,K26,10 dB (distinct), native ODMA PUPE is 0.55874 versus dense D2 0.09831
+and sparse D2 0.13957. This is an end-to-end small-B advantage, not yet an isolated encoder advantage.
+Joint encoder training is mixed. Some D0 high-SNR tails are a count-to-list readout limitation; leave these
+historical results unchanged and defer re-evaluation. Do not use the affected tails as evidence against a codebook.
+
+Next: [033](../033_matched_d2/README.md) adds the missing published-codebook D2 controls and matched hash/amplitude
+rows, reusing the completed native and dense/sparse D2 references. No D0/D1 rerun or additional native tuning is needed.
+D4 can finish independently. ODMA is primary; CCS native alignment remains approximate. Dynamic CS stays excluded
+because its native implementation is unvalidated, not because the published method has been shown inferior.
+
+## Native validation decisions retained from 2 October
+
+All 80 pilot rows, 24/36 original native rows and all 20 follow-up checks returned and passed their audits.
 
 | Follow-up | Returned evidence | Decision |
 |---|---|---|
@@ -191,9 +201,24 @@ At B12,K22/26 iid the collision correction alone exceeds 5%, so this bound canno
 Legacy `src/ura_bound.py` is unchanged and must not be relabelled as rigorous. The unused weak Fano helper was removed.
 To regenerate in an empty output directory: `uv run python -m benchmarks.ura_bound_analysis --out results/032_bounds`.
 
+Overlay on the returned main results (prepared bound files must be present):
+
+```bash
+uv run python jobs/032_published_baselines/plot_bound_overlay.py
+uv run python jobs/032_published_baselines/plot_bound_overlay.py --sampling iid
+```
+
+Figures go to `results/comparison/analysis/bound_overlay_distinct/` or `bound_overlay_iid/` within this job folder:
+the full comparison and a high-load log view. The script verifies bound-source fingerprints, uses matching message
+sampling, and adds half-dB bound evaluations across the transition. It does not retrain or alter any measured result.
+For distinct B14,K26 at 6 dB, the bound is 0.000416 versus dense D2 0.26062 and native ODMA 0.65860. This is an
+existence-based reference, not the optimal PUPE or a guarantee for a particular codebook. Explicit decoders below
+the loose bound at lower SNR do not violate it. Nominal-energy CCS is shown only as separately labelled context.
+
 ## Commands
 
-**Next submission**, after updating an idle/isolated HPC checkout (the CCS author dependency already exists):
+**Original main submission, already running/returned; do not resubmit completed rows.**
+The next batch is [033](../033_matched_d2/README.md). These commands document how 032 was launched:
 
 ```bash
 git pull --ff-only origin main
