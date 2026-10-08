@@ -228,6 +228,11 @@ Triadic10 graph with ten-bit sections and must not be compared directly with the
 
 ## Published receiver benchmark checks
 
+`tests.polar_mapping_test` certifies the 034/033 contract, identical initialization, unit-energy parameterizations,
+factorized matrix products and D2 geometry/gradient equivalence. `tests.polar_mapping_learning` runs fixed, learned
+energy and learned mixer paths at smoke/B8-mini/B14-execution sizes. See [034](../jobs/034_polar_mapping/README.md).
+The B100 check is procedural generation only; no tractable decoder is claimed.
+
 `uv run python -m tests.published_baselines_test -v` checks polar SCL against tiny exhaustive ML, CRC arithmetic,
 native receiver execution, exact-energy invariants, CCS/author waveform equivalence (including both embedding options),
 dynamic-CS ordering/operators, D0–D4 gradients, D2/full-list D3 equality, collision metrics and the new bound references.

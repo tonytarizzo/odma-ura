@@ -34,11 +34,16 @@ docs/*
 !docs/README.md
 !docs/CURRENT_STATE.md
 !docs/EXPERIMENT_BANK.md
+!docs/archive/
+docs/archive/*
+!docs/archive/conditioned_inference_brief.md
 !docs/reports/
 docs/reports/*
 !docs/reports/report_style.tex
 !docs/reports/*.tex
 !docs/reports/*.pdf
+!docs/reports/2026-10-07_supervisor_meeting/
+docs/reports/2026-10-07_supervisor_meeting/build/
 
 results/*
 !results/03_results.md

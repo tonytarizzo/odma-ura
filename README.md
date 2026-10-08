@@ -1,24 +1,15 @@
 # ODMA-URA
 
-Research testbed for unsourced random access (URA), structured codebooks, support recovery, and scalable section-domain
-encoding/decoding.
+Research testbed for unsourced random access (URA), structured encoders and learned/model-based multiuser decoding.
 
-The repository now separates two execution regimes:
+Matched small-B tests show a large receiver gap on unchanged ODMA–polar codebooks; dense D2 still retains an edge.
+The current question is how to retain strong explicit-codebook recovery with tractable inference. Polar coding and
+resource placement are separate design choices: using polar structure need not commit the framework to a fixed ODMA
+construction. Job 034 tests learned polar-symbol energy and a shared pre-placement mixer with unchanged D2;
+a new tractable receiver is still a derivation question. See the [current handoff](docs/CURRENT_STATE.md).
 
-- `framework.Encoder`: a small-`B` global-message backend with an implicit factorisation of
-  `Phi in C^(n x M)`, where `M=2^B`. It avoids materialising `Phi` during normal computation but still keeps
-  `M`-length message states.
-- `framework.SectionedEncoder`: a scalable backend with local states of total size `sum_l N_l`, a procedural outer
-  encoder, exact unit-energy construction, local D0 evidence, optional outer BP, and complete-path list extraction.
-
-The current research conclusion is deliberately narrower than “sectioning works” or “sectioning fails.” Small-`B`
-tests show that independently distributed sparse-global supports retain near-dense performance over a broad density
-range, while a small reused ODMA support bank performs much worse even at equal density. The scalable backend is exactly
-compatible with the global backend at `L=1`, but the current `L>1` route loses complete-message association as local
-occupancy rises. The `B=128` implementation executes without a `2^B` object and satisfies unit energy, but its current
-local decoder saturates and does not learn useful recovery. The active branch therefore keeps `L=1`: an affine hash
-generates sparse support, while compact amplitude generation is still being tested. The next benchmark compares
-complete published receivers with the explicit framework before pursuing further generator restrictions.
+Global D0–D2 remain exponential in payload length. Generated hash/amplitude encoders and section-domain backends are
+retained as research controls; compact encoding or candidate-only refinement does not establish scalable message search.
 
 ## Start Here
 
@@ -28,7 +19,8 @@ complete published receivers with the explicit framework before pursuing further
 - [`results/03_results.md`](results/03_results.md): explicit dense-versus-ODMA and oracle-support evidence.
 - [`results/04_results.md`](results/04_results.md): detailed framework, decoder, and sectioned-experiment evidence.
 - [`jobs/README.md`](jobs/README.md): private HPC workflow and job commands.
-- [`Job 032`](jobs/032_published_baselines/README.md): published end-to-end comparisons, validation and submission commands.
+- [`Job 033`](jobs/033_matched_d2/README.md): completed matched D2 controls, building on the published comparisons in 032.
+- [`Job 034`](jobs/034_polar_mapping/README.md): matched polar mapping extensions; local checks pass, HPC results pending.
 
 ## Repository Layout
 
@@ -40,7 +32,7 @@ complete published receivers with the explicit framework before pursuing further
 - `tests/`: executable experiments, merge/plot scripts, smoke tests, and algebraic regression tests.
 - `jobs/`: numbered HPC manifests, scripts, logs, checkpoints, and returned outputs.
 - `results/`: detailed result ledgers and generated local outputs.
-- `docs/reports/`: six supervisor-facing chronological LaTeX reports and their PDFs.
+- `docs/reports/`: chronological LaTeX reports and the supervisor meeting summary; not the live roadmap.
 
 ## Setup
 

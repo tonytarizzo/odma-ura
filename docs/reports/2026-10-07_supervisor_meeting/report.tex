@@ -1,0 +1,219 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,microtype,amsmath,amssymb,booktabs,tabularx,graphicx,enumitem,xcolor}
+\usepackage[margin=20mm,headheight=14pt,footskip=10mm]{geometry}
+\usepackage{titlesec,fancyhdr,caption,hyperref}
+\definecolor{ink}{HTML}{183B50}
+\definecolor{teal}{HTML}{167D7F}
+\hypersetup{colorlinks=true,urlcolor=teal,linkcolor=teal,citecolor=teal,pdftitle={Learning and compressing URA codebooks: evidence and next steps}}
+\titleformat{\section}{\large\bfseries\color{ink}}{\thesection.}{.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries\color{ink}}{}{0em}{}
+\titlespacing*{\section}{0pt}{0pt}{8pt}
+\titlespacing*{\subsection}{0pt}{8pt}{4pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\setlist[itemize]{leftmargin=1.3em,itemsep=3pt,topsep=3pt,parsep=0pt}
+\setlist[enumerate]{leftmargin=1.5em,itemsep=5pt,topsep=4pt,parsep=0pt}
+\captionsetup{font=small,labelfont=bf,skip=5pt,hypcap=false}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{ink}URA: explicit reference to compact construction}
+\fancyhead[R]{\small 7 October 2026}
+\fancyfoot[L]{\footnotesize Supervisor discussion \;|\; Results audited 6 October}
+\fancyfoot[R]{\small\thepage}
+\renewcommand{\headrulewidth}{.3pt}
+\newcommand{\R}{\mathbb R}
+\newcommand{\F}{\mathbb F}
+\newcommand{\E}{\mathbb E}
+\newcommand{\norm}[1]{\lVert #1\rVert_2}
+\newcommand{\fig}[3]{\begin{center}\includegraphics[width=\linewidth]{figures/#1.pdf}\captionof{figure}{#2}\label{#3}\end{center}}
+
+\begin{document}
+{\LARGE\bfseries\color{ink}Learning and compressing URA codebooks}\par
+{\large Evidence, limitations and the next research question}\par
+\vspace{5pt}
+\section{What does the explicit reference buy us?}
+\textbf{Aim.} Find a compact encoder and a tractable multiuser decoder that retain the performance of a broad,
+explicit codebook. Small payloads let us separate encoder restrictions from receiver limitations; they do not establish
+competitiveness at the original papers' dimensions.
+
+\textbf{Common experiment.} Real, synchronous, unfaded AWGN; known $K$; $M=2^B$ messages:
+\[
+ y=\Phi a+z,\quad \Phi\in\R^{n\times M},\quad \norm{\phi_j}=1,\quad
+ z\sim\mathcal N(0,\sigma^2I),\quad \sigma^2=\frac{1}{2B(E_b/N_0)}.
+\]
+The primary test draws $K$ distinct messages: $a\in\{0,1\}^M$, $\mathbf1^Ta=K$.
+PUPE is $\E[|\mathcal S\setminus\widehat{\mathcal S}|/K]$, with at most $K$ decoded identities.
+We use $B\in\{12,14\}$, $n=256$, $K\in\{7,15,22,26\}$ and $E_b/N_0=-4{:}2{:}10$ dB.
+Each point averages three seeds, each with 256 frames. ``Fixed'' means the encoder is frozen; D2 is trained.
+Native comparators use ODMA placement plus polar-list decoding, or coded compressed sensing with AMP/BP.
+Replacing their receiver with D2 tests the codebook separately from its native inference procedure.
+
+\fig{matched_systems_bounds}{High-load comparison: fixed codebooks, distinct messages, three-seed means.
+Published schemes are adapted to these small payloads. *CCS--AMP uses nominal, not per-codeword peak, energy;
+its curve is contextual rather than a strictly energy-matched comparison.}{fig:main}
+\vspace{-2pt}
+\begin{itemize}
+ \item \textbf{The receiver explains most of the original ODMA gap.} At $B=14,K=26,10$ dB, native ODMA--polar
+ has PUPE $0.559$; the \emph{same codebook} with D2 gives $0.137$, versus $0.098$ for dense D2.
+ Receiver replacement closes 92\% of that gap (95.5\% over the full tested grid).
+ \item \textbf{A smaller encoder gap remains.} Full-grid means at $B=14$: dense $0.285$, random sparse $0.299$,
+ ODMA--polar $0.296$ under D2. Similar results do not imply equivalent or optimal codebooks.
+ \item \textbf{Read the bounds as a bracket, not a target curve.}
+ $\epsilon_{\rm converse}\leq\epsilon^*\leq\epsilon_{\rm ach}$, where $\epsilon^*$ is the best achievable PUPE.
+ A method may beat the achievability curve, but not a valid converse in expectation. Bound definitions are on page~4.
+\end{itemize}
+
+\newpage
+\section{Can the encoder be generated instead of stored?}
+\textbf{Starting point.} Dense storage is $n2^B$ reals; sparse storage is $T2^B$ amplitudes plus supports.
+Earlier sparsity sweeps motivated compression. Here $T=32$ is 12.5\% density, more aggressive than the original 25\% test.
+
+\textbf{Current construction: one nonzero per table, coordinate-wise amplitude banks.}
+Partition $n=TR$ coordinates into $T$ tables of $R=2^r$ positions. For message $w\in\F_2^B$,
+\begin{align*}
+ h_t(w)&=\operatorname{int}(A_tw\oplus b_t), & A_t&\in\F_2^{r\times B},\quad b_t\in\F_2^r,\\
+ u_t(w)&=\operatorname{int}(P_tw), & P_t&\in\F_2^{J\times B},\quad V\in\R^{T\times2^J},\\
+ g_t(w)&=V_{t,u_t(w)}, & \alpha(w)&=g(w)/\norm{g(w)},\\[-2pt]
+ \phi(w)&=\sum_{t=0}^{T-1}\alpha_t(w)e_{tR+h_t(w)}. &&
+\end{align*}
+Indices are zero-based. Binary maps choose \emph{where} and \emph{which bank entry}; amplitudes are real, not bits.
+Disjoint tables give $\norm{\phi(w)}=1$ for every nonzero $g(w)$. Full-rank stacked hashes ensure distinct support tuples.
+Maps stay fixed; joint training updates $V$ through lookup, normalization and the decoder.
+
+Each table has its \emph{own} label $u_t$; this is not reuse of one complete amplitude vector across messages.
+At $J=B$, invertible $P_t$ recovers arbitrary amplitudes on the chosen supports. At $B=14,T=32$:
+\[
+ \underbrace{524{,}288}_{\text{unrestricted}}\quad\longrightarrow\quad
+ \underbrace{32{,}768}_{J=10\;(16\times)}\quad\longrightarrow\quad
+ \underbrace{8{,}192}_{J=8\;(64\times)}\quad\longrightarrow\quad
+ \underbrace{512}_{J=4\;(1{,}024\times)}\quad\text{stored amplitudes.}
+\]
+Map metadata adds $O(T(r+J)B)$ bits. With bounded $J$, generation is no longer exponential in $B$; decoding still is.
+
+\fig{amplitude_frontier}{$B=14,n=256,K=26$: same support hashes across amplitude families.
+Both panels train D2; the right also learns the encoder. Some runs were training-sensitive, so the ordering is not
+a clean ranking of encoder model classes.}{fig:amplitudes}
+\begin{itemize}
+ \item \textbf{$J=8$ is a promising compression point.} Joint $J=8$ and unrestricted hash have almost identical
+ full-grid means, $0.29361$ and $0.29331$, with 64$\times$ fewer amplitudes. Three seeds do not certify equivalence.
+ Some $J=4$ and unrestricted runs were unstable; initialization and training need improvement before declaring
+ the strongest compression harmful. Performance at larger $B$ remains untested.
+ \item \textbf{Hashing is not uniquely favoured.} Current ODMA--polar is similarly competitive under D2 and already
+ has a structured inverse. Its 64/256 placement patterns at $B=12/14$ differ from the poor historical four-mask control.
+ \item \textbf{The missing step is inversion.} These tests score all $2^B$ messages. Our earlier sectioned parity/BP
+ trials failed to recover users' messages at large $B$: fragment association remained unresolved.
+ This does not rule out sectioned codes generally.
+\end{itemize}
+
+\newpage
+\section{What changed in the decoder?}
+\begin{tabularx}{\linewidth}{@{}l l X@{}}
+\toprule
+ & State & Main idea and present limitation\\
+\midrule
+D0 & $2^B$ & Unrolled residual updates; learned scalar variance/evidence calibration.\\
+D1 & $2^B$ & D0 plus learned global context; more parameters do not ensure better inference.\\
+D2 & $2^B$ & Geometry-based interference estimate, likelihood update and known-$K$ projection.\\
+D3 & $Q=1024$ & D2 on a proposed list; faster refinement, but missed candidates are unrecoverable.\\
+D4 & $Q=1024$ & D3 plus learned pairwise candidate interactions; results still incomplete.\\
+\bottomrule
+\end{tabularx}
+
+\fig{decoder_ladder}{Same fixed dense codebooks, eight layers, same evaluation conditions. D2 makes a large gain over
+D0/D1; restricting to candidates can help or hurt. D4 is omitted rather than averaging incomplete groups.}{fig:decoders}
+
+\textbf{D2's rationale.} Let $G=\Phi^T\Phi$, $d_j=G_{jj}$ and $s_j=\sum_kG_{jk}^2$.
+For residual $r^t=y-\Phi a^t$, adding back the self-term gives an exact decomposition:
+\[
+ \zeta_j^t=\phi_j^Tr^t+d_ja_j^t
+ =d_ja_j^\star+\underbrace{\sum_{k\ne j}G_{jk}(a_k^\star-a_k^t)+\phi_j^Tz}_{\text{interference plus noise}}.
+\]
+Approximating this interference as Gaussian with mean-field variance gives
+\[
+ \widehat\omega_{j,t}=c_t\big[\sigma^2d_j+\bar v_{-j}^t(s_j-d_j^2)\big],\qquad
+ v_k^t=a_k^t(1-a_k^t),\quad \bar v_{-j}^t=\frac{\sum_{k\ne j}v_k^t}{M-1}.
+\]
+The resulting active-versus-inactive evidence and cardinality projection are
+\[
+ e_{j,t}=\frac{d_j(\zeta_j^t-d_j/2)}{\widehat\omega_{j,t}},\qquad
+ p_j^t=\operatorname{sigmoid}(e_{j,t}+\lambda_t),\quad \sum_jp_j^t=K,
+ \qquad a^{t+1}=\beta_ta^t+(1-\beta_t)p^t.
+\]
+Only the variance scale $c_t>0$ and damping $\beta_t\in(0,1)$ learn: \textbf{16 scalars for eight layers}.
+Codebook geometry enters analytically; the uniform prior is absorbed into $\lambda_t$.
+
+\begin{itemize}
+ \item \textbf{Useful structure, not a posterior guarantee.} D2 accounts for column correlations and separates
+ evidence from cardinality. It is still an approximate, repeatedly reused effective channel: no Onsager correction or
+ state-evolution claim. Changed losses/calibration accompany the change, so no single ingredient is causally isolated.
+ \item \textbf{D3 exposes the proposal trade-off.} At $B=14,K=26,10$ dB, dense D3 gives $0.0794$ versus D2's
+ $0.0983$, despite a proposal miss rate near $0.0533$. At $B=12$, D3's $0.00726$ error is already its proposal floor,
+ versus D2's $0.00035$. Current proposals rank all messages by matched-filter evidence: still exponential work.
+ \item \textbf{More learning is not automatically better.} D1's extra capacity and joint encoder learning do not
+ consistently improve the results. D2 is a strong working reference, not an optimal decoder; D4's ranking is still pending.
+\end{itemize}
+
+\newpage
+\section{Research direction: locate the gain, then make it tractable}
+\textbf{Where can we gain performance, and how much survives a tractable encoder and receiver?}
+The explicit small-$B$ system helps separate these questions; it is not the intended final architecture.
+\begin{enumerate}
+ \item \textbf{Encoding or inference: where is the remaining opportunity?} Compare established and generated
+ codebooks under the same strong receivers. If their performance stays close as inference improves, prioritize better
+ decoding of a structured code. If an encoder advantage persists across receivers, identify the geometry responsible
+ and preserve it in a compact construction. The present ODMA result favours investigating the first possibility.
+ \item \textbf{What actually benefits from learning?} Separate analytical inference, learned decoder calibration,
+ and joint encoder--decoder learning. If most gains come from a small learned correction, retain the analytical
+ structure. If learned encoders give a reproducible additional gain, ask which part of that adaptation can be generated
+ without a parameter for every message. Greater expressivity alone is not the objective.
+ \item \textbf{Which useful structure also admits an inverse?} Treat ODMA--polar and generated hashes as alternative
+ starting points. Polar constraints offer an existing search mechanism; hashes offer flexible compact codebooks.
+ Compare full-alphabet recovery with bounded-search recovery on the \emph{same} encoder. If the loss appears only
+ after restricting search, improve the inverse rather than assuming the encoder is inadequate.
+ \item \textbf{Can the gain survive scaling?} Carry promising encoder/receiver combinations to larger payloads and
+ paper-scale comparisons. Require candidate recall, memory and runtime alongside PUPE: the goal is to close the
+ performance gap without enumerating $2^B$ messages. A small-$B$ gain motivates this step; it does not predict its outcome.
+\end{enumerate}
+\textbf{Working hypothesis.} Much of the useful freedom may already exist in tractable code constructions; the larger
+opportunity may be recovering their messages better. Hash/amplitude generation remains a credible alternative, not
+a conclusion we need to defend. The research should determine which combination of structure, inference and learning
+offers the best performance--complexity trade-off.
+
+\subsection{What exactly are the two bounds?}
+The black curve is Polyanskiy's Gaussian-MAC achievability reference~[1], an \emph{upper bound on optimal PUPE}.
+It uses the original numerical recipe (all $p_t$ terms and $q_1$), omitting the collision penalty for distinct messages.
+The survey's Gaussian reference is this same result, not a second independent bound.
+
+The lower curve takes the stronger of a genie-aided binary-testing/list converse and a finite-set
+rate-distortion converse combined with channel capacity~[2]. It uses the same distinct-message, known-$K$,
+real-AWGN, list-size-$K$ model. Both bounds allow column energy $\leq1$; our matched codebooks have energy $1$.
+Finite-$M$ set sizes are retained rather than assuming $B$ is large.
+For $B=14,n=256,K=26$, target PUPE $0.05$ is bracketed by roughly \textbf{0.07 dB necessary} and
+\textbf{4.68 dB sufficient}; none of the principal production D2 means reaches it by 10 dB.
+This leaves room for improvement, but neither bound diagnoses encoder versus decoder loss.
+
+\subsection{Fair-comparison and evidence limits}
+\begin{itemize}
+ \item \textbf{Small-$B$ adaptations, not native-scale paper reproductions.} ODMA--polar~[3] uses shortened polar
+ codewords; CCS--AMP/BP~[4] uses a small parity graph. Block CCS is a variant, not a third independent paper.
+ \item \textbf{CCS has an additional obstruction here.} The small-$B$ triad admits distinct message sets with exactly
+ the same noiseless sum; changing the decoder cannot resolve these ambiguities. Its poor results do not establish a
+ limitation of the original large-$B$ construction. Nominal-energy CCS is not peak-energy matched.
+ \item \textbf{Measured, not proved optimal.} Complete three-seed groups are compared; the latest matched batch is
+ fully returned. Training sensitivity limits fine encoder rankings. No result yet certifies equivalence, optimality
+ or scalable recovery.
+\end{itemize}
+
+\vspace{2pt}
+{\footnotesize
+\textbf{References and reproducibility.}\quad Frozen data, source hashes, the figure builder and audit links accompany this report.\par
+[1] Y. Polyanskiy, \href{https://people.lids.mit.edu/yp/homepage/data/isit17_mac.pdf}{A perspective on massive random-access}, ISIT 2017.\par
+[2] J.-F. Chamberland, K. Narayanan and Y. Polyanskiy,
+\href{https://www.itsoc.org/sites/default/files/2021-08/Unsourced\%20Multiple\%20Access\%20\%28UMAC\%29\%20Information\%20Theory\%20and\%20Coding_0.pdf}{Unsourced Multiple Access: Information Theory and Coding}, ISIT tutorial, 2021.\par
+[3] M. \"Ozates, M. Kazemi and T. M. Duman,
+\href{https://doi.org/10.1109/LWC.2024.3359270}{Unsourced Random Access Using ODMA and Polar Codes}, IEEE WCL, 2024.\par
+[4] V. K. Amalladinne et al., \href{https://arxiv.org/abs/2010.04364}{Unsourced Random Access with Coded Compressed Sensing: Integrating AMP and Belief Propagation}, IEEE TIT, 2022.
+}
+\end{document}

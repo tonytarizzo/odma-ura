@@ -4,18 +4,17 @@
 An explicit codebook with a trained receiver is not assumed optimal. A poor small-B adaptation is not evidence that
 the published large-B scheme is poor.
 
-## Current decision — 5 October 2026
+## Returned evidence — 6 October 2026
 
-**159/174 main rows returned:** all native/D0/D1/D2/D3 groups and 9/24 D4 runs. The completed rows pass
-configuration/source/grid checks. At B14,K26,10 dB (distinct), native ODMA PUPE is 0.55874 versus dense D2 0.09831
-and sparse D2 0.13957. This is an end-to-end small-B advantage, not yet an isolated encoder advantage.
-Joint encoder training is mixed. Some D0 high-SNR tails are a count-to-list readout limitation; leave these
-historical results unchanged and defer re-evaluation. Do not use the affected tails as evidence against a codebook.
+**161/174 main rows returned:** all native/D0/D1/D2/D3 groups and 11/24 D4 runs. Completed rows pass the recorded
+configuration/source/grid audit. [033](../033_matched_d2/README.md) is now complete: at B14,K26,10 dB (distinct),
+native ODMA PUPE 0.55874 becomes 0.13712 with D2 on the same codebook, versus dense D2 0.09831 and sparse D2 0.13957.
+Most of the native-ODMA gap is therefore a receiver gap; dense retains an edge. Joint encoder training is mixed.
 
-Next: [033](../033_matched_d2/README.md) adds the missing published-codebook D2 controls and matched hash/amplitude
-rows, reusing the completed native and dense/sparse D2 references. No D0/D1 rerun or additional native tuning is needed.
-D4 can finish independently. ODMA is primary; CCS native alignment remains approximate. Dynamic CS stays excluded
-because its native implementation is unvalidated, not because the published method has been shown inferior.
+Some D0 tails are a count-to-list readout limitation: preserve and label them, with re-evaluation deferred. D4 can
+finish independently. CCS alignment remains approximate; dynamic CS stays excluded because its implementation is
+unvalidated, not because the published method was shown inferior. Current research choices are in the
+[handoff](../../docs/CURRENT_STATE.md), with consolidated conclusions in the [ledger](../../docs/EXPERIMENT_BANK.md).
 
 ## Native validation decisions retained from 2 October
 

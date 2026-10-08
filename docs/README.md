@@ -1,68 +1,46 @@
-# Research Narrative and Evidence Map
+# Research Documentation
 
-The documentation is arranged as a causal research story rather than a catalogue of files. Read the six reports in
-order: each retains the algebra, assumptions, failed routes, evidence, and decision that motivated the next stage. Use
-the Markdown ledgers when the exact run-level audit trail is needed.
+Start with [CURRENT_STATE.md](CURRENT_STATE.md) for the research question, evidence and open decisions.
+Use [EXPERIMENT_BANK.md](EXPERIMENT_BANK.md) for dated job status and links to exact contracts. The handoff is the live
+research summary; the ledger is the experiment index, not a second roadmap.
 
-## Supervisor-facing reports
+## Meeting summary
 
-1. [`reports/01_initial_odma_decoding.pdf`](reports/01_initial_odma_decoding.pdf) — the original ODMA signal model,
-   resource/block BP/EP equations, V1--V4 progression, instability mechanism, and transition to global recovery.
-2. [`reports/02_support_recovery_bottleneck.pdf`](reports/02_support_recovery_bottleneck.pdf) — the common global count
-   posterior; explicit BP/EP, MAP-ADMM, NNOMP, VAMP, BlockMAP/BlockCD/SIC algebra; dense-versus-ODMA experiments; and
-   the oracle-support decomposition.
-3. [`reports/03_factorised_encoder_framework.pdf`](reports/03_factorised_encoder_framework.pdf) — the explicit
-   `M=2^B` starting point, two-layer factorisation, representation library, implicit execution, encoder/D0/D1 gradients,
-   exact checks, and jobs `018--022`.
-4. [`reports/04_scalable_sectioned_framework.pdf`](reports/04_scalable_sectioned_framework.pdf) — procedural outer
-   encoding, local banks, exact deployment-time energy, modular parity algebra, local D0, association and BP/list
-   algebra, and the failure analysis from jobs `023--026`.
-5. [`reports/05_hash_skeleton_generator.pdf`](reports/05_hash_skeleton_generator.pdf) — why the explicit sparse result
-   from completed job `027` motivates a generated, searchable `L=1` replacement; the table/hash algebra; and the fixed
-   and joint-learning tests `028--029`, followed by coordinate-wise amplitude generation and job `031`.
-6. [`reports/06_decoder_ladder.pdf`](reports/06_decoder_ladder.pdf) — the common known-`K` model and incremental D0--D4
-   algebra: analytic effective-channel calibration, candidate-restricted execution, learned candidate geometry,
-   complexity, losses, and the non-oracle proposer boundary.
+[7 October 2026: evidence and next steps](reports/2026-10-07_supervisor_meeting/report.pdf) is the concise supervisor
+report covering matched published-codebook comparisons, both bounds, generated encoders and the decoder ladder.
+Its [folder](reports/2026-10-07_supervisor_meeting/README.md) contains LaTeX, curated figures and a reproducible snapshot.
+It freezes the 6 October evidence; subsequent research decisions belong in the current handoff.
 
-The `.tex` source for each report sits beside its PDF. `report_style.tex` is the shared formatting preamble.
+## Technical history
 
-## Documentation provenance
+Read these for the derivation or the reason for a past decision. They are chronological records, not competing
+current plans. Dates, local checks and proposed experiments describe their stage; Reports 5/6 predate the completed
+031–033 analysis. Report 7 develops the current polar/D2 question. Consult the ledger for subsequent outcomes.
 
-The September 2026 revision restores derivational depth that was removed during an earlier cleanup. The first two
-reports and the explicit factorised framework were reconstructed from retained source implementations, experiment
-ledgers, prior report section maps, and recovered original passages. They preserve the verified equations and historical
-decision sequence while using the newer common visual style. They are not presented as byte-for-byte copies of the
-superseded documents.
+| Report | Scope |
+|---|---|
+| [1. Initial ODMA decoding](reports/01_initial_odma_decoding.pdf) | Signal model, BP/EP equations, early variants and transition to global recovery. |
+| [2. Support-recovery bottleneck](reports/02_support_recovery_bottleneck.pdf) | Global count posterior, classical decoder algebra, dense/ODMA comparisons and oracle-support controls. |
+| [3. Factorised encoder framework](reports/03_factorised_encoder_framework.pdf) | Explicit M=2^B model, implicit operators, gradients and jobs 018–022. |
+| [4. Sectioned framework](reports/04_scalable_sectioned_framework.pdf) | Outer code, exact energy, local inference, association and the failures in jobs 023–026. |
+| [5. Generated sparse codebooks](reports/05_hash_skeleton_generator.pdf) | Hash-support algebra, coordinate amplitudes, initialization and the original 031 test design. |
+| [6. Decoder ladder](reports/06_decoder_ladder.pdf) | D0–D4 algebra, approximations, complexity and the candidate-search boundary. |
+| [7. Polar structure and D2 inference](reports/07_polar_d2_inference.pdf) | D2 derivation, exact polar matrix identities, soft decoding, related multiuser work and the two Job 034 encoder tests. |
 
-Historical alternatives are retained when they clarify an assumption or a dead end. They are labelled as historical,
-oracle-aided, approximate, or current so that a future paper can reuse the derivation without mistaking an abandoned
-variant for the present method.
+Each report has adjacent .tex source; report_style.tex is the shared preamble. The September revision restored
+derivations from retained implementations, ledgers and recovered passages, not byte-for-byte original documents.
+Keep historical failures and oracle assumptions visible rather than rewriting history around a new direction.
 
-## Current handoff
+## Detailed evidence and operation
 
-[`CURRENT_STATE.md`](CURRENT_STATE.md) is a concise, neutral context document suitable for starting a new conversation.
-It distinguishes verified observations, interpretations, limitations, and open research choices. It covers completed
-jobs `028--031` and 159/174 main returns from [`job 032`](../jobs/032_published_baselines/README.md).
-[`Job 033`](../jobs/033_matched_d2/README.md) adds matched published-codebook D2 controls and hash/amplitude
-comparisons; local checks pass, production results are pending.
+- [Results 03](../results/03_results.md): jobs 001–017, dense/ODMA sweeps and oracle-support evidence.
+- [Results 04](../results/04_results.md): jobs 018–031, derivations, local checks and historical artifact audits.
+  Later 031–033 outcomes are indexed in the [experiment ledger](EXPERIMENT_BANK.md).
+- Individual job READMEs: exact manifests, training/evaluation contracts, submission and merge commands.
+- [HPC notes](../jobs/README.md): private cluster workflow; intentionally not versioned.
+- [Tests](../tests/README.md): implementation checks and executable analysis tools.
+- [Archived conditioned-inference brief](archive/conditioned_inference_brief.md): theory proposal, not an active paper plan.
 
-## Detailed evidence
-
-- [`../results/03_results.md`](../results/03_results.md) records jobs `001--017`, including explicit dense/ODMA sweeps
-  and oracle-support controls.
-- [`../results/04_results.md`](../results/04_results.md) records jobs `018--031`, implementation checks, returned-job
-  audits, numerical tables, and interpretation limits. For the latest 031–033 status use `EXPERIMENT_BANK.md`.
-- [`EXPERIMENT_BANK.md`](EXPERIMENT_BANK.md) records current experiment contracts and latest job status.
-- [`../jobs/README.md`](../jobs/README.md) records private HPC operation, submission, and merge commands.
-
-## Evidence language
-
-The reports use four levels of claim:
-
-- **Exact/regression equivalence:** equality checked algebraically or numerically under a stated tolerance.
-- **Measured result:** returned artifacts were complete enough to audit and the reported metric was observed.
-- **Interpretation:** a causal explanation supported by controls but not proved for all decoders or codebooks.
-- **Open hypothesis:** a direction requiring a new experiment or theoretical result.
-
-Generated plots and raw checkpoints are intentionally not part of the narrative layer. They remain in `jobs/` and
-`results/` so conclusions can be re-audited without forcing every intermediate artifact into the readable document set.
+Distinguish exact algebra/regression equivalence, measured results, interpretations and untested hypotheses.
+Compact generation, isolated-message injectivity and scalable multiuser decoding are separate claims. Raw outputs
+stay in jobs/ and results/; curated report figures are the explicitly retained presentation exception.

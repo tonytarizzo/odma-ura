@@ -1,329 +1,121 @@
-# Framework Experiment Bank
+# Experiment Ledger
 
-This is the concise operational ledger. The chronological explanation is in [`docs/README.md`](README.md), the current
-neutral handoff is in [`docs/CURRENT_STATE.md`](CURRENT_STATE.md), and full numerical evidence is in
-[`results/04_results.md`](../results/04_results.md).
+Returned results audited on **6 October 2026**; new batch added 8 October. This indexes evidence,
+not a new full result audit or submission request. The [handoff](CURRENT_STATE.md) owns research priorities;
+job READMEs/manifests own run contracts, and the [reports](README.md) retain the algebra.
 
-The ledger intentionally does not duplicate derivations. Reports 1--2 retain the historical receiver equations;
-Report 3 derives the explicit factorised model; Report 4 derives and audits the section-domain route; Report 5 connects
-job `027` to the generated hash-skeleton tests.
+## Next batch: 034 — polar energy and shared mixer
 
-## Explicit `L=1` contract (`021--022`)
+[034](../jobs/034_polar_mapping/README.md) is implemented and locally verified, not yet a production result. Twelve
+rows add learned per-pattern symbol energies or one shared orthogonal pre-placement mixer to the selected 033
+ODMA–polar construction. Both retain the original polar/CRC/positions, exact unit energy and full-message D2.
+Uniform/identity initialization exactly reproduces all six 033 waveforms. Fixed controls are reused, not rerun.
 
-- Message space: `M=2^B=Q*V`; every `(q,v)` pair is legal, so `U=T=I`.
-- Product encoder: `Phi=[R_1 C|...|R_Q C]`, `d=n`, fixed real diagonal sign masks `R_q`, and fixed or learned `C`.
-- Compact operators: diagonal masks are stored as `(Q,n)`. Normal channel and decoder operations call implicit `matvec/rmatvec`; they do not construct `Phi` or an `(M,n,d)` intermediate.
-- Controls: fixed/learned dense global codebooks, fixed legacy ODMA placement, and a fixed sparse global codebook without product sharing.
-- Antennas: one by default. The framework still supports multiple known-channel antennas, but they are irrelevant to this first factorisation test.
-- D0: unrolled exact implicit gradient steps, Bernoulli posterior-inspired scalar calibration, per-layer parameters, differentiable mass normalisation to `K_a`, and hard integer count projection only at output.
-- D1: D0 plus latent-slot attention within each pattern `q`, across patterns for each shared local index `v`, and globally. It has no flattened-index convolution or adjacency assumption. Its correction head is zero-initialised, so it starts with exactly the D0 forward map; training tests whether nonlocal factor context helps.
-- Conservative control: `UnrolledNonnegativeISTA` remains available. It is an exact-gradient nonnegative ISTA-style baseline, not classical LISTA with learned dense matrices.
-- Loss: balanced support BCE at all layers, Smooth-L1 count loss for multiplicities, and D1 analysis/inverse symmetry. There is no data-consistency loss, count-sum loss, ranking loss, or L1 sparsity penalty.
-- Tiny certification: `exact_count_ml` enumerates count multisets, includes message collisions, uses implicit encoding, and refuses problems above a hypothesis limit.
+The B12/14,n256 grid, seeds, load/SNR cells, 200-epoch cap, patience 10 and evaluation match 033. This tests whether
+extra waveform freedom improves recovery with the same receiver. Neither arm demonstrates scalable decoding.
+The B8 mini loss falls from 0.10815 to 0.07585/0.07414 for energy/mixer (fixed control 0.08205); smoke and reduced-budget
+B14 execution also pass. These are learning checks only. [Report 7](reports/07_polar_d2_inference.pdf) separately
+develops the deferred D2/polar receiver algebra and literature map. No new receiver was silently selected.
 
-## Training and evaluation grid
+## Latest matched comparison: jobs 032–033
 
-The default training load is sampled once per batch from
-
-`K_min=round(0.4*n/B)` through `K_max=round(1.2*n/B)` (inclusive).
-
-| B | n | train K | fixed evaluation K | extrapolation K |
-|---:|---:|---:|---:|---:|
-| 12 | 128 | 4-13 | 4, 9, 13 | 15 |
-| 12 | 256 | 9-26 | 9, 17, 26 | 30 |
-| 14 | 128 | 4-11 | 4, 7, 11 | 13 |
-| 14 | 256 | 7-22 | 7, 15, 22 | 26 |
-
-Training samples one `Eb/N0` value per batch uniformly in dB over `[-4,12]`. Evaluation uses fixed `[-4,0,4,8,12]` dB points. Every result row records empirical and theoretical probability of any message collision and expected users per pattern `K_a/Q`.
-
-Learned encoders are trained first for 40 epochs through the same D0 surrogate. The encoder is then frozen before the selected decoder phase. D0 receives 80 decoder epochs because the local convergence control showed it was still improving after 20; D1 receives 20 because it plateaued around epochs 10-15. Paired D0/D1 jobs use the same encoder seed, preventing decoder architecture from silently changing the learned encoding under comparison.
-
-The pilot array has 20 rows at `(B,n)=(12,128)`: ten encoders times D0/D1. The scale array has 60 rows for `(12,256)`,
-`(14,128)`, and `(14,256)`. Both arrays are complete and inspected.
-
-## Receiver knowledge audit
-
-| Quantity | Used by receiver? | Status in this bank |
+| Bank | Returned | Purpose and outcome |
 |---|---:|---|
-| Full factorised encoder (`C`, `R`, `U`, `T`) | yes | Known system design; accessed by forward/adjoint operations. |
-| Realised `K_a` | yes | Oracle-known. It sets the Bernoulli prior, mass normalisation, and final count total. Unknown-`K_a` decoding is not tested here. |
-| AWGN variance / selected `Eb/N0` | yes | Oracle-known scalar used for calibration. A noise-blind ablation is not yet included. |
-| Channel coefficient `H` | yes | Known. With the default single constant antenna, `H=1`, so this is trivial. |
-| Message prior | yes | Uniform i.i.d. user messages, yielding `rho=K_a/M`. |
-| Active message identities and multiplicities | no | These are the decoder targets and are visible only to the training loss/evaluator. |
-| Noise realisation | no | Never exposed. |
-| Collision locations | no | Not exposed; multiplicities are learned through the count target. |
-| Per-pattern occupancy | no | D1 computes soft occupancy from its current iterate; true occupancy is not supplied. |
+| [032: published baselines](../jobs/032_published_baselines/README.md) | 161/174 main rows; only D4 incomplete | Native ODMA/CCS versus explicit dense/sparse and D0–D4. Strong D2 results motivated same-codebook controls. |
+| [033: matched D2](../jobs/033_matched_d2/README.md) | 66/66 | D2 on unchanged published codebooks plus hash/coordinate amplitudes. Most native-ODMA versus dense-D2 loss is a receiver gap. |
 
-These `L=1` jobs compare encoders and decoder expressiveness under known `K_a`, known noise level, known codebook, and low collision. They do not establish robustness to unknown activity/noise, learned `R`, restricted legal pairs, or paper-faithful CCS. The later section-domain jobs test `L>1` separately. Existing CCS-AMP jobs remain the external matched-decoder benchmark and should not be relabelled as a generic-framework control.
+All native/D0/D1/D2/D3 groups in 032 are complete; D4 has 11/24 rows. Its remaining rows do not affect 033, which
+reuses all 42 native and dense/sparse D2 references. Historical validation: 80/80 pilot rows, 24/36 original native rows,
+20/20 follow-up checks. Dynamic CS is excluded because its native implementation remains unvalidated, not because
+the published method was shown inferior.
 
-## Verification checklist
+### Shared contract
 
-- [x] Exact implicit forward versus materialised `Phi` for real sign and complex phase operators.
-- [x] Numerical adjoint identity and selected-column materialisation.
-- [x] Legacy ODMA algebraic equivalence after implicit operator changes.
-- [x] Variable `K_a` per batch, single antenna, D0/D1 forward/backward, and collided count target.
-- [x] Tiny noiseless collision-aware exact ML recovery.
-- [x] PBS shell syntax and 20/60 manifest row counts.
-- [x] Tiny end-to-end learned-encoder plus D1 smoke run.
-- [x] Pilot job 021 completed and inspected; 20/20 summaries and checkpoints returned.
-- [x] Scale job 022 completed and inspected; 60/60 summaries and checkpoints returned.
+- Real Gaussian MAC; B=12/14, n=256, K=7/15/22/26, physical Eb/N0=-4:2:10 dB; three seeds, 256 frames/cell/seed.
+- Train distinct messages; evaluate distinct/iid separately. Receiver knows K, noise and codebook.
+- Eight layers, 200 epochs maximum, patience 10, best-checkpoint restoration. Fixed means encoder frozen, decoder trained.
+- 033 keeps published codebooks identical to 032. Hash rows share support and compare unrestricted amplitudes with
+  coordinate J=4/8/10, fixed/joint. Discrete maps stay fixed; joint rows learn amplitude entries and D2.
+- Exact-unit and nominal/message-dependent energy remain separate. Explicit joint references project columns;
+  hash joint rows normalize raw banks in the forward map, so their optimization parameterizations differ.
+- D3/D4 use 1,024 non-oracle full-alphabet matched-filter candidates. Misses count, membership is hard, and search
+  still enumerates all messages. Original oracle-complete local checks are not production proposer evidence.
 
-## Scalable section-domain banks
+### Main conclusions
 
-Jobs `023` and `024` use the no-global-axis backend with procedural outer encoding, exact-unit-energy section banks,
-Binomial local D0, modular BP, and valid-path list recovery.
+At B14,K26,10 dB with distinct messages:
 
-| Job | Scale | Purpose | Status |
-|---|---|---|---|
-| `023_sectioned_outer_pilot` | `B=16,n=512`, mainly `K=2` plus selected `K=4` controls | Compare outer graph, section alphabet, exact versus overlapping energy, fixed versus learned banks, and random-sparse graph degree. | Partial: 16/26 summaries and checkpoints returned. Core triadic controls completed; ten broad graph-sweep rows are missing. |
-| `024_sectioned_B128_scale` | `B=128,J=16,n=38400`, `K=10,25,50,75` | Establish whether the complete M-free D0/BP/association path executes and learns at the target payload scale. | Complete: 8/8. M-free execution and exact energy pass, but D0 saturates and PUPE is 1.0 throughout. |
+| Encoder / receiver | PUPE |
+|---|---:|
+| ODMA–polar / native | 0.55874 |
+| Same ODMA–polar / D2 | 0.13712 |
+| Fixed dense / D2 | 0.09831 |
+| Fixed random sparse s32 / D2 | 0.13957 |
+| Fixed hash coordinate J8 / D2 | 0.13552 |
 
-These are not directly attributable against `021/022`: they change the message representation, physical codebook class,
-prior, association layer, outer constraints, and operating scale together.
+1. Replacing only the ODMA receiver closes 91.6% of its gap to dense D2 in this cell and 95.5% over the full grid.
+   Dense retains an advantage; neither encoder equivalence nor superiority at the papers' native scales is established.
+2. Current ODMA–polar has 64/256 patterns at B12/B14 and polar/CRC symbols. It is not the old four-mask control.
+3. Joint coordinate J8 has B14 full-grid mean 0.29361 versus 0.29331 for the unrestricted hash parent, with 64x fewer
+   amplitude values. Three seeds support promising compression, not formal equivalence or scalable inversion.
+4. Some parent/J4 runs are training-sensitive. Post-hoc decoder-only calibration transfer improves tails on unchanged
+   waveforms; it is a diagnostic, not a replacement production ranking. Joint encoder learning is mixed.
+5. Small-B CCS retains exact multiuser aliases and is not rescued comparably by D2. Native B128 uses a different
+   construction; these adaptations do not establish that published CCS is intrinsically poor.
+6. D3 exposes a search/refinement trade-off. Dense B14 at this cell gives 0.07943 versus D2's 0.09831; at B12 its
+   0.00726 PUPE is already its proposal floor, versus D2's 0.00035. Refinement cannot recover an omitted message.
+7. D0's count-to-list readout contributes to some high-SNR tails. Retain/label outputs; re-evaluation is deferred.
+   This does not invalidate matched native/D2 comparisons.
 
-Returned `023` conclusions:
+### Native checks and bounds
 
-- learned exact-energy `J=4` triadic improves mean D0 PUPE from `0.6833` (fixed) to `0.5500` at `K=2`;
-- sampled overlapping energy is worse and violates exact deployable energy, reaching approximately `1.29` sampled energy;
-- BP is worse than D0 in eight of nine completed configuration aggregates;
-- the outer-loss ramp produces pre-clipping gradient norms as large as `10^15`, so BP and fine graph rankings are not
-  considered well-optimised;
-- the missing graph rows should not be rerun as the same broad sweep.
+ODMA cap30 removes premature cancellation truncation: native K100,0.5 dB PUPE changes 11.22% to 4.58% on the same
+128 frames; cap60 agrees. Cap30 cannot truncate productive small-B recovery at K<=26. CCS alignment remains approximate;
+keep the original selected small-B budgets. Exact fidelity caveats and tuning are in the 032 README.
 
-Returned `024` conclusion: `B=128` runs without a global message axis and preserves unit energy to `4.8e-7`, but its
-support logits sit at the lower clamp. Support loss remains approximately `15`, initial gradients are effectively zero,
-and all PUPE values are `1.0`. Fix local-evidence/denoiser calibration before any unchanged scale rerun.
+Polyanskiy's p_t+q_1 curve is an **achievable-error upper bound**, not a floor on decoder performance. The converse is
+a lower bound combining the available genie-list and non-genie rate-distortion/capacity constraints. Match sampling,
+K, energy and channel conventions. At B14,K26, distinct-message 5% references are about 4.68 dB sufficient and 0.07 dB
+necessary; none of the principal production D2 means reaches 5% by 10 dB. Neither curve certifies decoder optimality
+or applies unchanged to nominal-energy codes.
 
-## Small-B causal bridge banks
+Evidence: [meeting report and reproducible snapshot](reports/2026-10-07_supervisor_meeting/README.md) and the local
+[full 033 audit](../jobs/033_matched_d2/results/analysis/review_2026-10-06/REPORT.md). The latter contains paired tables,
+checkpoint checks and calibration diagnostics; it is a local generated artifact, not a versioned report.
 
-Jobs `025` and `026` restore a matched `B=12,n=256` comparison before interpreting `023/024`.
+## Earlier experiments: evidence, not the current roadmap
 
-### `025_sectioned_L1_bridge`
+| Jobs | Completion | Question and retained conclusion |
+|---|---:|---|
+| 001–017 | See Results 03 | Initial ODMA/global recovery and oracle controls: much observed loss was practical support search. |
+| 018–020 | See Results 04 | Collision-rich oracle checks and early author-code CCS; assumptions differ from 032. |
+| 021–022 | 20/20 + 60/60 | Factorised explicit encoders and D0/D1. Broad sparse supports were competitive; four-mask ODMA was not. |
+| 023 | 16/26 | Small section pilot. Learning helped some low-load cases, BP usually did not; do not repeat the missing sweep unchanged. |
+| 024 | 8/8 | B128 M-free execution and energy passed; saturated local inference gave PUPE 1.0. |
+| 025 | 6/6 | L=1 bridge: global/section-compatible outputs agree; Binomial prior changes PUPE by less than 0.0037. |
+| 026 | 6/6 | L>1 bridge: correct signal algebra, association deteriorates with load; triadic helps at low load, tested BP worsens results. |
+| [027](../jobs/027_sparse_density_frontier/README.md) | 72/72 | Sparse-density frontier at B12,n256; useful sparsity is broad, not arbitrarily close to zero. |
+| [028](../jobs/028_hash_skeleton_B14/README.md) | 36/36 | Tables/hashes versus iid support at B14,T16/32. Selected hash is competitive. |
+| [029](../jobs/029_joint_encoder_decoder_B14/README.md) | 20/20 | Joint amplitudes and D0/D1: selected hash and iid sparse stay close at matched support. |
+| [030](../jobs/030_prototype_amplitude_frontier_B14/README.md) | 64/64 | Whole-vector sharing degrades as J falls. Retained for reproduction, not the preferred route. |
+| [031](../jobs/031_coordinate_amplitude_frontier_B14/README.md) | 72/72 | Separate scalar labels: balanced J8 is close to the unrestricted D0/D1 parent; motivates the completed 033 comparison. |
 
-- Six array rows: dense, 25%-sparse global, and four-placement ODMA codebooks, each with two seeds.
-- Same `K=9--26` training range, `K=9,17,26,30` evaluation loads, `[-4,0,4,8,12]` dB grid, and 8,000 D0 steps as
-  the corresponding job-`022` D0 bank.
-- The physical codebook is unchanged. Global Bernoulli D0 and section Bernoulli-compatibility D0 share learned weights
-  and observations; the run fails if their logits or estimates differ beyond numerical tolerance.
-- A separately trained Binomial section D0 isolates the change from the old support prior to the collision-aware prior.
-- Status: complete, 6/6. Compatibility logits/soft/hard outputs agree exactly. Binomial versus Bernoulli has maximum
-  absolute PUPE difference below `0.0037`, so neither backend nor prior causes the later structured gap.
+Historical qualifications:
 
-### `026_sectioned_Lgt1_bridge`
+- 021/022 D0/D1 had unequal budgets. Implicit multiplication removed matrix materialization, not M-sized state.
+  Full contracts and receiver-knowledge audits remain in Results 04 and Report 3.
+- 023 overwrote PBS logs; missing-row causes cannot be recovered. Do not resubmit 024 unchanged. The 026 failure
+  does not prove that all sectioned constructions or BP variants fail at larger loads.
+- 027's repaired seed-2702 full-density endpoint changed RNG consumption and is not a clean nested paired control.
+  Intermediate supports remain paired. D0 is near-flat through s about 48; strict-aggregate D1 at s16 is about 0.0293
+  PUPE above dense with a shorter budget. Correlation tails worsen before labels run out; s1 leaves only 512 real
+  signed directions for 4,096 messages.
+- 028 versus 029 changes budget as well as encoder learning, so it is not a matched causal learning ablation.
+  Small-B best-of-128 hash selection enumerates XOR differences; sampled B100 generation does not scale that search.
+- 030/031 used 120 epochs maximum and patience five, not the later 032/033 defaults. In 031, fixed D1 J8 versus parent
+  is 0.32683 versus 0.32937; joint is 0.32466 versus 0.32174 (8/12-dB aggregate). Different sampling, training and legacy
+  noise conventions prevent pooling those curves with 032/033.
 
-- Six array rows: fixed and learned exact-energy triadic encoders, plus the fixed identity/no-outer control, with two seeds.
-- Every final encoder is frozen before decoder comparison. Learned rows first receive 4,000 projected local-D0 encoder
-  steps; both decoder routes then receive 8,000 steps on matched random streams.
-- The induced `Phi in R^(256 x 4096)` is materialised only inside this small-`B` certification. Its global D0 result
-  measures the physical encoder/model-class effect without scalable association.
-- The same observations are decoded by local Binomial D0 plus valid-path association, and then with BP evidence added.
-  The recorded gaps therefore localise global-to-local inference/association and the incremental BP effect.
-- The identity row demonstrates the unidentifiable no-outer association problem. It has fewer physical sections than the
-  redundant triadic construction, so it is a structural necessity control rather than a pure one-factor BP ablation.
-- Status: complete, 6/6. Signal equivalence and exact energy pass within `6.6e-7`. Identity remains near PUPE `0.93--0.99`
-  at high SNR; learned triadic reaches `0.414` at `K=9` but degrades to `0.947` by `K=30`. BP is worse than local
-  association in every high-SNR cell.
-
-Current interpretation: `025` clears the refactor and prior. `026` shows that outer constraints are necessary and useful,
-but the present triadic code, locally trained encoder, association route, and marginal BP do not preserve the dense or
-sparse-global landscape as local occupancy grows. This is a practical matched-system result, not an optimality theorem,
-because the induced-global comparator is D0 rather than exact MAP/ML.
-
-## Sparse-global density frontier
-
-### `027_sparse_density_frontier`
-
-- Status: complete, 72/72 summaries and checkpoints; the strict merger has no completeness notes. Four full-density
-  seed-2702 rows were rerun after exact-zero Gaussian entries violated the intended support invariant. Because the fix
-  changed random-number consumption, that rerun is not a clean nested paired endpoint; intermediate supports retain the
-  intended paired construction.
-- Scope: retain the job-`022` `B=12,n=256`, load, SNR, unit-energy, D0/D1, and training contract while changing only
-  sparse-global integer support `s` over `256,192,128,96,64,48,32,24,16,12,8,6,4,3,2,1`.
-- Controls: separately trained dense at `p=1` and four-mask ODMA at `p=0.25`, where `p=s/n`.
-- Replication: two codebook/training seeds. Sparse codebooks are nested across `s` within a seed while retaining the same
-  marginal random-support/Gaussian-amplitude law at every support size.
-- Pairing: codebook/init, training-data, and evaluation-data streams have separate seeds. Within one replication seed,
-  all densities, both controls, D0, and D1 use identical held-out messages and noise.
-- Precision: eight evaluation batches rather than the four used by jobs `021/022`, giving 64 realisations per
-  `(K,E_b/N_0)` cell per seed.
-- Diagnostics: exact energy and support repetition, row load/energy balance, 30,000 sampled column pairs, and 256 sampled
-  active sets. No `M x M` Gram matrix is formed.
-- Primary output: high-SNR mean PUPE versus nonzero fraction on a reversed log axis. Zero is excluded; `s=1`, or
-  `p=1/256`, is the physical endpoint.
-
-Final artifact audit:
-
-- all 72 contain the expected 80 D0 or 20 D1 epochs, 20 learned and 20 matched-filter evaluation cells, finite values,
-  and checkpoints;
-- all D0/D1 pairs have bit-identical encoder states and identical matched-filter evaluation streams;
-- nested supports and shared signs are exact within both seeds over every returned density;
-- maximum codeword-energy deviation is `9.54e-7`;
-- the strict merger succeeds with no missing or unexpected runs.
-
-High-SNR mean PUPE (8/12 dB, all four loads) shows:
-
-| Family/support | Nonzero fraction | D0 | D1 | Evidence |
-|---|---:|---:|---:|---|
-| dense | 1 | 0.2935 | 0.2030 | two complete summaries; repaired second seed is not nested-paired |
-| sparse global, `s=256` | 1 | 0.2976 | 0.2300 | two complete summaries; repaired second seed is not nested-paired |
-| sparse global, `s=64` | 1/4 | 0.2932 | 0.2256 | two complete summaries |
-| sparse global, `s=48` | 3/16 | 0.2975 | 0.2188 | two complete summaries |
-| sparse global, `s=32` | 1/8 | 0.3051 | 0.2276 | two complete summaries |
-| sparse global, `s=16` | 1/16 | 0.3312 | 0.2323 | two complete summaries |
-| sparse global, `s=8` | 1/32 | 0.3984 | 0.2813 | two complete summaries |
-| sparse global, `s=4` | 1/64 | 0.5171 | 0.3994 | two complete summaries |
-| ODMA, four masks | 1/4 | 0.5363 | 0.4884 | two complete summaries |
-
-The useful region is broad, not a single sharp support. D0 is near-flat through about `s=48`; D1 remains near dense at
-`s=16`, but its two-seed errors are larger and its 20-epoch training curves are still descending. At the same `p=1/4`,
-random sparse-global supports beat ODMA by `0.243` (D0) and `0.263` (D1). Even `s=4` nominally beats ODMA. This extends
-the original result: density is not enough to explain the ODMA penalty; support diversity/geometry matters strongly.
-
-The degradation begins well before the raw mask count is exhausted. Through `s=4`, both seeds retain 4,096 distinct
-support masks and signed patterns. From `s=32` to `s=8`, sampled correlation q99.9 rises from `0.256` to `0.479`, while
-the `K=30` occupied-row fraction falls from `0.982` to `0.613`. At `s=1`, only 256 supports/512 real signed directions
-exist, signed-pattern repetition is about 87.5%, correlation q99.9 is 1, and PUPE collapses. A procedural generator must
-therefore target recovery geometry and searchability, not just enough combinatorial labels.
-
-Do not repeat all 16 supports over all old geometries. The next bank instead tests a compact generated support family at
-one larger explicit payload while retaining iid sparse controls.
-
-## Generated hash-skeleton certification
-
-### `028_hash_skeleton_B14`
-
-- Status: all 36 expected HPC summaries and checkpoints are present; support comparisons are retained as the current design basis.
-- Scale: `B=14,n=256`, training `K=7--22`, evaluation `K in {7,15,22,26}`, and the established
-  `Eb/N0 in {-4,0,4,8,12}` dB grid.
-- Sparse supports: `T in {16,32}`, giving `(R,r)=(16,4)` and `(8,3)` under `n=TR`, `R=2^r`.
-- Families: iid arbitrary sparse, balanced random one-per-table, random full-rank affine binary hash, and an affine hash
-  selected from 128 candidates by exact XOR-difference collision geometry. Dense is a contextual reference.
-- Pairing: at fixed `T` and seed, all sparse families use the same Gaussian amplitude array before exact unit-energy
-  normalisation. Training and evaluation data streams are also fixed across families and D0/D1.
-- Causal comparisons: balanced tables versus iid isolates the table constraint; random linear versus balanced tables
-  isolates repeated-XOR linear structure; selected versus random linear tests offline geometry design.
-- Diagnostics: exact support/energy, support repetition, row load/energy, sampled pair overlap/correlation, active
-  occupancy/singletons, active Gram spectra, disjoint `K`-sum separation, and exact linear collision spectra.
-- Scalability boundary: `A in GF(2)^(T x r x B)` and `b in GF(2)^(T x r)` compactly generate support. The current
-  certification still materialises `Phi in R^(256 x 16384)`, stores fixed per-message amplitudes, and uses global D0/D1.
-  It therefore tests model-class damage, not yet scalable inverse search.
-- Local evidence: deterministic algebra tests pass; the `B=6` D0/D1 smoke, ten-row `B=8` family/decoder mini suite,
-  and reduced-training `B=14` D0/D1 manifest rows all completed with finite losses, metrics, diagnostics, and checkpoints.
-
-Primary decision rule: reject or revise the table skeleton if balanced tables are materially worse than iid sparse at
-matched `T`. If tables survive but linear hashes do not, retain the skeleton and change the generator family. Only after
-a compact hash matches the control should work move to procedural amplitudes and a sub-exhaustive message proposer.
-
-### `029_joint_encoder_decoder_B14`
-
-- Status: complete; local checks and all 20 HPC summaries/checkpoints pass the strict merger.
-- Question: did fixed amplitudes and unequal/short decoder training understate the sparse and hash model classes?
-- Scale: the job-`028` `B=14,n=256` operating point, with dense plus iid and selected-hash supports at `T=16,32`.
-- Training: D0/D1 and their encoder amplitudes are optimized together for 120 epochs. Sparse support is immutable;
-  exact zero masking and unit-column projection are applied after every step. Dense is learned under the same budget.
-- Evidence recorded: full loss curves and codebook geometry before/after learning, alongside the common PUPE grid.
-- Result: selected hash and iid sparse are effectively tied at both supports. Selected-minus-iid PUPE is approximately
-  `-0.0003/-0.0103` for D0/D1 at `T=16` and `+0.0026/+0.0025` at `T=32`.
-- Boundary: the per-message learned amplitudes and global D0/D1 state still scale with `2^B`.
-
-Decision rule: compare fixed job `028` with joint job `029`, then compare selected hash with iid at matched `T`, decoder,
-and seed. Improvement from joint learning changes the fixed-amplitude conclusion; a persistent hash--iid gap identifies
-support structure rather than amplitude co-adaptation as the remaining limitation.
-
-### `030_prototype_amplitude_frontier_B14`
-
-- Status: all 64 manifest rows returned, including the J=10/12 extension. Retained as the historical whole-vector-sharing test.
-- Fixed object: the same selected affine support hash `A,b` at `B=14,n=256,T=32`.
-- Amplitude classes: `u_J=P_Jw`, `V in R^(T x 2^J)`, and `J in {0,2,4,8,14}`. Prefix projections make the model
-  classes nested; the extended grid includes J=10/12. `J=0` shares one table profile and `J=14` recovers arbitrary per-message amplitudes.
-- Training comparison: every Gaussian `J` has a fixed-`V` row (decoder only) and a paired learned-`V` row (joint
-  amplitude/decoder training). `A,b,P_J` are always fixed. Equal `J=0` and Rademacher `J=14` are fixed controls.
-- Energy: normalising each column of `V` in the forward rule guarantees unit energy for every message, including unseen
-  messages after deployment; projection after an update removes the unused radial degree of freedom.
-- Training contract: at most 120 epochs, a fixed validation stream, stop after five consecutive non-improvements, and
-  restore the best validation checkpoint. D0/D1, seed, support, projection, and initial amplitudes are paired.
-- Boundary: the saved generator contains only `A,b,P_J,V`, but the `B=14` adapter builds runtime message lookups because
-  current D0/D1 remain global. This is an amplitude model-class frontier, not a scalable inverse experiment.
-
-Outcome: compression did not convincingly preserve performance. For J=4 versus J=14, fixed D0 PUPE is 0.5399 versus
-0.3586; joint D0 is 0.4987 versus 0.3606. D1 also retains a gap. These are realized training/receiver results, not proof
-that every optimizer or decoder must suffer that gap. Candidate proposal was not part of these tests.
-
-### `031_coordinate_amplitude_frontier_B14`
-
-- Status (5 October): 72/72 HPC rows pass the strict manifest/checkpoint/grid/energy audit.
-  Balanced coordinate J8 fixed D1 gives mean high-SNR PUPE 0.32683 versus unrestricted 0.32937; jointly trained
-  J8 gives 0.32466 versus 0.32174. Compression is promising under these receivers, not proved lossless.
-- Change: each table uses its own label `P_t w`, sharing scalar entries of V rather than whole amplitude vectors.
-  Gather then normalize each message. J=B remains the unrestricted fixed-support endpoint.
-- Design: full-rank labels, maximum stacked rank and maximum local joint support/label rank. Center/unit-RMS banks
-  at initialization only; train V freely thereafter. No discrete map learning and no new decoder.
-- 72 rows: coordinate J=4/8/10 balanced, coordinate J=4 raw, and J=14 raw parents, each fixed/joint; shared J=4
-  raw/balanced fixed controls; D0/D1; three seeds. B=14,n=256,T=32 throughout.
-- Budget: 120 epochs maximum, 100 batches/epoch of 8, validation patience 5, best checkpoint including epoch zero.
-  Deterministic spectral calibration; separate paired train/validation/evaluation streams.
-- Decision: compare same-seed parent gaps per load/SNR, bank initialization effects and fixed/joint results.
-  Report seed spread and geometry; do not infer non-inferiority from an overlapping aggregate alone.
-- Boundary: compact generation including B=100 is tested; global D0/D1 are still exponential. Inversion is deferred.
-
-Commands and manifest: [`jobs/031_coordinate_amplitude_frontier_B14/README.md`](../jobs/031_coordinate_amplitude_frontier_B14/README.md).
-
-### `032_published_baselines`
-
-- Status (5 October): **159/174 main rows returned**, all native/D0/D1/D2/D3 groups complete; 9/24 D4 rows returned.
-  Pilot 80/80, original native 24/36 and follow-up checks 20/20 remain the validation record. Dynamic CS is excluded
-  from the main array, not deleted from the repository or historical evidence.
-- Follow-up findings: ODMA K100,0.5 dB PUPE falls 11.22%→4.58% over the same 128 frames at cap30; cap60 is identical.
-  Main small-B ODMA uses cap30, which cannot truncate productive recovery at K≤26. Pilot winners are unchanged;
-  saved pilot provenance and the explicit receiver-budget override are checked separately. CCS AMP40→80 improves
-  only 6.75%→6.59% over the same 32 diagnostic frames at 37% extra runtime; keep small-B pilot-selected budgets.
-  Dynamic CS finishes but gives 34.5%/48% PUPE at K50/100,2.5 dB (four frames each): defer its validation/debugging.
-- Question: does the explicit encoder/learned-decoder pair actually outperform complete published schemes at
-  tractable B, or is the current receiver the bottleneck? Hash/amplitude generation is not assumed superior.
-- Four controls per paper: native encoder/native receiver; identical encoder with D0/D1; fixed explicit dense/sparse
-  with D0/D1; jointly learned explicit dense/sparse with D0/D1. Reference rows are reused across papers.
-- Main native chains: ODMA–polar SCL/TIN/SIC and pinned author CCS-AMP/BP plus two-pass SIC. ODMA is the primary
-  comparator; CCS alignment remains approximate. Exact-energy block CCS is a separately labelled adaptation.
-- Pilot: 80 native tuning rows at B=12/14,n=256. Held-out comparison: 174 rows over three seeds, K=7/15/22/26,
-  physical Eb/N0=-4:2:10 dB, 256 frames/cell for distinct and iid messages. Sparse support size 32.
-- All D0–D4 have fixed and joint dense/sparse controls. D3/D4 use 1,024 observation-only matched-filter candidates,
-  never injected truth; misses count in loss and PUPE, but hard membership has no gradient. Training: 200 epochs,
-  patience 10, restore best pair. Proposal recall plots expose the remaining shortlist bottleneck.
-- Energy: exact-unit and nominal/message-dependent families remain separate. The analysis now uses Polyanskiy's
-  p_t+q_1 achievable-error upper bound (the original numerical recipe, not a converse). The shared-noise minimum
-  is integrated, not replaced by independent users or a normal proxy. B6/12/14/100/128 curves are prepared separately
-  from simulations. B12,K22/26 iid cannot certify 5% because its collision correction already exceeds that target.
-- Native paper alignment: 36 rows, B100/n30000 for ODMA/dynamic CS, B128/n38400 for CCS, K50/100, two seeds,
-  seven SNRs/family and 128 frames per point; compare 5% PUPE crossings with labelled visual readings of the papers.
-  Dynamic CS has the largest CPU/memory cost. Underspecified native tuning prevents an advance reproduction claim.
-- Audit fixes: candidate loss previously omitted missed messages; dynamic CS previously stopped after FA removal
-  when CRC had no success. Regressions cover both. Source changes during execution now invalidate completion.
-
-Decision: use matched native/matrix decoding to distinguish receiver losses from construction losses. Check native
-validation, energy, local collisions and confidence intervals before claiming a paper was beaten. Commands,
-source-fidelity notes and the full protocol are in [`job 032`](../jobs/032_published_baselines/README.md).
-
-Returned evidence: at B14,K26,10 dB (distinct messages), PUPE is native ODMA 0.55874, fixed dense D2 0.09831,
-fixed sparse D2 0.13957 and fixed dense D3 0.07943. D2 improves strongly on D1; encoder joint learning is mixed.
-This motivates continuing, but published-codebook D2 controls are needed before attributing the gap to encoder
-geometry. The small-B CCS construction also has exact multiuser aliases; do not extrapolate to its native payload.
-Some D0 high-SNR tails are caused by its count-to-list readout, not the encoder. Re-evaluation is deferred by choice;
-leave those results labelled and do not use them to claim an encoder defect. All original outputs remain unchanged.
-
-### `033_matched_d2`
-
-- Question: does the explicit advantage persist with D2 on published codebooks, and survive hash/amplitude compression?
-- 18 controls: same selected ODMA/CCS/block-CCS codebooks as 032, D2 only; no new tuning or encoder learning.
-- 48 generator rows: selected hash with unrestricted amplitudes (`J=B`) or coordinate J=4/8/10 banks; fixed/joint,
-  B12/14,n256,T32 and seeds 3201/3202/3203. Only V and D2 learn; discrete support/amplitude maps remain fixed.
-- Exact 032 training/evaluation contract; reuse its 24 dense/sparse D2 and 18 native rows. The merger verifies
-  physical-codebook identity for paper controls and permits only the explicitly audited source-file transitions.
-- Plots include the sampling-matched Polyanskiy achievable-error upper bound, not a converse floor. Nominal-energy
-  CCS remains separately labelled; the bound's peak-energy guarantee does not apply to that construction.
-- Checks: procedural/explicit D2 equivalence, gradients, unit energy, endpoint equivalence, manifest/profile pairing;
-  nine B6 smoke paths and four B8 minis pass. All mini validation losses decrease. Production results pending.
-- Boundary: fixed and joint comparisons stay separate; joint explicit references use column projection whereas
-  hash banks use forward normalization. Strong full-alphabet decoding is still exponential, not a scalable inverse.
-
-Commands and interpretation: [`job 033`](../jobs/033_matched_d2/README.md).
+Detailed history remains in [Results 03](../results/03_results.md), [Results 04](../results/04_results.md) and Reports 1–6.
+Preserved manifests define exact rows/budgets; this index does not replace them. No bank establishes a complete B100
+generated-codebook receiver.

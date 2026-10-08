@@ -1140,7 +1140,10 @@ Joint learning does not eliminate the low-J gap. These are outcomes of the teste
 not proof that the smaller model class contains no useful solution. Job 031 changes the sharing pattern instead
 of treating this as evidence against all amplitude compression. Discrete maps remain fixed and inversion is deferred.
 
-## 20. Coordinate-wise Amplitude Generation (`031`, HPC pending)
+## 20. Coordinate-wise Amplitude Generation (`031`, original local-validation record)
+
+The following preserves the 18 September pre-HPC checks. Job 031 subsequently completed 72/72 rows; its returned
+evidence and the later matched D2 comparisons are recorded in [the experiment ledger](../docs/EXPERIMENT_BANK.md).
 
 The next family uses `g_t(w)=V[t,P_t w]` with separate table-specific label maps, followed by exact
 message-wise normalization. It retains T*2^J real parameters, removes compulsory sharing of whole amplitude vectors,
@@ -1171,6 +1174,5 @@ K=3/6 and 4/8 dB, 32 frames per cell. D0 remains undertrained; these numbers est
 learning behavior, not comparative performance or an advantage from joint learning. The new adapter fixes the power
 iteration starting vector so changing spectral-calibration randomness cannot contaminate validation stopping.
 
-Decision: inspect matched parent gaps at every load/SNR, initialization ablations, seed variability, learning curves,
-and geometry before deciding whether compact coordinate sharing preserved the explicit reference. No job-031 HPC
-performance claim is made yet.
+Decision at that stage: inspect parent gaps, initialization, seed variability, learning curves and geometry before
+claiming retained performance. These local numbers are implementation evidence, not the subsequently returned HPC results.

@@ -4,6 +4,15 @@ Two questions remain after 032: does the explicit advantage persist when the pub
 and does our compressed encoder retain that advantage under the same receiver? D2 scores the full alphabet;
 there is no candidate-list confound and no claim of scalable decoding.
 
+## Returned evidence — 6 October 2026
+
+All **66/66** rows pass the strict audit and reuse all 42 required 032 references. Same-codebook ODMA–polar D2 closes
+most of the native receiver gap; dense D2 retains an edge. Coordinate J8 remains competitive with the unrestricted
+hash parent. Some learned calibrations are unstable, so post-hoc diagnostics do not replace the production ranking.
+See the [experiment ledger](../../docs/EXPERIMENT_BANK.md) for conclusions and the local
+[full audit](results/analysis/review_2026-10-06/REPORT.md) for numerical tables. The contracts and replay commands below
+are retained for reproduction; this is not a request to resubmit the bank.
+
 ## Array
 
 | Rows | Encoder | Training | What this isolates |
