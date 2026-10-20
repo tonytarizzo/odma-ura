@@ -16,7 +16,7 @@ from functools import lru_cache
 
 import numpy as np
 from scipy.optimize import brentq, minimize_scalar
-from scipy.special import gammaln, ndtr, roots_legendre
+from scipy.special import gammaln, ndtr, roots_legendre, xlogy
 from scipy.stats import chi2, ncx2
 
 from src.ura_bound import _E_of_t
@@ -36,7 +36,7 @@ def polyanskiy_gallager(payload_bits, n, num_active, ebn0_db, *, grid=31, power_
     """Thm.1 p_t branch + clipping + original collision union bound (iid case).
 
     The result upper-bounds the paper's collision-as-error metric, hence also
-    duplicate-tolerant PUPE. For uniformly sampled distinct messages, the same
+    multiset PUPE (and historical duplicate-tolerant PUPE). For distinct messages, the same
     change-of-measure proof omits the collision term. It applies to norm<=1
     codewords, not only exact-norm codebooks. A decoder can beat this curve:
     epsilon_opt <= epsilon_achievable_bound, not epsilon_decoder >= bound.
@@ -192,3 +192,29 @@ def reference_curves(payload_bits, n, num_active, ebn0_db, *, distinct=False):
             "numerical_method": "Conditional noncentral-chi-square CDF and Gauss-Legendre quadrature over noise norm",
             "energy_constraint": "norm<=1; not nominal-only energy without audit",
             "message_sampling": "distinct" if distinct else "iid"}
+
+
+def list_fano_converse(payload_bits, n, num_active, ebn0_db, *, distinct=False):
+    """Restore the historical genie/list-Fano lower bound, also valid for multiset PUPE.
+
+    Reveal K-1 ordered messages and subtract their signals. The remaining
+    uniform alphabet has size A=M (IID) or M-K+1 (distinct), and information
+    is at most C=n/2 log(1+1/(n*sigma²)). List-Fano gives
+    log A <= C+h(e)+(1-e)log K+e log(A-K).
+    The original list's miss probability cannot exceed multiset PUPE, so
+    this lower bound transfers. It may be zero or very weak; it is not a
+    same-codebook Bayes risk or a multiplicity-specific converse.
+    """
+    b, k = int(payload_bits), int(num_active)
+    if min(b, n, k) < 1 or k >= 2**b or not math.isfinite(ebn0_db):
+        raise ValueError("Require positive B,n,K; K<2^B; finite Eb/N0")
+    alphabet = 2**b - (k - 1 if distinct else 0)
+    if alphabet <= k:
+        return 0.0
+    capacity = n / 2 * math.log1p(2 * b * 10**(float(ebn0_db) / 10) / n)
+
+    def gap(error):
+        entropy = -xlogy(error, error) - xlogy(1 - error, 1 - error)
+        return math.log(alphabet) - capacity - entropy - (1 - error) * math.log(k) - error * math.log(alphabet - k)
+
+    return 0.0 if gap(0) <= 0 else float(brentq(gap, 0, 1 - k / alphabet))

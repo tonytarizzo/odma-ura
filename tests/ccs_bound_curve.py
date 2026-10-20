@@ -12,8 +12,8 @@ Narayanan-Chamberland coupled compressed sensing scheme:
   * per section, recover a K_a+10 candidate list by non-negative least squares,
   * stitch section lists and output a root only when its parity-consistent path is unique.
 
-For each K we sweep Eb/N0, measure the count/multiset PUPE (fraction of active
-users whose message is not in the recovered list), and report the smallest
+For each K we sweep Eb/N0, measure multiset PUPE (one decoded occurrence can
+match only one transmitted occurrence), and report the smallest
 Eb/N0 reaching a target PUPE. That empirical required-Eb/N0-vs-K curve is
 overlaid on the Polyanskiy random-coding achievability bound (src/ura_bound.py).
 
@@ -28,6 +28,7 @@ curve is compared with the paper.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from dataclasses import dataclass
 import json
 import math
@@ -199,7 +200,8 @@ def parity_ok(code: CCSCode, ell: int, prefix_bits: np.ndarray, candidate_parity
 def tree_survivors(code: CCSCode, lists: list[np.ndarray], K: int,
                    max_tree_paths: int) -> tuple[list[int], dict]:
     """Original root-wise tree decoder: output a root iff exactly one path survives."""
-    survivors: set[int] = set()
+    survivors: list[int] = []
+    seen: set[int] = set()
     truncated_roots = ambiguous_roots = 0
     for root in lists[0]:
         truncated = False
@@ -224,10 +226,15 @@ def tree_survivors(code: CCSCode, lists: list[np.ndarray], K: int,
         if truncated:
             truncated_roots += 1
         elif len(paths) == 1:
-            survivors.add(bits_to_int(paths[0]))
+            message = bits_to_int(paths[0])
+            if message not in seen:
+                survivors.append(message)
+                seen.add(message)
         elif len(paths) > 1:
             ambiguous_roots += 1
-    return list(survivors), {"truncated_roots": truncated_roots, "ambiguous_roots": ambiguous_roots}
+    # Root candidates arrive in descending NNLS score; apply the known-K output budget in that order.
+    return survivors[:K], {"truncated_roots": truncated_roots, "ambiguous_roots": ambiguous_roots,
+                          "raw_survivors": len(survivors), "output_overflow": max(0, len(survivors) - K)}
 
 
 def run_point(code: CCSCode, args: argparse.Namespace, K: int, ebn0_db: float,
@@ -238,11 +245,11 @@ def run_point(code: CCSCode, args: argparse.Namespace, K: int, ebn0_db: float,
     y = sample_signal(code, coded_per_user, args.num_antennas, ebn0_db, rng)
     lists = section_lists(code, y, int(K), args.list_extra, args.nnls_pool)
     survivors, tree_meta = tree_survivors(code, lists, int(K), args.max_tree_paths)
-    decoded = set(survivors)
-    missed = sum(1 for m in true_msgs if m not in decoded)  # count/multiset PUPE
+    truth, decoded = Counter(true_msgs), Counter(survivors)
+    missed = K - sum((truth & decoded).values())
     pupe = missed / float(K)
-    false_alarms = len(decoded - set(true_msgs))
-    return pupe, false_alarms / max(len(decoded), 1), len(survivors), tree_meta
+    false_alarms = sum((decoded - truth).values())
+    return pupe, false_alarms / max(len(survivors), 1), len(survivors), tree_meta
 
 
 def main(argv: list[str] | None = None) -> None:

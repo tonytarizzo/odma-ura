@@ -1,7 +1,7 @@
 #!/bin/bash
 #PBS -l walltime=72:00:00
 #PBS -l select=1:ncpus=8:mem=64gb
-#PBS -J 1-12
+#PBS -J 1-6
 #PBS -N ura034_polar
 
 set -euo pipefail

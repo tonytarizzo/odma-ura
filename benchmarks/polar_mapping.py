@@ -10,14 +10,16 @@ import torch
 from baselines.odma_polar import ODMAPolarBaseline
 from benchmarks.ura_comparison import DEFAULTS, _atomic_json, evaluate, materialize, train
 from framework.polar_mapping import PolarD2, PolarExplicitEncoder
+from src.metrics import PUPE_DEFINITION
 
 
-FAMILIES = {"polar_energy": "energy", "polar_mixer": "mixer", "odma_polar": "identity"}
+FAMILIES = {"polar_energy": "energy", "odma_polar": "identity"}
 
 
 def source_hashes():
     paths = sorted(Path("baselines").glob("*.py")) + sorted(Path("benchmarks").glob("*.py"))
-    paths += sorted(Path("framework").glob("*.py")) + [Path("src/ura_bound.py"), Path("tests/ccs_amp_author.py")]
+    paths += sorted(Path("framework").glob("*.py"))
+    paths += [Path("src/metrics.py"), Path("src/ura_bound.py"), Path("tests/ccs_amp_author.py")]
     return {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
 
 
@@ -61,7 +63,7 @@ def run_experiment(config, out_dir):
     if not all(np.isfinite(final_energy[k]) and abs(final_energy[k] - 1) <= 1e-5 for k in ("min", "max")):
         raise FloatingPointError("The learned construction violates per-message unit energy")
     if source_hashes() != fingerprints: raise RuntimeError("Source changed during this run")
-    summary = {"status": "complete", "config": config,
+    summary = {"status": "complete", "config": config, "pupe_definition": PUPE_DEFINITION,
                "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
                "source_sha256": fingerprints, "baseline": baseline.metadata(), "training": training, "evaluation": cells,
                "initial_matrix_sha256": initial_hash, "energy_audit_initial": initial_energy, "energy_audit_final": final_energy,

@@ -1,0 +1,1144 @@
+\documentclass[10pt,a4paper]{article}
+\newcommand{\ReportShortTitle}{Complete polar decoder options}
+\input{report_style.tex}
+\newcommand{\E}{\mathbb E}
+\newcommand{\ind}{\mathbf 1}
+\newcommand{\TV}{\operatorname{TV}}
+\newcommand{\KL}{D_{\rm KL}}
+\begin{document}
+{\LARGE\bfseries Polar Bayesian decoding: complete decoder options}\par
+{\large From exact identities and approximation algebra to full decisions}\par
+{\color{muted}19 October 2026 --- Report 10; design and derivation, before implementation}
+
+\textbf{Purpose.} Assemble the receiver options implied by Reports 7 and 9. A useful decoder description
+must reach full-message counts from the observation, including discovery, normalization, multiplicity
+and a stopping rule. A moment formula or a local update alone does not do that.
+We retain one exact reference family and thirteen execution families, with shared variations.
+This covers the existing mathematical resources, not every possible future algorithm or combination.
+
+\textbf{Status.} These are mathematical designs, with explicit finite constructions and conditional
+guarantees. None has been implemented or ranked in this report. Several remain exponentially expensive.
+The new derivations close product-law discovery, auxiliary-field importance correction and a sequential
+particle option. Report 7 continues to own exact foundations; Report 9 owns approximation bounds A--T;
+Report 8 supplies the frozen encoder. The design log is \path{docs/POLAR_DECODER_DESIGN_LOG.md}.
+The identifiers DEC-01--DEC-13 are unrelated to the historical D0--D4 receiver ladder.
+
+\section{The same problem and decision for every option}
+\label{sec:contract}
+The known encoding rule maps a full message $w=(p,v)$ to
+\[
+ \phi(p,v)=S_p\diag(\sqrt{e_p})(-1)^{Lv},\qquad
+ \|\phi(w)\|=1,\qquad
+ y=\sum_{k=1}^K\phi(w_k)+z,\quad z\sim\mathcal N(0,\sigma^2I_n).
+\]
+Patterns and payloads are unknown. $P=2^{B_p}$, $V=2^{B_c}$ and $M=PV=2^B$.
+The receiver knows $K$, $\sigma^2>0$, and the fixed polar/CRC, placement and balanced-energy construction.
+No option changes the physical noise or assumes the active patterns are supplied.
+
+Under the primary IID uniform source, a count vector $a$ and an ordered tuple $W$ have weights
+\begin{equation}
+ \omega(a)=\frac{K!}{M^K\prod_w a_w!}\,g(y-\Phi a),\qquad
+ \omega_{\rm slot}(W)=M^{-K}g\!\left(y-\sum_k\phi(w_k)\right),\qquad
+ g(r)=e^{-\|r\|^2/(2\sigma^2)}.
+ \label{eq:target}
+\end{equation}
+Both normalize by the same evidence $Z$. Summing ordered tuples with the same counts gives the factorial
+weight in the first expression. A sampling proposal need not be exchangeable; the target still is.
+Do not insert a second factorial factor into ordered-slot weights.
+
+For an output $d$ with nonnegative integer counts and $\sum_wd_w=K$, the loss is
+\[
+ \ell(a,d)=1-\frac1K\sum_w\min(a_w,d_w).
+\]
+The sufficient decision statistics are count tails $T_{w,j}=\Pr(a_w\geq j\mid y)$, $1\leq j\leq K$.
+Choose the largest available next tail $T_{w,d_w+1}$ until $K$ copies have been allocated.
+This greedy rule is exact because each word's tails decrease. MAP, a single sampled tuple and top-$K$
+posterior means are generally different decisions.
+
+The distinct-message control uses ordered prior $1/(M)_K$ on injective tuples, or uniform prior
+$1/\binom MK$ on $0/1$ counts. Require $K\leq M$ and output distinct words there.
+It retains collisions of patterns with different payloads. Every extension to it below keeps those
+exclusions explicitly; an IID approximation theorem is not automatically a distinct-source theorem.
+
+\subsection{What makes an option a full decoder}
+Each option specifies: a finite construction from the known encoder and $y$; how full words are
+discovered or enumerated; the legal law or exact queries being evaluated; count-tail readout; a feasible
+allocation and stopping rule; and the cost/error that remains. Computational infeasibility is permitted
+at this design stage, but uncharged inner or posterior oracles are not.
+
+For later implementations the common interface remains
+\[
+ \texttt{run(scenario, **params) -> (counts, meta)}.
+\]
+Here \texttt{counts} may be a sparse full-word map internally; a mandatory dense $M$-vector adapter
+would itself cost $M$ and must be counted. The mathematical output contract does not require that adapter.
+Relevant metadata are the source, variant, resource budget, realized construction/query work, target-bias
+bound, numerical error/failure budget and conditional excess-loss certificate. No implementation is added now.
+
+\section{A map of the options}
+\label{sec:map}
+The numbering is an index, not a performance ordering. Start with inexpensive inner formulas when a
+family permits them, then refine only as its accuracy requires.
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}p{.12\textwidth}p{.27\textwidth}Y@{}}\toprule
+ID & Core idea & How it reaches actual decoded words\\\midrule
+REF & Exact posterior evaluation & Sum legal explanations, obtain count tails and allocate copies. Different exact representations compute the same decision.\\
+DEC-01 & Direct residual queries & Visit every word and estimate its count masses from excluded-word residual likelihoods.\\
+DEC-02 & Variational product law & Optimize one common one-user law; discover its highest-probability words and use binomial count tails.\\
+DEC-03 & Message-prefix refinement & Bound the recoverable gain inside unresolved sets of words; split only cells that can affect the allocation.\\
+DEC-04 & Configuration search / bounded list & Search explanations of all $K$ users; retain complete tuples and bound the mass of the unresolved frontier.\\
+DEC-05 & Independent guided importance & Draw full tuples using approximate continuation scores; exact weights correct their guidance, and weighted counts give tails.\\
+DEC-06 & Corrected local/global chain & Combine exact-target global proposals with local one-, two- or three-user moves; use count frequencies after a justified schedule.\\
+DEC-07 & Sequential particles & Grow and resample clouds of partial tuples; terminal physical-likelihood correction and independent batches yield count queries.\\\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}p{.12\textwidth}p{.27\textwidth}Y@{}}\toprule
+ID & Core idea & How it reaches actual decoded words\\\midrule
+DEC-08 & Quantized continuation states & Merge compatible partial sums with positive corrections, then reverse the recorded graph to recover count marginals.\\
+DEC-09 & Positive factor contraction & Retain regional counts and exact constraints; simplify interactions or condition feature indices, then contract count-marked factors.\\
+DEC-10 & Connected-user expansion & Sum small connected blocks, including all their combinations across $K$ slots, and reconstruct marked count polynomials.\\
+DEC-11 & Fourier query decoder & Replace residual convolutions by frequency calculations; bound signed count numerators and combine with full-word traversal or prefix search.\\
+DEC-12 & Signed low-rank contraction & Compress likelihood tables and contract their positive error envelopes alongside count marks; use bounded queries for the final decision.\\
+DEC-13 & Positive auxiliary fields & Integrate shared Gaussian fields and independent conditional one-user laws, or sample the extended field/tuple space with exact correction.\\\bottomrule
+\end{tabularx}
+\end{center}
+
+These families overlap deliberately at interfaces. DEC-03 is a discovery/decision strategy, and can
+use DEC-01, 10, 11, 12 or 13 as query providers. DEC-05 can use a law from DEC-02, 08 or 09 as its
+proposal when its density and draws are available. Changing an inner moment order is a variation;
+changing from message-prefix queries to configuration sampling changes the execution family.
+The combination rules near the end specify which connections are legitimate.
+
+\section{Shared readout, stopping and error rules}
+\label{sec:interfaces}
+\subsection{From tails or intervals to a feasible action}
+If estimated tails have uniform error $e$ and the action maximizes their gain, Report 9 gives
+\begin{equation}
+ R(\widehat d\mid y)-R(d^*\mid y)\leq\min(1,2e).
+ \label{eq:decision}
+\end{equation}
+Clip estimates to $[0,1]$ and sort each word's tails in decreasing order if necessary.
+Order statistics cannot increase uniform distance from the true sorted tails, so this preserves the
+bound and makes greedy allocation valid. It does not assert joint consistency of unrelated word estimates.
+
+For interval-only calculations, let $[l_{w,j},u_{w,j}]$ contain every exact tail.
+Choose a feasible incumbent maximizing lower-tail gain, using monotone closures of valid bounds.
+For each word these closures are $l_j\leftarrow\max_{r\geq j}l_r$ and
+$u_j\leftarrow\min_{r\leq j}u_r$, after intersection with $[0,1]$.
+An upper bound on any feasible gain is obtained by maximizing the upper-tail gain under the same budget.
+If these bounds are $L_*$ and $U_*$, then
+\[
+ R(\widehat d\mid y)-R(d^*\mid y)\leq\min\{1,(U_*-L_*)/K\}.
+\]
+DEC-03 extends this rule to unresolved prefixes. At a resource limit, return the incumbent with the
+remaining bound, possibly one. A prefix, latent state or field sample is never itself a recovered word.
+Ties may prevent strict optimality certification; an arbitrary positive excess-risk tolerance is a
+different stopping requirement.
+
+\subsection{A common independent-replicate guarantee}
+\label{sec:replicates}
+Several designs produce independent replicates $(Y_s,X_{s,H})$ for bounded count observables $H$, with
+\[
+ 0\leq X_{s,H}\leq Y_s\leq C,\qquad
+ \E Y_s=Z_0>0,\quad \E X_{s,H}=Z_0T_H.
+\]
+$Z_0$ may be the physical evidence, a fixed rescaling, or an explicitly restricted target evidence.
+For $J$ queries and failure budget $\delta$, put
+\[
+ b_S=C\sqrt{\frac{\log[2(J+1)/\delta]}{2S}},\qquad
+ \widehat T_H=\frac{\overline X_H}{\overline Y}.
+\]
+The bounded-variable exponential inequality and a union bound give simultaneous numerator/denominator
+errors at most $b_S$. Hence, when $\overline Y>b_S$,
+\begin{equation}
+ \max_H|\widehat T_H-T_H|
+ \leq e_S:=\min\left\{1,\frac{2b_S}{\overline Y-b_S}\right\};
+ \quad\text{otherwise use }e_S=1.
+ \label{eq:replicate-bound}
+\end{equation}
+If $\overline Y=0$, do not divide: retain a fixed legal incumbent and the trivial risk bound one,
+then continue or stop at the declared budget. For IID sampling the incumbent can be $K$ copies of
+one fixed word; for the distinct control it is the first $K$ legal words.
+Take $J=MK$ for all word tails, including unseen words, or $J=K(2M-1)$ for all binary message-prefix
+count tails. The logarithm is computable from $B,K$ without constructing those arrays.
+Weights may all be rescaled together; $C$ must use the same scale. It is a proved global bound, not
+the largest observed weight. Report 9 H also gives variance-sensitive sample rates.
+
+A positive weighted sample law gives monotone tails automatically. A sample containing count $c$ of a
+word updates its first $c$ tails, so only $K$ updates are needed per complete tuple.
+Unseen words have zero empirical tails but remain covered by the simultaneous error bound.
+For prescribed rounds, allocate $\delta_r=\delta/[r(r+1)]$. This permits stopping on a certificate.
+Freeze a learned-from-computation proposal before using fresh independent draws, or supply a separate
+adaptive proof; numerical independence cannot be inferred from an effective-sample-size diagnostic.
+
+\newpage
+\subsection{Keep target approximation separate from numerical uncertainty}
+If support restriction costs posterior mass $\eta$, a positive conditional target approximation has TV
+error $\tau$, and its normalized tails have numerical error $e$, then a valid total error is
+\begin{equation}
+ e_{\rm total}\leq\eta+(1-\eta)\min(1,\tau+e).
+ \label{eq:ledger}
+\end{equation}
+For compatible positive weight modifications with log-ratio range $\Omega$, one may use
+$\tau=\tanh(\Omega/4)$. Exact importance correction removes proposal bias, while retaining sampling
+error and concentration cost. Signed computations instead supply numerator/evidence intervals.
+Do not count a corrected guide error again as posterior bias, or omit an error in the target weights.
+All bounds here are in real arithmetic; certified finite-precision enclosures are a later implementation duty.
+
+\section{REF: exact finite Bayes decoding}
+\label{sec:reference}
+\textbf{In plain terms.} Give every legal explanation its physical likelihood and source probability,
+then choose the output with greatest expected number of correctly recovered copies.
+This is the reference against which an approximation's query and decision errors can eventually be measured.
+
+A direct construction visits the $H(M,K)=\binom{M+K-1}{K}$ IID count vectors, accumulates $Z$ and each
+occupied word's marked count masses, normalizes and allocates copies. It requires at most $K$ positive
+count-tail updates per configuration. Computing each signal directly costs $O(KC_{\rm enc}+nK)$;
+enumerating $H(M,K)$ configurations remains the dominant issue. Streaming avoids storing every posterior
+state, but an all-word tail table can require $O(MK)$ storage.
+
+Report 7 supplies equivalent execution variants:
+\begin{enumerate}
+\item Excluded-alphabet residual recursion, with a Gaussian base case.
+\item Positive inside/outside convolutions over message-prefix alphabets, retaining multiplicities.
+\item Exact projected/frontier schedules and resource finalization.
+\item Polar/pattern factor elimination with joint separators and count counters.
+\item Full Fourier inversion or the full connected-user expansion.
+\item Specialized exact polar pair and triangle contractions for $K=2,3$.
+\item Certified partial summation that stops before exhaustive evaluation if the Bayes decision separates.
+\end{enumerate}
+These are not different optimal decoders statistically. Their cost, reuse and intermediate objects differ.
+The low-dimensional parity/projection structure can reduce operations without removing explicit alphabet,
+joint-interface or reachable-state growth. Equal-signal classes retain source-weighted word identities:
+replacing a class by an arbitrary representative would change the loss.
+
+\clearpage
+\section{DEC-01: direct residual-count decoding}
+\label{sec:direct}
+\textbf{In plain terms.} For each possible word, ask how plausible the observation is if that word appears
+zero, one, two, or more times. Explain the remaining signal using the other words.
+
+For $M>1$, let $X^{(-w)}$ be uniform on all words except $w$, and define
+\[
+ L_h^{(-w)}(r)=\E g\!\left(r-\sum_{i=1}^hX_i^{(-w)}\right).
+\]
+The exact count numerators are
+\begin{equation}
+ N_{w,j}=\binom Kj M^{-j}(1-1/M)^{K-j}
+              L_{K-j}^{(-w)}(y-j\phi_w),\qquad \sum_{j=0}^KN_{w,j}=Z.
+ \label{eq:direct-count}
+\end{equation}
+Exclusion is essential: leaving $w$ in the remainder produces factorial moments instead.
+$M=1$ is deterministic. A finite decoder visits every word, evaluates or bounds these $K+1$ masses,
+normalizes per word, takes tails and applies Section~\ref{sec:interfaces}.
+
+\textbf{Retained variations.}
+Use F's Gaussian smoothed-residual formula; a mixture over explicit modes; N's tilted closure with
+Q's finite inner queries; or Q's positive likelihood-polynomial hierarchy.
+The latter converges with increasing degree without requiring Gaussian interference.
+Alternatively query M's factorial moments, with an \emph{unrestricted} remainder, and reconstruct
+tail intervals using P's finite moment LP. At full order exact moments determine each word's count law.
+These changes affect the query provider, not the decoder's full-alphabet traversal.
+
+Gaussian masses are positive and yield monotone per-word tails, though their separate normalizers need
+not be one common approximate evidence. Use direct tail bounds, not an invented joint posterior TV.
+For signed providers, bound event and complement masses before division. Shared-evidence and moment
+constraints can tighten the intervals without assuming independent errors.
+
+\textbf{Cost and stopping.} If $C_L$ includes a residual query's inner moments, partitions and matrices,
+direct work is $O(MKC_L+MK)$ plus tail selection and encoder construction, with possible shared work.
+Excluded moments use the exact rank-one correction in F. Complete readout is already explicit in $M$.
+Choose a query tolerance/degree or return its actual bound at a budget limit. A Gaussian closure alone
+need not approach exact inference as numerical precision increases; use the polynomial or exact residual
+variant when a convergent refinement is required.
+Under distinct sampling, only counts zero and one remain, with the separate excluded distinct residual
+and masses from Report 9's completion section.
+
+\clearpage
+\section{DEC-02: an optimized product-law decoder}
+\label{sec:product}
+\textbf{In plain terms.} Approximate the joint posterior by $K$ independent draws from one optimized
+message distribution. This is the simplest retained joint law, but it can miss strong dependence.
+
+For $\psi(\theta)=M^{-1}\sum_w e^{\theta^T\phi_w}$ and $\mu=\nabla\log\psi$, S specifies
+\[
+ \nu_\theta(w)=\frac{e^{\theta^T\phi_w}}{M\psi(\theta)},\qquad
+ Q_\theta(W)=\prod_k\nu_\theta(w_k),\qquad
+ \sigma^2\theta_*+(K-1)\mu(\theta_*)=y.
+\]
+Optimize the strictly convex tilt objective with S's finite gradient accuracy bound, or stop at a
+declared trial tilt. Q's character polynomials or explicit sums evaluate its partitions/moments.
+The true objective value and an evidence upper bound give
+\[
+ \tau_{\rm var}\leq
+ \min\{1,\sqrt{(\log Z_+-F_-)/2}\}.
+\]
+This certifies the chosen reference only when informative. Exact optimization is not a guarantee of a
+good approximation; Report 9 gives a two-user counterexample.
+
+\subsection{Close discovery using the highest-probability words}
+Under $Q_\theta$, $a_w\sim\operatorname{Binomial}(K,\nu_\theta(w))$.
+Every binomial tail is increasing in its probability, and
+$T_{w,j}\leq T_{w,1}$. Let $C$ contain the $\min(K,M)$ highest-probability words.
+If an allocation uses a word outside $C$, then some word in $C$ has no allocated copy: there are only
+$K$ copies in total. Moving an outside copy to that inside word's first copy does not decrease gain,
+since its first tail is at least the removed outside tail. Repeat to obtain an optimal allocation
+supported on $C$. Ties can be resolved deterministically. This is a property of this product law,
+not a top-$K$ shortcut for the physical interacting posterior.
+
+The probabilities are ordered by $s(w)=\theta^T\phi(w)$.
+For a fixed pattern and conditioned payload prefix, Q's character grouping gives
+$s(z)=a_0+\sum_{g\ne0}a_g\chi_g(z)$ and upper bound $a_0+\sum_g|a_g|$.
+Initialize the $P$ pattern roots, split the highest-bound payload prefix, and evaluate full words at
+leaves. Stop when no unresolved bound exceeds the $\min(K,M)$th retained score; include tie-breaking in that
+comparison. Full traversal is the finite worst case. Pattern enumeration and key construction are charged.
+
+Evaluate the normalizer and binomial tails on $C$, then allocate $K$ copies by next-tail gain.
+With exact partitions this is the exact Bayes action for $Q_\theta$.
+Certified partition intervals instead bound each $\nu_\theta(w)$; binomial-tail monotonicity propagates
+them. Probability error $\epsilon_p$ gives tail error at most $K\epsilon_p$ by coupling $K$ Bernoulli draws.
+Add numerical error to $\tau_{\rm var}$ or use direct allocation intervals.
+
+\textbf{Variations and cost.} The one-user tilt $\theta=y/\sigma^2$ is an unoptimized variant.
+One common positive Taylor weight across words gives a coherent polynomial product surrogate; its
+additional source-law error must be charged.
+Costs include all optimization queries, $P$ roots, visited prefixes, the partition and at most $K$
+word-count distributions. The search or partition can still enumerate all $M$ words.
+This product law is IID-specific; conditioning it on distinctness requires a separate coupled calculation.
+
+\newpage
+\subsection{A complete slot-specific product variation}
+The larger family $Q(W)=\prod_k\nu_k(w_k)$ is also finite, but its optimization is generally nonconcave.
+Write $\mu_k=\E_{\nu_k}\phi$, and let $u$ be the uniform one-word law. Its evidence objective is
+\[
+ F(Q)=-\frac{\|y-\sum_k\mu_k\|^2+\sum_k(1-\|\mu_k\|^2)}{2\sigma^2}
+              -\sum_k\KL(\nu_k\|u).
+\]
+Holding the other laws fixed, the exact coordinate optimum is
+\[
+ \nu_k(w)\propto e^{\theta_k^T\phi_w},\qquad
+ \theta_k=\frac{y-\sum_{i\ne k}\mu_i}{\sigma^2}.
+\]
+Start, for example, from zero tilts and perform a declared number of cyclic coordinate sweeps.
+Exact coordinate updates cannot decrease $F$, but give no global optimum guarantee.
+With approximate inner moments, treat the resulting tilts as trial references and bound their actual
+objective; an optimization improvement is not assumed.
+
+For each word, obtain its count probabilities from
+$\prod_k[1-\nu_k(w)+z\nu_k(w)]$ in $O(K^2)$ arithmetic.
+Full alphabet traversal, followed by tails and greedy allocation, closes readout; the identical-slot
+top-$K$ discovery proof is not reused. Alternatively these product cell-count queries can feed DEC-03,
+with the variational error allowance included. The same evidence-gap TV certificate applies by
+marginalization, although slot/count KL need not be equal when the factors differ.
+The variation costs the coordinate partition/moment work plus $O(MK^2)$ direct readout.
+It can represent different likely roles for slots, but remains an independent product and can still miss
+essential posterior correlations. Symmetrizing slot labels changes no count law or count decision.
+
+\clearpage
+\section{DEC-03: decision-directed message-prefix refinement}
+\label{sec:prefix}
+\textbf{In plain terms.} Keep large sets of possible words unresolved until their possible contribution
+to the output makes them worth splitting. Ask count questions about each set rather than guessing one word.
+
+Maintain a disjoint binary prefix cover $\mathcal C$ of the \emph{message} alphabet. For a cell $D$,
+let $A_D=\sum_{w\in D}a_w$ and bound
+\[
+ G_D(h)=\E\min(A_D,h),\qquad h=0,\ldots,K.
+\]
+For any allocation of $h$ output copies inside $D$, its matching gain is at most $\min(A_D,h)$
+pointwise. If $U_D(h)$ bounds $G_D(h)$, then
+\begin{equation}
+ U_*=\max_{\substack{h_D\geq0\\\sum_Dh_D=K}}\sum_{D\in\mathcal C}U_D(h_D)
+ \label{eq:prefix-upper}
+\end{equation}
+is an upper bound on the best physical-posterior gain. A budget dynamic program costs
+$O(|\mathcal C|K^2)$; concavity may simplify special cases but is not assumed.
+Bounds $0\leq G_D(h)\leq h$ always initialize the calculation.
+
+Resolve one legal word initially and assign its $K$ copies for an IID incumbent; for distinct sampling
+resolve $K$ distinct words. Retain lower tail bounds on resolved leaves to get incumbent gain $L_*$.
+Refine a cell used by an optimistic allocation in \eqref{eq:prefix-upper}, or tighten a query whose
+uncertainty controls the gap. Stop when $(U_*-L_*)/K$ is small enough, or return the actual remaining bound.
+Resolve full words before output; an unresolved cell is only an upper bound.
+
+\textbf{Query variants.} Use conditional polar moments and excluded-cell residuals; tilted or polynomial
+residual queries; marked connected, Fourier or signed-contraction queries; field count polynomials;
+or simultaneously bounded configuration samples. P's moment LP, shared evidence and prefix split tables
+combine available information. They cannot remove the proven ambiguity of insufficient moments.
+Gaussian-only queries can stall. A declared convergent provider or exact subtree summation closes
+the finite refinement route. A deterministic fair schedule can interleave promising refinements with
+the oldest unresolved cell/query; budget termination does not require full refinement.
+
+\textbf{Cost.} Charge every visited prefix and every provider invocation, its preprocessing, the current
+cover program and full-word readout. There can be $2M-1$ message-prefix nodes. If a randomized provider
+is used adaptively, cover all possible prefix queries or allocate conditional failure budgets to fresh
+queries. Choosing favourable estimates after seeing them does not preserve a fixed-query guarantee.
+
+\clearpage
+\section{DEC-04: bounded configuration search and list decoding}
+\label{sec:configuration}
+\textbf{In plain terms.} Build complete explanations of all users. Keep exact weights for explanations
+already completed and a rigorous upper bound on everything still unexplored.
+This differs from DEC-03: its prefixes belong to the $KB$-bit \emph{ordered tuple}, not one message.
+
+Partition the tuple space into evaluated leaves $\mathcal L$ and a disjoint unresolved prefix frontier
+$\mathcal F$. A node $\xi$ has prior mass $\pi(\xi)$ and conditional likelihood
+$L(\xi)=\E_\pi[g(y-s_W)\mid\xi]$. Any valid $u_\xi\geq L(\xi)$ gives
+\[
+ Z_{\mathcal L}=\sum_{W\in\mathcal L}\omega_{\rm slot}(W),\qquad
+ U_{\mathcal F}=\sum_{\xi\in\mathcal F}\pi(\xi)u_\xi,\qquad
+ \eta\leq\frac{U_{\mathcal F}}{Z_{\mathcal L}+U_{\mathcal F}}.
+\]
+The bound follows from the unknown omitted evidence being at most $U_{\mathcal F}$.
+Use $u_\xi=1$ at worst, or Report 7's convex-completion/support bounds and Report 9's likelihood
+intervals. Those are bounds on unexplored completions, not substitutes for their total prior mass.
+
+Initialize by completing one legal tuple and retaining the sibling prefixes along its path.
+This supplies positive $Z_{\mathcal L}$ and a cover of every other tuple.
+Expand a frontier node, replace it by its legal children and update the bounds. Complete leaves use
+the physical likelihood exactly. Their normalized positive weighted counts give a feasible Bayes action
+on the retained list, with excess risk at most $2\eta$, capped at one. Marked adverse-event bounds can
+give a sharper decision certificate. Multiple orderings of one count vector must all retain their mass.
+
+\textbf{Variations.} Best-first mass-bound expansion, depth-first traversal and a bounded beam/list
+change exploration order or memory. A discarded beam node still belongs to the omitted frontier:
+keep its bound, or a valid aggregate bound, instead of silently declaring it impossible.
+A message-list restriction is another event and needs a bound for configurations containing omitted words.
+Report 7's count-tree version avoids ordered duplicates using its exact factorial prior.
+
+\textbf{Cost and limit.} In the worst case the ordered search has $M^K$ leaves.
+Each bound/leaf evaluation and frontier record is charged. The $K$ sparse updates per completed tuple
+avoid an additional full alphabet readout. Exhaustion gives REF; a limited list gives an approximate
+decision with its actual unresolved bound. Keeping only the best physical residual and returning it
+would instead be a MAP-like decision and is not this decoder.
+
+\clearpage
+\section{DEC-05: independent guided importance decoding}
+\label{sec:importance}
+\textbf{In plain terms.} Let a cheap approximation suggest complete tuples, then correct each suggestion
+using its exact physical likelihood and the probability with which it was proposed.
+
+At an ordered-tuple bit prefix $\xi$, choose a positive continuation guide $\widetilde L$ and use
+\[
+ q_g(b\mid\xi)=\frac{\pi(b\mid\xi)\widetilde L(\xi b)}
+                    {\sum_c\pi(c\mid\xi)\widetilde L(\xi c)},\qquad
+ q_g(W)=\prod_{t=1}^{KB}q_g(b_t\mid\xi_{t-1}).
+\]
+The prior branch is $1/2$ for IID uniform bits. Two child queries per bit suffice; both pattern and
+payload bits are generated. F's conditional Gaussian guide is one starting choice; N/Q, positive
+contractions or exact small-block sums give alternatives.
+If certified child likelihoods imply posterior branch $p_0\in[l,u]$, the robust guide
+$q_0=u/(1+u-l)$ has worst branch ratio $1+u-l$. Its complete ratio bound must cover unvisited prefixes too.
+
+For universal full support use the \emph{whole-tuple} mixture
+\[
+ q(W)=\epsilon\pi_{\rm slot}(W)+(1-\epsilon)q_g(W),\qquad 0<\epsilon\leq1.
+\]
+Draw its component, generate a tuple, and evaluate the actual mixture density, including both terms.
+Compute
+\[
+ Y(W)=\omega_{\rm slot}(W)/q(W)\leq1/\epsilon,\qquad
+ X_H(W)=Y(W)H(W).
+\]
+Independent tuples satisfy Section~\ref{sec:replicates}. Accumulate sparse weighted count tails, allocate
+copies and stop at a declared sample round/certificate or budget. Guide bias has been corrected.
+The self-normalized estimates are not exactly unbiased at finite sample count.
+
+\textbf{Variations.} Prior-only sampling is $\epsilon=1$.
+An evaluable product, quantized-state or positive-contraction law can replace the bit guide.
+A positive surrogate with log-weight range error $\Omega$ supplies concentration bound
+$\sup P/q\leq e^\Omega$ without a prior mixture when it already has full support.
+An exact conditional block may be integrated before sampling the rest; Report 9 H proves the centered
+unnormalized query variance cannot increase. This may require dense marked queries, so retain an explicit
+discovery/readout method when conditional integration removes the sampled words.
+
+\textbf{Cost and limits.} Let $C_q$ include drawing and evaluating the full mixture, including any guide
+construction. Direct cost for $S$ tuples is
+\[
+ O\!\left(S[C_q+KC_{\rm enc}+nK]+SK\log(2+SK)\right),
+\]
+with $O(SK)$ sparse tail storage. No explicit $M$-array is required by this execution path, but $C_q$
+may include pattern sums and the required sample count can be enormous. A good empirical effective
+sample size is a diagnostic, not a global unseen-word certificate.
+Distinct sampling uses the correct legal prior/proposal and its actual exclusions.
+
+\clearpage
+\section{DEC-06: corrected block moves with global refreshes}
+\label{sec:chain}
+\textbf{In plain terms.} Maintain one complete explanation, revise small groups while retaining all
+outside users in the residual, and occasionally propose a completely new explanation.
+
+Use DEC-05's full-support proposal in an independence Metropolis step:
+\[
+ \alpha(W,W')=\min\left\{1,
+ \frac{\omega_{\rm slot}(W')q(W)}{\omega_{\rm slot}(W)q(W')}\right\}.
+\]
+With fixed probability $\beta>0$ choose this global kernel. Otherwise update a fixed-size slot block
+$\mathcal B$ conditional on the current outside messages using
+$r_{\mathcal B}=y-\sum_{i\notin\mathcal B}\phi(w_i)$.
+Exact one-user polar sums or exact K2/K3 joint contractions supply conditional draws.
+Alternatively a guided block proposal uses its exact conditional Metropolis ratio.
+Outside messages are current state variables, never supplied truth.
+
+For K2, draw the first word from its exact marginal and the second from its conditional law.
+For K3, draw one from its exact slot marginal, then a conditional pair. Independently sampling block
+marginals would lose their dependence. Distinct updates exclude outside words and within-block repeats.
+Freeze proposal and state-independent block-selection probabilities during a run; otherwise include the
+correct selection ratios or derive a separate adaptation argument.
+
+Every kernel preserves the exact target. For a certified $\bar\gamma\geq\sup_W P_{\rm slot}(W\mid y)/q(W)$,
+Report 9 L proves a target minorization $\kappa=\beta/\bar\gamma$.
+Record $S$ states separated by
+\[
+ t\geq\kappa^{-1}\log(S/\delta_{\rm mix})
+\]
+transitions, including before the first record. A coupling bounds their distance from $S$ independent
+posterior draws by $\delta_{\rm mix}$, giving simultaneous tail error
+\[
+ e=\sqrt{\frac{\log(2MK/\delta_{\rm stat})}{2S}}
+\]
+with total failure at most $\delta_{\rm mix}+\delta_{\rm stat}$, capped as necessary.
+Sparse count frequencies and greedy allocation complete the decoder.
+An evidence lower bound provides $\bar\gamma\leq W_{\max}/Z_-$.
+Even $Z_-=e^{-(\|y\|+K)^2/(2\sigma^2)}$ is valid, but usually much too conservative.
+
+\textbf{Cost and limits.} Charge $St$ transitions, each local contraction and each global proposal,
+not just recorded states. Exact K3 still pays repeated pair-operator and alphabet costs.
+Local-only chains with an unspecified burn-in have an exact invariant law but lack this finite guarantee.
+The proof does not show that block moves outperform independent sampling.
+Their role is to explore dependence inside a complete joint decoder, not to declare higher-user effects absent.
+
+\clearpage
+\section{DEC-07: sequential particles with a complete count guarantee}
+\label{sec:particles}
+\textbf{In plain terms.} Preserve several partial explanations, repeatedly allocate more particles to
+promising ones, and correct the accumulated guidance at the end. Resampling can help exploration,
+but it creates dependence; the certificate below counts independent batches rather than descendants.
+Sequential importance/resampling is classical machinery \cite{delmoral2006}; the finite count-query
+construction and proof here specify its role in this problem.
+
+\subsection{Prefix-growth variant}
+Let $T=KB$, and let $\xi_t$ be the first $t$ tuple bits. Choose fixed positive guide functions
+$\ell_t(\xi_t)$ before running a batch, with
+\[
+ \ell_0=1,\qquad \ell_T(W)=g(y-s_W),\qquad
+ \gamma_t(\xi_t)=\pi(\xi_t)\ell_t(\xi_t).
+\]
+For $0<t<T$, the guides may be clipped Gaussian, tilted or polynomial continuation estimates.
+They are intermediate computational weights, not additional physical observations.
+Use an evaluable legal branch proposal $q_t(b\mid\xi)$, and incremental weight
+\begin{equation}
+ G_t(\xi b)=
+ \frac{\pi(b\mid\xi)\ell_t(\xi b)}
+      {q_t(b\mid\xi)\ell_{t-1}(\xi)}.
+ \label{eq:particle-increment}
+\end{equation}
+Without resampling the product telescopes to the exact tuple importance weight.
+
+One batch contains $N$ particles:
+\begin{enumerate}
+\item Start with $N$ empty prefixes of equal weight and $\widehat Z_0=1$.
+\item At each step, independently choose each parent from the previous normalized weights, then draw
+      its next bit from $q_t$. This is multinomial resampling followed by propagation.
+\item Compute $G_t^{(i)}$, their average $\overline G_t$, normalized weights
+      $w_t^{(i)}=G_t^{(i)}/(N\overline G_t)$, and
+      $\widehat Z_t=\widehat Z_{t-1}\overline G_t$.
+\item At $t=T$, retain the weighted complete tuples without an additional resampling step.
+      Set $Y=\widehat Z_T$ and $X_H=Y\sum_iw_T^{(i)}H(W^{(i)})$.
+\end{enumerate}
+All weights are positive. Whole tuple histories, or parent pointers sufficient to reconstruct them,
+must survive resampling so full-message counts remain available.
+
+\subsection{Why independent batches give valid finite confidence}
+Define $\widehat\gamma_t(f)=\widehat Z_t\sum_iw_t^{(i)}f(\xi_t^{(i)})$.
+Conditioning on the previous cloud and averaging the multinomial parents and proposed children gives
+\[
+ \E[\widehat\gamma_t(f)\mid\mathcal F_{t-1}]
+ =\widehat\gamma_{t-1}\!\left(
+       \sum_b\pi(b\mid\xi)\frac{\ell_t(\xi b)}{\ell_{t-1}(\xi)}f(\xi b)\right).
+\]
+Induction from the empty prefix proves
+\[
+ \E\widehat\gamma_t(f)=\sum_{\xi_t}\gamma_t(\xi_t)f(\xi_t).
+\]
+In particular $\E Y=Z$ and $\E X_H=ZT_H$. This proves unbiasedness of the unnormalized quantities,
+not of each batch's self-normalized tails.
+
+To obtain a deterministic finite bound, ensure
+$q_t(b\mid\xi)\geq\epsilon_t\pi(b\mid\xi)$ and
+$a_t\leq\ell_t\leq b_t$, with $a_0=b_0=1$ and $b_T=1$.
+Positive clipping supplies the intermediate $a_t,b_t$ without asserting their accuracy.
+Then
+\begin{equation}
+ 0\leq X_H\leq Y\leq C_{\rm part}:=
+       \prod_{t=1}^T\frac{b_t}{\epsilon_t a_{t-1}}.
+ \label{eq:particle-bound}
+\end{equation}
+Run $S$ independent batches and pool their \emph{unnormalized} $X_H,Y$.
+Section~\ref{sec:replicates} applies with $C=C_{\rm part}$ and $J=MK$.
+The pooled positive law weights terminal particles by $Y_s w_{T,s}^{(i)}$.
+It yields sparse count tails and a feasible greedy action. Equal-weight averaging of batch ratios
+would not have the displayed unbiased numerator identity.
+
+The bound can be exponentially poor in $KB$; that is explicit, not hidden as a claimed effective sample size.
+For fixed $N$, arbitrarily many independent batches still give consistent queries with a finite
+confidence prescription. With $N=1$, the construction reduces to independent sequential importance sampling.
+This proof does not claim a useful rate for one large correlated cloud.
+
+\subsection{A second variant: temper complete tuples}
+Instead of increasing prefix length, use complete tuples and a fixed schedule
+$0=\beta_0<\beta_1<\cdots<\beta_T=1$:
+\[
+ \gamma_t(W)=\pi_{\rm slot}(W)g(y-s_W)^{\beta_t},\qquad
+ G_t(W)=g(y-s_W)^{\beta_t-\beta_{t-1}}\in(0,1].
+\]
+Initialize particles from the true source. At each stage weight by $G_t$, record the mean weight in
+$\widehat Z_t$, resample, and optionally apply any kernel invariant for the normalized $\gamma_t$.
+DEC-06 supplies such conditional/global Metropolis kernels with the stage likelihood.
+The intermediate exponent changes a computational target only; the final physical noise remains $\sigma^2$.
+
+For a marked function $f$, the same induction now uses
+$\gamma_{t-1}(G_t K_t f)=\gamma_t(K_t f)=\gamma_t(f)$, by invariance of $K_t$.
+At the final stage use the post-resampling/mutation equal-weight empirical measure with $\widehat Z_T$,
+or its equivalent pre-resampling weighted measure if no final mutation is made.
+Thus independent batches again have unbiased evidence/numerator pairs and now $Y\leq1$.
+No equilibrium assumption for each finite mutation run is needed for this identity.
+Poor exploration still appears as high relative error when $Z$ is small.
+An adaptive temperature schedule selected from the same particles is outside this fixed-schedule proof.
+
+\textbf{Costs.} Prefix growth needs $SNT$ branch/guide operations, propagation and resampling,
+plus waveform construction and terminal count reconstruction. Parent pointers require $O(NT)$ records
+per active batch; cached signals can add $O(Nn)$ storage and $O(n)$ copying work per propagation.
+Pooled sparse tails require at most $SNK$ updates/storage entries before aggregation.
+Tempering charges all complete-tuple mutations and stage likelihoods instead.
+No claim equates $SN$ correlated terminal particles with $SN$ independent posterior samples.
+
+\clearpage
+\section{DEC-08: compatible quantized-state decoding}
+\label{sec:states}
+\textbf{In plain terms.} Many partial explanations can have almost the same effect on every possible
+future explanation. Merge those effects while retaining legal count choices and their probabilities.
+
+Use Report 7's compatible future projections before quantizing. A fully specified specialization orders
+the complete alphabet. At cut $i$, preserve occupancy $k$, a representative signal and positive source
+weight. A transition chooses $a_i=c$, multiplies by $1/c!$ for IID counts, adds $c\phi_i$ and applies
+Report 9 B's positive representative correction $\kappa_i$. Zero-count transitions can be identities.
+The complete-path weight is
+\[
+ \widetilde\omega(a)\propto
+       \left(\prod_i\frac{\kappa_i}{a_i!}\right)g(y-\overline s_M).
+\]
+Every legal count vector has one path. Merge only states with compatible future constraints; no legal
+path is dropped merely because its representative has drifted outside a cover of exact signals.
+Use B's enlarged grid cover or certified constructed ranges.
+
+At occupancy $K$ the future is empty and final scalar absorption is exact.
+The product likelihood-ratio error telescopes, using the observation once.
+If the sum of absolute local log errors is at most $E_*$ on every path, then
+$\TV(P,Q)\leq\tanh(E_*/2)$.
+The occupied-transition schedule charges at most $K$ rounding events and bounds their total error by
+$\theta K(K-1)/2$, with $\theta$ fixed by grid spacings and future coordinate widths.
+
+Record every transition with a count marker $z_{i,c}$. A reverse pass gives
+$Q(a_i=c)=\partial\log\widetilde Z/\partial\log z_{i,c}$.
+Take tails, allocate and report the TV-derived excess-risk bound. Hold grouping/scalars fixed during
+this differentiation. A scalar derivative for a message's \emph{mean} alone would be insufficient.
+
+\textbf{Variations.} Exact finalized-resource schedules; cut-specific versus occupancy-fixed grids;
+state-specific envelopes; backward sampling from the graph followed by DEC-05 correction.
+The unique-path construction makes its approximate weight evaluable on a proposed count vector.
+Known alias conditionals may be restored separately.
+Distinct sampling restricts each transition to $c=0,1$ and preserves its future exclusions.
+
+\textbf{Cost.} With at most $R$ representatives per cut/occupancy, there are $O(MKR)$ states and
+$O(MK^2R)$ transitions, each with its construction/projection cost.
+The reverse pass needs recorded transitions or charged recomputation, and tails cost $O(MK)$.
+The covering number can be exponential in projected dimension.
+This complete option remains explicit in $M$; a prefix-built state graph that avoids all leaves would
+require its own transition and readout derivation and is not assumed here.
+
+\clearpage
+\section{DEC-09: positive regional and feature contraction}
+\label{sec:positive-contraction}
+\textbf{In plain terms.} Keep exact choices inside manageable regions and simplify how regions interact.
+Sum the resulting positive model while carrying the total number of users and the requested word counts.
+
+Partition the word alphabet into disjoint regions $\mathcal R_r$.
+A local state is a legal count vector $a^{(r)}$, with occupancy $k_r$ and signal $x_r=\Phi_r a^{(r)}$.
+Use exact local source factors $1/\prod_w a_w!$ and enforce $\sum_rk_r=K$.
+Expand the physical likelihood into local unaries and cross terms
+$\exp(-x_r^Tx_s/\sigma^2)$ as in Report 9 C.
+Declare which edges are retained exactly, deleted with a bound, or represented by positive features.
+
+For a forest, cardinality-indexed sum-product messages give its normalizer and marked local-state
+marginals. With cycles, condition a sufficient feature/state cutset and sum every sector, or use a
+specified exact elimination schedule on the approximate factors.
+At a region incident to several edges, retain their \emph{joint} feature indices.
+Separate low ranks do not justify multiplying independently marginalized neighbour effects.
+
+For each word in a region, sum local states with $a_w=c$ to obtain count probabilities.
+Alternatively carry the corresponding count marker through contraction.
+Normalize, take tails and allocate. Compatible deleted-edge/feature log bounds add to a global range;
+use $\tanh(\Omega/4)$ or the propagated nonuniform envelopes for its error.
+Positive Taylor feature order tending upward restores the retained interactions; restoring all edges
+and states gives exact contraction.
+
+\textbf{Variations.} Regions may be full words, groups of patterns/payloads, or exact constrained blocks.
+The polar bit/pattern factor graph is another representation, provided all CRC/XOR, pattern, source and
+occupancy constraints remain exact and the needed count counters cross every separator.
+Positive low-rank factors, cutset enumeration and sampled cutset sectors are different implementations.
+Sampling sectors needs their \emph{actual} proposal density and the corresponding importance proof.
+Backward sampling from a fully normalized positive contraction can feed DEC-05 when the sampled
+configuration weight/density is evaluable. Local state caps need an omitted-mass certificate.
+
+\textbf{Cost.} Include construction of every local state and every feature, all sector sums, joint
+separator domain products and marked readout. A small local rank is not a small cyclic contraction.
+This family has a complete finite procedure but no generally small separator guarantee.
+Unlike an undeclared loopy-message approximation, it defines one positive count law and a stated error.
+
+One explicit sampled-sector variation avoids any unspecified sector distribution.
+For $L$ discrete cutset sectors, propose each uniformly and contract its nonnegative evidence $Z_\ell$
+and marked numerator $N_{\ell,H}$. The pair $Y=LZ_\ell$, $X_H=LN_{\ell,H}$ is unbiased for the
+approximate model's full evidence/numerator. A bound $Z_\ell\leq Z_{\rm env}$ gives
+$Y\leq LZ_{\rm env}$, so Section~\ref{sec:replicates} applies.
+For example, an upper bound on the complete positive weight divided by the normalized source prior
+also bounds its evidence and every nonnegative sector. Construct that bound from the factor envelopes.
+This defines finite sampling and readout without claiming a cheap or concentrated choice of sectors;
+the approximate model's bias remains separate from the sampling error.
+
+\clearpage
+\section{DEC-10: connected-component decoding}
+\label{sec:connected}
+\textbf{In plain terms.} Compute interactions inside small groups, then assemble every way those groups
+can coexist among the $K$ users. A two-user cutoff still includes many interacting pairs at once.
+
+Fix one target-$K$ unary reference $\nu$ and centered pair factor $b$, possibly using DEC-02's center.
+For the positive variant choose a certified floor $0<b_0\leq b(u,v)$ and put
+$f_+(u,v)=b(u,v)/b_0-1\geq0$.
+In the exact auxiliary-graph expansion, restrict connected components to size at most $q$.
+For a queried word or cell $D$, construct marked connected coefficients
+\[
+ C_{m,D}(z)=\E_{\nu^{\otimes m}}\!
+ \left[z^{A_D}\sum_{\text{connected }G\text{ on }m\text{ slots}}
+                         \prod_{(i,j)\in G}f_+(w_i,w_j)\right],\quad m\leq q.
+\]
+Assemble all disjoint components by
+\[
+ B_{0,D}^{(q)}(z)=1,\qquad
+ B_{k,D}^{(q)}(z)=\sum_{m=1}^{\min(k,q)}
+       \binom{k-1}{m-1}C_{m,D}(z)B_{k-m,D}^{(q)}(z).
+\]
+Normalize coefficients of $B_{K,D}^{(q)}$ to obtain count probabilities.
+For a standalone decoder query every full word, take tails and allocate.
+For selective discovery use these cell queries inside DEC-03.
+Report 9 E bounds the omitted auxiliary-component mass $\eta_q$, giving $\TV(P,Q_q)\leq\eta_q$.
+Order $q=K$ is exact; $q=1$ is the reference product law. Freeze the target-$K$ reference and floor
+throughout the recurrence rather than changing them with intermediate block size.
+
+\textbf{Signed variant.} Report 7's expansion with $f=b-1$ can have smaller coefficients but signed
+truncations. Carry its connected-tree numerator/evidence remainder and use interval decisions.
+Negative truncated coefficients cannot be normalized as probabilities. This signed formulation can
+retain the distinct-source hard pair zeros; the positive-floor product assembly cannot.
+When combining evidence with other providers, restore every reference-dependent scale factor.
+
+\textbf{Costs.} A direct connected-block construction costs at most
+$O(\sum_{m\leq q}m^2M^m2^{\binom m2})$ arithmetic once pair access is available.
+Shared marked coefficients and polar K2/K3 operators reduce particular work.
+The positive per-word assembly costs $O(MK^2q^2)$, and its weighted tree certificate additionally costs
+$O(KC_{\rm pair}+K^2M)$. A low cutoff need not give a small error or cheap block construction.
+The graph-component restriction is not a small \emph{word-list} restriction; its sampling density must
+not be replaced by the weight of one chosen auxiliary graph.
+
+\clearpage
+\section{DEC-11: Fourier-based count-query decoding}
+\label{sec:fourier}
+\textbf{In plain terms.} Express a distribution of waveform sums through frequency functions.
+Multiplication then replaces convolution, but the result is a signed/complex calculation requiring
+marked numerator bounds and a positive denominator bound.
+
+\subsection{Finite-signature and continuous-frequency variations}
+The finite-signature route uses Report 7's exact integer signature and its sufficiently large Fourier
+grid. Keep all modes for the exact query, or selected modes with Report 9 G's omitted-mode bounds.
+Count-$j$ queries involve the excluded remainder power $K-j$, not just the evidence power $K$.
+Strong damping of the evidence modes need not justify dropping the same modes in high-count queries.
+Constructing likelihood coefficients remains part of the cost.
+
+Alternatively draw $\Omega\sim\mathcal N(0,\sigma^{-2}I_n)$.
+With $\chi_S(\Omega)=\E_{w\mid S}e^{-i\Omega^T\phi_w}$, exact IID identities are
+\[
+ Z=\E_\Omega e^{i\Omega^Ty}\chi_{\mathcal W}(\Omega)^K,\qquad
+ N_{w,j}=\binom Kj M^{-j}(1-1/M)^{K-j}
+ \E_\Omega e^{i\Omega^T(y-j\phi_w)}\chi_{-w}(\Omega)^{K-j}.
+\]
+Take real parts. Character sums may be explicit, or use Q's certified complex polynomial queries
+projected onto the unit disk. A one-user error $\epsilon_\chi$ gives power error at most $h\epsilon_\chi$;
+include the exact prior count coefficient when bounding the marked term.
+
+Each exact frequency integrand for an evidence or count-tail numerator has real value in $[-1,1]$.
+For $S$ independent frequencies and $J$ queries, the simultaneous sampling error is at most
+$\sqrt{2\log[2(J+1)/\delta]/S}$, before adding inner errors.
+This is a signed bounded-variable argument, not the positive-replicate assumption
+$0\leq X\leq Y$ in Section~\ref{sec:replicates}.
+Use numerator/event-complement intervals and a certified positive evidence lower bound.
+
+\textbf{Full decoder and cost.} Evaluate all word queries and apply interval allocation, or supply all
+cell-count queries required by DEC-03 with its simultaneous confidence accounting.
+A frequency table without word discovery is incomplete. Direct all-word work retains $M$ dependence;
+each frequency's conditional characteristic and inner degree/pattern work is charged.
+Increasing modes, sample count and inner accuracy approaches exact queries, but cancellation and small
+evidence can make the needed absolute accuracy prohibitive.
+Without-replacement draws require the exact distinct marked coefficients or a controlled source-law
+comparison; the displayed IID powers do not apply unchanged.
+
+\clearpage
+\section{DEC-12: signed low-rank query contraction}
+\label{sec:signed}
+\textbf{In plain terms.} Approximate large intermediate tables by shorter signed factorizations.
+Compute a bound on what those factors lose through the same constrained calculation.
+
+Choose a finite factorization/elimination schedule with exact source, CRC, pattern and cardinality
+constraints. Preserve every needed count counter in its separators.
+Approximate selected nonnegative likelihood factors $f_e$ by signed low-rank $\widetilde f_e$.
+For a cut table $G$, a certified operator-norm residual $\epsilon_r$ gives
+$|a^T(G-\widetilde G)b|\leq\epsilon_r\|a\|_2\|b\|_2$, using actual incoming vectors or valid norm bounds.
+
+For multiple factors use constructible nonnegative bounds
+$|f_e-\widetilde f_e|\leq\epsilon_e$ and $|\widetilde f_e|\leq A_e$.
+The positive error envelope from Report 9 T is
+\[
+ \mathcal E(x)=\sum_j\epsilon_j(x)
+       \prod_{e<j}(A_e(x)+\epsilon_e(x))\prod_{e>j}A_e(x).
+\]
+Contract the signed model for $\widetilde Z,\widetilde N_H$.
+The two envelope contractions are
+\[
+ B_Z=\sum_x\pi(x)\mathcal E(x),\qquad
+ B_H=\sum_x\pi(x)|H(x)|\mathcal E(x).
+\]
+They certify $|Z-\widetilde Z|\leq B_Z$ and $|N_H-\widetilde N_H|\leq B_H$.
+Normalize intervals, query all words or attach DEC-03, and allocate under Section~\ref{sec:interfaces}.
+
+\textbf{Variations and limits.} Cut SVDs, signed tensor networks and selected separator compression use
+the same interface only when their residual certificates are supplied.
+If $\widetilde f=\sum_\ell u_\ell v_\ell$, the positive envelope
+$A=\sum_\ell|u_\ell||v_\ell|$ gives an explicit contraction, but may inflate its rank/size or magnitude.
+A full SVD is a finite construction, possibly requiring the very table one hoped to avoid.
+Include construction, main contraction, every marked envelope and joint separator work.
+Full rank/zero residual recovers exact contraction. Sampled-entry rank estimates, clipped negative
+outputs and an unmarked residual alone do not close this decoder.
+
+\clearpage
+\section{DEC-13: positive-field decoding and exact joint correction}
+\label{sec:fields}
+\textbf{In plain terms.} Replace the joint interaction by shared Gaussian auxiliary variables.
+Conditioned on them, the uncorrected retained-field law separates into one-user categorical laws.
+Either integrate their count distributions or sample complete tuples together with the fields.
+
+Stack the waveforms as $x_W$ and put $s_W=\sum_k\phi(w_k)$,
+$t=y/\sigma^2$, $C=(KI-\one\one^T)\otimes I_n/\sigma^2$.
+Choose a retained covariance $BB^T\preceq C$, whitened field $U\in\mathbb R^d$, and define
+\[
+ D(W)=x_W^T(C-BB^T)x_W,\qquad
+ c_y=e^{-(\|y\|^2+K^2)/(2\sigma^2)},\qquad
+ f_k(u,w)=e^{(t+(Bu)_k)^T\phi_w}.
+\]
+The full field has $BB^T=C$ and $D=0$.
+For a common retained physical projection, R expresses $D$ as omitted pairwise dispersion and bounds it.
+
+\subsection{Conditional-count integration}
+Ignoring $D$ gives tuple weight $\omega_{\rm slot}(W)e^{-D(W)/2}$.
+With exact inner sums $\psi_k(u)=M^{-1}\sum_w f_k(u,w)$, its field density is proportional to
+$\varphi_d(u)h(u)$, $h=\prod_k\psi_k$, and
+$p_{k,w}=f_k/(M\psi_k)$.
+Conditional count probabilities for word or cell $A$ are coefficients of
+\[
+ \prod_{k=1}^K[1-p_{k,A}(u)+z\,p_{k,A}(u)].
+\]
+Use a bounded importance proposal from R, calculate its field weight, and integrate these bounded
+conditional tails. Section~\ref{sec:replicates} applies to independent field samples.
+Enumerate full words for readout, or feed cell queries to DEC-03.
+The bounded grid construction below gives a deterministic alternative to the field samples.
+
+Direction removal costs at most $\tanh((D_{\max}-D_{\min})/8)$ in TV.
+Restricting $\|U\|\leq R$ adds the corresponding posterior mass bound.
+Uniform coherent polynomial inner weights add the joint log-ratio bound from Report 9 R.
+Propagate these in their actual conditional order. Independent normalization of unrelated inner
+approximations does not necessarily define this joint law.
+
+\subsection{A deterministic field integral with an explicit remainder}
+For the uncorrected retained-field target and a word/cell count-tail indicator $H$, write
+\[
+ F_H(u)=\varphi_d(u)M^{-K}\sum_W
+              e^{t^Ts_W+(Bu)^Tx_W}H(W),\qquad 0\leq H\leq1.
+\]
+It is evaluable through the inner partitions and conditional count polynomial; $F_1$ is the evidence
+integrand, without $c_y$. Let $a_*=K/\sigma$ and restrict to the cube $[-R,R]^d$.
+Each component has logarithmic gradient $-u+B^Tx_W$, with $\|B^Tx_W\|\leq a_*$.
+Since all its summands are nonnegative,
+\[
+ F_H(u)\leq F_{\max}:=(2\pi)^{-d/2}e^{K\|t\|+a_*\sqrt d R},\qquad
+ \|\nabla F_H(u)\|\leq(\sqrt d R+a_*)F_{\max}=:\Lambda.
+\]
+These are uniform over all count marks in $[0,1]$; differentiating an approximate normalized
+conditional tail is unnecessary.
+A midpoint grid with cell side $\Delta=2R/m$ therefore has integral error at most
+\[
+ (2R)^d\Lambda\,\frac{\sqrt d\,\Delta}{2}.
+\]
+The proof bounds the integrand's change from each midpoint by its Lipschitz constant times the
+cell radius, then sums cell volumes. Node-value intervals add their volume-weighted errors.
+Multiply by $c_y$ for physical unnormalized weights and normalize with a positive denominator bound.
+
+The field posterior is a mixture of unit-covariance Gaussians with centers of norm at most $a_*$.
+Leaving the cube implies Euclidean norm above $R$, so its omitted mass is at most
+$\Pr(\|Z_d\|>R-a_*)$ for $R>a_*$. This also bounds the change in count law after restriction.
+Increasing $R$ and refining the grid gives a finite controlled approximation; it costs $m^d$ nodes
+and all their inner/count queries. This is a complete quadrature variation, not an efficient high-dimensional
+integration claim. At $d=0$ there is no integral.
+
+\subsection{Keep the auxiliary variable to make exact correction evaluable}
+\label{sec:field-joint}
+There is a useful complete alternative to evaluating the field-integrated proposal probability of a tuple.
+Define an unnormalized target on the \emph{joint} space:
+\begin{equation}
+ \Omega(u,W)=c_y\varphi_d(u)M^{-K}
+       \exp\!\left(t^Ts_W+(Bu)^Tx_W+\frac{D(W)}2\right).
+ \label{eq:field-joint}
+\end{equation}
+Integrating $u$ multiplies by $\exp(x_W^TBB^Tx_W/2)$.
+Adding $D/2$ restores $x_W^TCx_W/2=(K^2-\|s_W\|^2)/(2\sigma^2)$, so
+$\int\Omega(u,W)\,du=\omega_{\rm slot}(W)$ exactly.
+This algebra is the reason a reduced field can guide an exact-target sampler.
+
+Choose an evaluable field proposal $q_U(u)$ and independent conditional categorical guides
+$q_k(w\mid u)>0$. Draw $u$, then all $K$ full words, and use
+\[
+ Y(u,W)=\frac{\Omega(u,W)}
+                {q_U(u)\prod_kq_k(w_k\mid u)}.
+\]
+No marginal $q(W)=\int q_U\prod q_k$ is needed. This is ordinary importance weighting on an
+explicit extended space, not an assumption that this marginal density is cheap.
+
+In particular use Q's positive inner polynomials
+$\rho f_k\leq\widetilde f_k\leq f_k$, with
+$\widetilde\psi_k=M^{-1}\sum_w\widetilde f_k$ and
+$q_k=\widetilde f_k/(M\widetilde\psi_k)$.
+Draw each word by exact conditional prefix sums of that \emph{same} polynomial.
+Then the computable joint weight is
+\begin{equation}
+ Y=c_y\frac{\varphi_d(u)}{q_U(u)}e^{D(W)/2}
+        \prod_k\left[\widetilde\psi_k(u)
+                     \frac{f_k(u,w_k)}{\widetilde f_k(u,w_k)}\right].
+ \label{eq:field-corrected-weight}
+\end{equation}
+Both direction removal and inner guide error are corrected. Their price moves into weight
+concentration and construction cost. The physical likelihood is still represented exactly once.
+
+\subsection{A finite weight bound and full-word readout}
+Let $\overline\Sigma$ be a proved global tilted covariance envelope,
+$A=B^T(I_K\otimes\overline\Sigma)B\prec I$, and
+$D_A=\det(I-A)^{-1/2}$.
+R supplies $q_U=\mathcal N(0,(I-A)^{-1})$ and
+$\varphi_d h/q_U\leq D_A h_0$, $h_0=\psi(t)^K$.
+For $0\leq D\leq D_{\max}$, \eqref{eq:field-corrected-weight} therefore obeys
+\begin{equation}
+ Y\leq c_yD_Ah_0 e^{D_{\max}/2}\rho^{-K}.
+ \label{eq:field-joint-bound}
+\end{equation}
+Use a certified upper bound for $h_0$ when computing the numerical bound.
+Since the full evidence is at least $c_yh_0$, the exact concentration ratio is at most
+$D_Ae^{D_{\max}/2}\rho^{-K}$. The sufficient curvature regime, determinant, dispersion and inner degree
+can each make this unattractive. On an unbounded field domain a rule choosing degree from $\|u\|$
+must enforce the same $\rho$ for \emph{every} $u$, not just verify sampled points.
+
+Outside this Gaussian-envelope regime, restrict $u$ to a ball and propose
+$q_U=\varphi_d\ind_{\|u\|\leq R}/p_R$, where $p_R=\Pr(\|Z_d\|\leq R)$.
+For slot-sum-zero retained fields,
+$h(u)\leq\exp(K\|t\|+KR/\sigma)$ on the ball. This gives the finite bound
+\[
+ Y\leq c_y p_R e^{D_{\max}/2}\rho^{-K}
+                \exp(K\|t\|+KR/\sigma).
+\]
+After the $D$ correction, the conditional field given $W$ is still
+$\mathcal N(B^Tx_W,I)$, with $\|B^Tx_W\|\leq K/\sigma$.
+Thus its exact joint posterior mass outside the ball is at most
+$\eta_R=\Pr(\|Z_d\|>R-K/\sigma)$ for $R>K/\sigma$.
+The sampler targets this restricted joint law; add $\eta_R$ through the restriction rule.
+Rejection sampling the base Gaussian until it lies in the ball costs an expected $1/p_R$ attempts.
+
+Independent joint draws now give sparse full-word tails via Section~\ref{sec:replicates}, followed by
+greedy allocation. This closes discovery without a dense table of conditional count polynomials.
+The factor $e^{D/2}$ generally recouples words given $u$, so one cannot simultaneously apply the
+uncorrected Poisson-binomial readout to those corrected weights.
+At full rank with exact inner laws, conditional integration instead gives the earlier Rao--Blackwell
+query variation. At zero retained rank the joint sampler becomes a corrected one-user product proposal.
+
+\textbf{Costs and source boundary.} Charge field matrices, sampling/rejection, $K$ inner partition and
+prefix-sampling calculations, every pattern sum, exact waveform/dispersion evaluation and sparse readout.
+Projection may reduce field dimension while worsening correction concentration.
+The IID conditional product is essential to these inner formulas. For distinct tuples the identity
+for a fixed $W$ remains true, but one must use the injective prior, legal proposal and its coupled
+normalization/bounds. Reusing the IID product integral or the displayed concentration proof is not valid.
+
+\clearpage
+\section{Combine the designs without hiding a missing operation}
+\label{sec:combinations}
+\subsection{Useful compositions with explicit interfaces}
+\begin{enumerate}
+\item \textbf{Queries plus selective discovery.}
+      DEC-01, 10, 11, 12 and conditional-field DEC-13 can answer DEC-03's cell-count questions.
+      Their all-word version is already a finite decoder; the prefix wrapper is a possible reduction in
+      query count, not a guarantee that their preprocessing becomes sub-exhaustive.
+\item \textbf{Approximate law plus exact correction.}
+      DEC-02, 08 and fully normalized positive DEC-09 can propose for DEC-05.
+      Backward sampling, density evaluation and normalizers are required operations.
+      DEC-13's extended-space construction is a separate way to avoid one intractable marginal density.
+      A per-word residual estimate is not automatically a drawable joint law.
+\item \textbf{Exact local algebra inside global exploration.}
+      Polar K2/K3 contractions supply DEC-06 blocks and DEC-07 tempering mutations or exact conditional
+      integration. All outside-user dependence survives in the current residual or exact outer sum.
+      No assertion that interactions beyond three users are negligible is needed.
+\item \textbf{Reference choice before interaction approximation.}
+      DEC-02's center can initialize DEC-10 or a guide, while exact parity grouping precedes DEC-09/12
+      features and exact future projection precedes DEC-08 quantization.
+      Recentring leaves the field dispersion invariant, so its benefit does not transfer automatically.
+\item \textbf{Moment information plus multiple bounded providers.}
+      P's count LP and prefix consistency can intersect valid moments/numerators from different
+      providers using one common exact evidence. Their approximate point estimates need not form one
+      joint law. The low-order obstruction tells when a new query is required.
+\item \textbf{Lists and search plus omitted-mass control.}
+      Product search or sampling can suggest candidate words; DEC-04 or A's envelope can bound what was
+      omitted. Restricting an inference engine to that list costs posterior support mass.
+      Alternatively keep full support with a defensive proposal and correct it.
+\end{enumerate}
+
+\subsection{Mixtures, query selection and adaptation}
+Several full-support proposals $q_r$ can be combined as
+$q=\sum_r\lambda_rq_r$ with fixed nonnegative weights summing to one.
+Draw a component but weight using the \emph{mixture} density, which requires every contributing $q_r(W)$.
+If each $P/q_r\leq\gamma_r$, then
+\[
+ q(W)\geq P(W)\sum_r\lambda_r/\gamma_r,\qquad
+ \sup_W P(W)/q(W)\leq\left(\sum_r\lambda_r/\gamma_r\right)^{-1}.
+\]
+This is a conditional algebraic bound, not a promise that computing all densities is worthwhile.
+Incompatible latent spaces cannot be mixed by omitting their marginalization or defining no common target.
+
+Valid deterministic intervals can be intersected. Random intervals need simultaneous coverage across
+queries, provider choices and stopping rounds. Use conditional fresh-batch guarantees after adapting a
+guide; the report does not certify arbitrary reuse of adaptive samples.
+For a final action, use the strongest valid total-tail or direct-gain certificate actually obtained.
+Do not add two estimates of the same bias, or declare a bias removed merely because a correction was proposed.
+
+\subsection{Exact ambiguity and incomplete algorithm names}
+Restoring source-prior conditionals inside known disjoint equal-signal classes cannot increase TV
+(Report 7). Charge the class construction and full-word marks. Selecting a preferred word inside an
+ambiguous class does not remove the physical model's nonidentifiability.
+
+Generic loopy BP, EP, AMP/VAMP, SC/SCL and a neural guide are not additional derived full decoders here.
+They still need count readout, unseen-word handling and error accounting. A message calculation may
+guide DEC-05/07; a beam with its correct frontier is a DEC-04 variation. Learning is unnecessary here.
+Historical D2 remains an empirical comparator, with no new count-posterior or AMP guarantee from this report.
+
+\clearpage
+\section{Coverage of the exact and approximation work}
+\label{sec:coverage}
+\subsection{Every approximation entry has a defined role}
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}p{.12\textwidth}p{.34\textwidth}Y@{}}\toprule
+Report 9 & Resource & Decoder role\\\midrule
+A & Omitted-support evidence & DEC-04 and candidate/restricted variants; keeps discovery loss explicit.\\
+B & Compatible quantization & DEC-08, with optional corrected backward samples in DEC-05.\\
+C & Regional counts / sparse cross edges & DEC-09; exact cardinality survives edge simplification.\\
+D, J & Positive features / cyclic cutsets & DEC-09; joint indices and sector costs remain.\\
+E & Positive connected restriction & DEC-10, full-word or prefix-marked readout.\\
+F, N & Residual moments / exponential tilt & DEC-01 queries, DEC-03/04 bounds, DEC-05/07 guides.\\
+G & Marked Fourier calculation & DEC-11; signed normalization rather than a sampled count law.\\
+H & Weighted samples / conditional integration & DEC-05 and the generalized replicate interfaces in DEC-07/13.\\
+I & Prefix gain and discovery & DEC-03; also a readout wrapper for query-based families.\\
+K & Weighted correction / contrasts / aliases & Corrections in DEC-05/13 and tighter query/decision certificates.\\
+L & Guides and corrected local moves & DEC-05/06; guides and stage kernels in DEC-07.\\
+M, P & Multiplicity moments / consistent LPs & DEC-01/03 and any provider yielding the required marked constraints.\\
+O, R & Positive fields / reductions / integration & DEC-13, including the new joint correction route.\\
+Q & Finite polar inner and residual series & DEC-01/02/03/05/07/11/13; degree and pattern work charged.\\
+S & Variational reference / evidence gap & DEC-02; references and proposals in DEC-05/10.\\
+T & Signed low-rank errors & DEC-12 and its optional DEC-03 discovery wrapper.\\\bottomrule
+\end{tabularx}
+\end{center}
+
+Restriction, a moment LP and an alias correction are deliberately not separate decoder families.
+They modify or certify a full execution path. This table accounts for all A--T without enumerating an
+unbounded Cartesian product of settings.
+
+\subsection{The major exact resources also survive the transition}
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{.42\textwidth}Y@{}}\toprule
+Report 7 resource & Where it is used\\\midrule
+Common posterior, factorial source, count tails & The contract and final readout of every family.\\
+Excluded residual recursion & REF, DEC-01, guided conditional queries and marked Fourier counts.\\
+Inside/outside convolution and marked reverse passes & REF, DEC-08/09; no loss of word identity on merging.\\
+Conditional characters, Walsh and overlap parities & Inner queries, DEC-02 discovery, DEC-06 blocks and DEC-09/10/12 contractions.\\
+Compatible projections and reachable-state bounds & DEC-08 construction and its explicit remaining state cost.\\
+Joint separator/rank obstruction & DEC-09/12 cost account; low physical dimension is not assumed to imply low kernel rank.\\
+Support duals, cached bounds and adverse prior mass & DEC-03/04 certificates and guide/query bounds.\\
+Fourier and connected identities & DEC-11 and DEC-10, with their exact limits retained.\\
+Reference changes, reweighting and exact aliases & DEC-02/05/10/13 and common ambiguity/correction rules.\\\bottomrule
+\end{tabularx}
+\end{center}
+
+\clearpage
+\section{What is now ready to review}
+\label{sec:review}
+The result is a list of complete mathematical decoder options, not a commitment to thirteen independent
+implementations. A small implementation may share one source/encoder interface, count allocator,
+interval/replicate readout and a few query primitives across many variations.
+The important distinctions are what is constructed, what is sampled or summed, where approximation
+enters, how full messages appear, and what certificate is available.
+
+The additional closure work is:
+\begin{enumerate}
+\item Identical-slot product discovery needs only its highest $\min(K,M)$ word probabilities, with a proved
+      exchange argument and finite conditional-character prefix search. A slot-specific product variation
+      instead has explicit coordinate updates and Poisson-binomial readout, without the same discovery shortcut.
+\item Field sampling can retain its auxiliary variable and use a directly evaluable joint weight.
+      This corrects both discarded directions and polynomial categorical guides without evaluating
+      an unavailable integrated tuple proposal. Bounded-domain and curvature-regime guarantees remain explicit.
+\item Prefix or tempered particle batches have unbiased unnormalized count queries and finite
+      independent-batch confidence. Correlated particles are not treated as independent observations,
+      and useful concentration remains unproved.
+\item Uniform cutset-sector sampling and bounded field midpoint quadrature have explicit proposals or
+      integration remainders, so these named variations also have finite complete constructions.
+\end{enumerate}
+
+\textbf{Completion boundary.} Every retained option can return legal full-word counts at a finite
+resource budget and state its residual error bound, even if that bound is one. The options with
+convergent refinement are identified; standalone Gaussian and variational product approximations have
+irreducible modeling-error conditions rather than an automatic exact limit.
+No option is claimed tractable at the intended load solely because its inner equations are finite.
+
+\textbf{Review before code.} Decide which execution families and variations are worth retaining for the
+first comparison. For each chosen design, fix its query/proposal provider, exact versus approximate
+corrections, discovery rule and numerical stopping budget. The subsequent implementation stage should
+measure actual tail/decision error, certificate tightness or failure probability, and total construction,
+inference and readout cost separately. This report supplies that choice set; it does not select a winner
+or start simulations. New derivations should address a specific remaining computational obstacle exposed
+by a chosen design.
+
+\begin{thebibliography}{9}
+\bibitem{report7} Project Report 7, \emph{Polar decoding from the posterior}.
+\href{07_polar_decoding_from_posterior.pdf}{Exact report}. Exact identities, finite decoders, reductions,
+obstructions and decision certificates for the fixed contract.
+\bibitem{report9} Project Report 9, \emph{Polar Bayesian decoding: approximation algebra}, 19 October 2026.
+\href{09_polar_bayesian_approximations.pdf}{Approximation report}. Entries A--T and their completion audit
+supply the approximation formulas and bounds used here.
+\bibitem{delmoral2006} P. Del Moral, A. Doucet and A. Jasra,
+\emph{Sequential Monte Carlo samplers}, Journal of the Royal Statistical Society, Series B 68(3),
+411--436, 2006.
+\href{https://www.stats.ox.ac.uk/~doucet/delmoral_doucet_jasra_sequentialmontecarlosamplersJRSSB.pdf}{Paper}.
+Cited for the classical sequential importance/resampling context. DEC-07 gives its own finite
+prefix/tempering and marked-query proofs; no practical concentration or dimension-scaling result is imported.
+\end{thebibliography}
+\end{document}

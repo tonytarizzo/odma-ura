@@ -169,10 +169,12 @@ class PublishedBaselineTests(unittest.TestCase):
     def test_metric_duplicates_and_missed_proposals(self):
         truth = message_bits([1, 1, 3], 3)
         result = frame_metrics(truth, message_bits([1], 3), message_bits([1, 2], 3))
-        self.assertAlmostEqual(result["pupe"], 1 / 3)
+        self.assertAlmostEqual(result["pupe"], 2 / 3)
+        self.assertAlmostEqual(result["list_pupe"], 1 / 3)
         self.assertAlmostEqual(result["strict_pupe"], 1)
         self.assertAlmostEqual(result["candidate_recall"], 2 / 3)
-        with self.assertRaises(ValueError): frame_metrics(truth, message_bits([1, 1], 3))
+        self.assertAlmostEqual(frame_metrics(truth, message_bits([1, 1], 3))["pupe"], 1 / 3)
+        with self.assertRaises(ValueError): frame_metrics(truth, message_bits([1, 1, 1, 1], 3))
 
     def test_all_decoders_gradients_and_joint_constraints(self):
         for name, family, mode in product(["d0", "d1", "d2", "d3", "d4"], ["dense", "sparse"], ["fixed", "joint"]):

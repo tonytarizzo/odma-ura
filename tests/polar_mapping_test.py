@@ -28,7 +28,7 @@ class PolarMappingTests(unittest.TestCase):
         rows = runpy.run_path(str(folder / "build_manifest.py"))["manifest"]()
         self.assertEqual(rows, [json.loads(x) for x in (folder / "manifest.jsonl").read_text().splitlines()])
         self.assertEqual(len({r["name"] for r in rows}), 12)
-        self.assertIn("#PBS -J 1-12", (folder / "034_polar_mapping.sh").read_text())
+        self.assertIn("#PBS -J 1-6", (folder / "034_polar_mapping.sh").read_text())
         old = {r["name"]: r for r in map(json.loads, Path("jobs/033_matched_d2/manifest.jsonl").read_text().splitlines())}
         for r in rows:
             self.assertEqual({k: r[k] for k in DEFAULTS}, DEFAULTS)
@@ -46,76 +46,74 @@ class PolarMappingTests(unittest.TestCase):
                 if path.exists():
                     self.assertEqual(hashlib.sha256(reference.tobytes()).hexdigest(),
                                      json.loads(path.read_text())["initial_matrix_sha256"])
-                for mapping in ("identity", "energy", "mixer"):
+                for mapping in ("identity", "energy"):
                     encoder = PolarExplicitEncoder(baseline, [7], mapping, mapping != "identity")
                     np.testing.assert_array_equal(encoder.explicit_matrix().detach().numpy(), reference)
 
     def test_factorized_products_geometry_and_gradients(self):
-        for mapping in ("energy", "mixer"):
-            encoder = PolarExplicitEncoder(self.baseline, [2, 4], mapping, True).double()
-            with torch.no_grad(): encoder.codebook.values.normal_(0, .1)
-            matrix = encoder.explicit_matrix()
-            counts, residual = torch.randn(3, 64, dtype=torch.float64), torch.randn(3, 64, dtype=torch.float64)
-            torch.testing.assert_close(encoder.matvec(counts), counts @ matrix.T)
-            torch.testing.assert_close(encoder.rmatvec(residual), residual @ matrix)
-            torch.testing.assert_close(encoder.matvec(counts[0]), counts[0] @ matrix.T)
-            torch.testing.assert_close(encoder.rmatvec(residual[0]), residual[0] @ matrix)
-            diagonal, energy = encoder.gram_geometry()
-            gram = matrix.T @ matrix
-            torch.testing.assert_close(diagonal, gram.diag())
-            torch.testing.assert_close(energy, gram.square().sum(1))
-            actual = torch.autograd.grad(energy.sum(), encoder.codebook.values, retain_graph=True)[0]
-            expected = torch.autograd.grad(gram.square().sum(), encoder.codebook.values)[0]
-            torch.testing.assert_close(actual, expected, atol=1e-8, rtol=1e-8)
+        mapping = "energy"
+        encoder = PolarExplicitEncoder(self.baseline, [2, 4], mapping, True).double()
+        with torch.no_grad(): encoder.codebook.values.normal_(0, .1)
+        matrix = encoder.explicit_matrix()
+        counts, residual = torch.randn(3, 64, dtype=torch.float64), torch.randn(3, 64, dtype=torch.float64)
+        torch.testing.assert_close(encoder.matvec(counts), counts @ matrix.T)
+        torch.testing.assert_close(encoder.rmatvec(residual), residual @ matrix)
+        torch.testing.assert_close(encoder.matvec(counts[0]), counts[0] @ matrix.T)
+        torch.testing.assert_close(encoder.rmatvec(residual[0]), residual[0] @ matrix)
+        diagonal, energy = encoder.gram_geometry()
+        gram = matrix.T @ matrix
+        torch.testing.assert_close(diagonal, gram.diag())
+        torch.testing.assert_close(energy, gram.square().sum(1))
+        actual = torch.autograd.grad(energy.sum(), encoder.codebook.values, retain_graph=True)[0]
+        expected = torch.autograd.grad(gram.square().sum(), encoder.codebook.values)[0]
+        torch.testing.assert_close(actual, expected, atol=1e-8, rtol=1e-8)
 
     def test_d2_recurrence_and_training(self):
-        for mapping in ("energy", "mixer"):
-            encoder = PolarExplicitEncoder(self.baseline, [2], mapping, True)
-            other = copy.deepcopy(encoder)
-            bits = message_bits(np.array([[3, 17], [11, 32]]), 6)
-            counts, y, variance = learned_batch(encoder, bits, np.zeros((2, 64)), 4)
-            _, other_y, _ = learned_batch(other, bits, np.zeros((2, 64)), 4)
-            decoder, reference = PolarD2(3), UnrolledEffectiveChannelPGD(3)
-            h = torch.ones(2, 1)
-            out = decoder(encoder, y[..., None], h, 2, noise_var=variance)
-            expected = reference(other, other_y[..., None], h, 2, noise_var=variance)
-            torch.testing.assert_close(out.meta["soft_counts"], expected.meta["soft_counts"], atol=2e-6, rtol=2e-5)
-            config = {"decoder": "d2"}
-            objective(config, out, counts, None).backward()
-            objective(config, expected, counts, None).backward()
-            torch.testing.assert_close(encoder.codebook.values.grad, other.codebook.values.grad, atol=3e-6, rtol=1e-4)
-            self.assertGreater(float(encoder.codebook.values.grad.norm()), 1e-7)
-            self.assertTrue(all(p.grad is not None and torch.isfinite(p.grad).all() for p in decoder.parameters()))
-            optimizer = torch.optim.Adam(encoder.parameters(), lr=.01)
-            optimizer.step(); encoder.apply_constraints()
-            torch.testing.assert_close(encoder.explicit_matrix().square().sum(0), torch.ones(64), atol=2e-6, rtol=0)
-            clone = PolarExplicitEncoder(self.baseline, [2], mapping, True)
-            clone.load_state_dict(encoder.state_dict())
-            torch.testing.assert_close(clone.explicit_matrix(), encoder.explicit_matrix())
+        mapping = "energy"
+        encoder = PolarExplicitEncoder(self.baseline, [2], mapping, True)
+        other = copy.deepcopy(encoder)
+        bits = message_bits(np.array([[3, 17], [11, 32]]), 6)
+        counts, y, variance = learned_batch(encoder, bits, np.zeros((2, 64)), 4)
+        _, other_y, _ = learned_batch(other, bits, np.zeros((2, 64)), 4)
+        decoder, reference = PolarD2(3), UnrolledEffectiveChannelPGD(3)
+        h = torch.ones(2, 1)
+        out = decoder(encoder, y[..., None], h, 2, noise_var=variance)
+        expected = reference(other, other_y[..., None], h, 2, noise_var=variance)
+        torch.testing.assert_close(out.meta["soft_counts"], expected.meta["soft_counts"], atol=2e-6, rtol=2e-5)
+        config = {"decoder": "d2"}
+        objective(config, out, counts, None).backward()
+        objective(config, expected, counts, None).backward()
+        torch.testing.assert_close(encoder.codebook.values.grad, other.codebook.values.grad, atol=3e-6, rtol=1e-4)
+        self.assertGreater(float(encoder.codebook.values.grad.norm()), 1e-7)
+        self.assertTrue(all(p.grad is not None and torch.isfinite(p.grad).all() for p in decoder.parameters()))
+        optimizer = torch.optim.Adam(encoder.parameters(), lr=.01)
+        optimizer.step(); encoder.apply_constraints()
+        torch.testing.assert_close(encoder.explicit_matrix().square().sum(0), torch.ones(64), atol=2e-6, rtol=0)
+        clone = PolarExplicitEncoder(self.baseline, [2], mapping, True)
+        clone.load_state_dict(encoder.state_dict())
+        torch.testing.assert_close(clone.explicit_matrix(), encoder.explicit_matrix())
 
-    def test_mixer_changes_cross_pattern_not_within_pattern_geometry(self):
-        encoder = PolarExplicitEncoder(self.baseline, [2], "mixer", True).double()
-        original = encoder.explicit_matrix()
-        with torch.no_grad(): encoder.codebook.values.normal_(0, .15)
-        mixed = encoder.explicit_matrix()
-        v = encoder.num_payloads
-        torch.testing.assert_close(mixed[:, :v].T @ mixed[:, :v], original[:, :v].T @ original[:, :v])
-        delta = mixed[:, :v].T @ mixed[:, v:2*v] - original[:, :v].T @ original[:, v:2*v]
-        self.assertGreater(float(delta.detach().norm()), .01)
-        self.assertLess(encoder.codebook.diagnostics()["orthogonality_max_error"], 1e-12)
+    def test_retired_mixer_and_legacy_energy_checkpoint(self):
+        with self.assertRaises(ValueError): PolarMappedCodebook(self.baseline, "mixer", True)
+        encoder = PolarExplicitEncoder(self.baseline, [2], "energy", True)
+        state = encoder.state_dict()
+        state["codebook.upper"] = torch.triu_indices(32, 32, offset=1)
+        encoder.load_state_dict(state, strict=True)
+        state["unrecognized_weight"] = torch.tensor(1.)
+        with self.assertRaises(RuntimeError): encoder.load_state_dict(state, strict=True)
 
     def test_large_B_procedural_energy_no_global_table(self):
         baseline = ODMAPolarBaseline(100, 1024, 17, prefix_bits=8, code_length=128, crc_bits=8, list_size=8)
         bits = torch.randint(2, (17, 100), dtype=torch.uint8)
-        for mapping in ("energy", "mixer"):
-            book = PolarMappedCodebook(baseline, mapping, True)
-            with torch.no_grad(): book.values.normal_(0, .2)
-            words = book.codewords(bits)
-            self.assertEqual(words.shape, (1024, 17))
-            self.assertFalse(book.global_message_axis_present)
-            torch.testing.assert_close(words.square().sum(0), torch.ones(17), atol=3e-6, rtol=0)
-            words[0].sum().backward()
-            self.assertTrue(torch.isfinite(book.values.grad).all())
+        mapping = "energy"
+        book = PolarMappedCodebook(baseline, mapping, True)
+        with torch.no_grad(): book.values.normal_(0, .2)
+        words = book.codewords(bits)
+        self.assertEqual(words.shape, (1024, 17))
+        self.assertFalse(book.global_message_axis_present)
+        torch.testing.assert_close(words.square().sum(0), torch.ones(17), atol=3e-6, rtol=0)
+        words[0].sum().backward()
+        self.assertTrue(torch.isfinite(book.values.grad).all())
         with self.assertRaises(ValueError): PolarExplicitEncoder(baseline, [2])
 
     def test_merger_rejects_unreviewed_changes(self):

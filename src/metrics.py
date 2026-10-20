@@ -4,6 +4,37 @@ from __future__ import annotations
 
 import numpy as np
 
+PUPE_VERSION = 2
+PUPE_DEFINITION = "multiset_matching_v2"
+LEGACY_PUPE_DEFINITION = "duplicate_tolerant_list_v1"
+
+
+def _hard_counts(counts: np.ndarray) -> np.ndarray:
+    counts = np.asarray(counts)
+    if counts.ndim != 1 or np.iscomplexobj(counts) or not np.all(np.isfinite(counts)):
+        raise ValueError("Expected finite real 1-D hard counts")
+    if np.any(counts < 0) or np.any(counts != np.floor(counts)):
+        raise ValueError("Expected nonnegative integer hard counts; project soft estimates before scoring")
+    return counts.astype(np.float64, copy=False)
+
+
+def reported_counts(counts: np.ndarray, budget: int) -> np.ndarray:
+    """Hard multiset readout, capped in occurrences by descending count (stable ties).
+
+    This is an evaluation list budget, not an estimator of the unknown count vector.
+    Valid outputs already totaling at most the budget are returned unchanged.
+    """
+    counts = _hard_counts(counts)
+    if budget < 0 or int(budget) != budget:
+        raise ValueError("Multiset budget must be a nonnegative integer")
+    if counts.sum() <= budget:
+        return counts.copy()
+    order = np.argsort(-counts.astype(float), kind="stable")
+    remaining = np.maximum(budget - (np.cumsum(counts[order]) - counts[order]), 0)
+    out = np.zeros_like(counts)
+    out[order] = np.minimum(counts[order], remaining)
+    return out
+
 
 def normalized_l1_accuracy(counts_true: np.ndarray, counts_est: np.ndarray) -> float:
     """1 - normalized L1 count error, clipped to [0, 1].
@@ -34,25 +65,37 @@ def evaluate_counts(counts_true: np.ndarray, counts_hard: np.ndarray,
                     max_list_size: int | None = None) -> dict:
     """Compare true vs estimated global message-count vectors.
 
-    Returns a dict with support/count metrics and URA-style list metrics.
+    Returns raw support/count diagnostics and bounded multiset PUPE.
 
     Definitions:
       f1      — support detection F1 (counts_hard > 0 as the active set); ignores multiplicity.
       l1_err  — sum(|a_true - a_hat|) / sum(a_true).
       l1_acc  — clamp(1 - l1_err, 0, 1).
       nmse    — ||a_hat - a_true||_2^2 / ||a_true||_2^2.
-      pupe    — user-weighted missed-list probability after applying max_list_size if supplied.
-      raw_list_size — number of positive estimated messages before any list budget.
-      list_size — number of reported messages after applying max_list_size.
-      list_overflow — excess positive estimates beyond max_list_size.
+      pupe    — 1 - sum(min(a_true, a_reported)) / K; L1/(2K) when both totals equal K.
+      list_pupe — historical duplicate-tolerant membership loss (support-list budget).
+      raw_list_size/list_size/list_overflow — decoded occurrences before/after/beyond the budget.
       total_count_err — absolute error in the estimated total active-user count.
 
-    Standard URA constrains the output list to at most K_a messages. When max_list_size is supplied, the list is
-    the top positive estimated counts under that budget. Multiplicity errors are still captured by l1_err/nmse.
+    The occurrence budget defaults to K and may be reduced explicitly. Missing outputs count as misses;
+    excess raw outputs are truncated by descending count. Raw L1/NMSE remain separate diagnostics.
     """
+    counts_true, counts_hard = np.asarray(counts_true), np.asarray(counts_hard)
+    if counts_true.shape != counts_hard.shape or counts_true.ndim != 1:
+        raise ValueError("Expected matching 1-D count shapes")
+    counts_true = _hard_counts(counts_true)
+    counts_hard = _hard_counts(counts_hard)
+    total_true = float(np.sum(counts_true))
+    if total_true <= 0:
+        raise ValueError("PUPE requires a positive true user count K")
+    budget = int(total_true) if max_list_size is None else max_list_size
+    if budget > total_true:
+        raise ValueError("PUPE output budget must not exceed the true user count K")
+    reported = reported_counts(counts_hard, budget)
     supp_true = counts_true > 0
     supp_hard = counts_hard > 0
-    list_hard = _top_positive_mask(counts_hard, max_list_size)
+    list_hard = reported > 0
+    legacy_list = _top_positive_mask(counts_hard, max_list_size)
     tp = int(np.sum(supp_true & supp_hard))
     fp = int(np.sum(~supp_true & supp_hard))
     fn = int(np.sum(supp_true & ~supp_hard))
@@ -73,8 +116,9 @@ def evaluate_counts(counts_true: np.ndarray, counts_hard: np.ndarray,
     list_tp = int(np.sum(supp_true & list_hard))
     list_fp = int(np.sum(~supp_true & list_hard))
     list_fn = int(np.sum(supp_true & ~list_hard))
-    missed_users = float(np.sum(counts_true[supp_true & ~list_hard]))
-    list_size = int(np.sum(list_hard))
+    missed_users = float(np.sum(counts_true - np.minimum(counts_true, reported)))
+    false_instances = float(np.sum(reported - np.minimum(counts_true, reported)))
+    list_size = int(np.sum(reported))
     pupe = missed_users / max(total_true, 1e-12)
 
     return dict(
@@ -87,15 +131,20 @@ def evaluate_counts(counts_true: np.ndarray, counts_hard: np.ndarray,
         exact_count=exact_count,
         support_true=int(np.sum(supp_true)),
         pupe=pupe,
+        pupe_metric_version=PUPE_VERSION,
+        list_pupe=float(np.sum(counts_true[~legacy_list]) / max(total_true, 1e-12)),
         missed_users=missed_users,
-        raw_list_size=int(np.sum(supp_hard)),
+        false_instances=false_instances,
+        multiset_false_alarm_rate=false_instances / max(list_size, 1),
+        raw_list_size=int(np.sum(counts_hard)),
         list_size=list_size,
-        max_list_size=None if max_list_size is None else int(max_list_size),
-        list_overflow=0 if max_list_size is None else max(0, int(np.sum(supp_hard)) - int(max_list_size)),
+        unique_list_size=int(np.sum(list_hard)),
+        max_list_size=int(budget),
+        list_overflow=max(0, int(np.sum(counts_hard)) - int(budget)),
         list_tp=list_tp,
         list_fp=list_fp,
         list_fn=list_fn,
-        false_alarm_rate=float(list_fp / max(list_size, 1)),
+        false_alarm_rate=float(list_fp / max(int(np.sum(list_hard)), 1)),
     )
 
 

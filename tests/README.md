@@ -3,6 +3,26 @@
 This folder contains algebraic regression tests and historical experiment drivers. Run modules from the repository
 root with `uv run python -m tests.<script_name>`. Generated results are not versioned.
 
+## Active Report-10 decoder harness
+
+Run the module tests.polar_decoder_benchmark with --profile smoke and a fresh --out-dir.
+The smoke default selects REF, DEC-01 through DEC-13 and D2/ODMA; choose a subset with --decoders,
+inspect the catalogue with --list-decoders,
+or load a resolved JSON configuration with --config. The shared scorer, saved inputs/count outputs,
+PUPE/runtime/learning plots, source restrictions and CPU array commands are described in
+[035](../jobs/035_polar_decoders/README.md). DEC-02/03/10/11/13 are IID-only; the other paths support both sources.
+The unittest module tests.polar_decoder_bank_test checks posterior/proposal/source/readout,
+training-checkpoint, baseline-equivalence and decoder/load-sharded job pairing behavior.
+The module tests.polar_decoder_families_test checks all thirteen algorithms against independent identities,
+exact endpoints, finite-state bounds and sampling controls; it does not assert every default is accurate.
+The module tests.polar_decoder_cost measures B12/B14 inference/training cost separately from PUPE evaluation.
+
+## Multiplicity-aware PUPE
+
+Run `uv run python -m unittest tests.pupe_metrics_test tests.polar_posterior_test` for cross-scorer agreement,
+collision and output-budget cases, candidate-index readout, historical-result isolation and exact Bayes decisions.
+The primary metric changed on 11 October 2026; read [the correction](../docs/PUPE_METRIC.md) before reusing IID scores.
+
 ## Current published comparison (job 032)
 
 Run `uv run python -m unittest tests.published_baselines_test tests.published_bounds_test tests.published_comparison_manifest_test`.
@@ -229,9 +249,28 @@ Triadic10 graph with ten-bit sections and must not be compared directly with the
 ## Published receiver benchmark checks
 
 `tests.polar_mapping_test` certifies the 034/033 contract, identical initialization, unit-energy parameterizations,
-factorized matrix products and D2 geometry/gradient equivalence. `tests.polar_mapping_learning` runs fixed, learned
-energy and learned mixer paths at smoke/B8-mini/B14-execution sizes. See [034](../jobs/034_polar_mapping/README.md).
+factorized matrix products and D2 geometry/gradient equivalence. `tests.polar_mapping_learning` runs fixed and learned
+energy paths at smoke/B8-mini/B14-execution sizes; mixer training is retired. See [034](../jobs/034_polar_mapping/README.md).
 The B100 check is procedural generation only; no tractable decoder is claimed.
+
+`tests.polar_energy_geometry_test` checks the Report 8 moment/interference identities, analytic gradient, row balancing
+and its failure conditions, known-K covariance, and a tight-frame counterexample. The read-only
+`benchmarks.polar_energy_geometry` audit compares uniform/balanced/learned polar and fixed dense without new training.
+
+### Polar decoder research
+
+The exact/approximation algebra now feeds the active Report-10 harness described above. Implementations
+cover REF and all thirteen families, with D2/ODMA controls. See the active harness above for finite variants and limitations.
+[Report 7](../docs/reports/07_polar_decoding_from_posterior.pdf) contains exact Bayesian foundations;
+[Report 9](../docs/reports/09_polar_bayesian_approximations.pdf) owns assumptions and error/cost derivations.
+
+Use the [experiment bank](../docs/EXPERIMENT_BANK.md#exact-foundations) for historical exact modules E1–E8,
+their questions, fixtures and algebra. The [parked-script index](../docs/EXPERIMENT_BANK.md#parked-approximation-scripts)
+maps the pre-reset approximation drivers to their historical setups. These scripts are preserved without
+carrying their branch rankings or assumptions into the new study. This index is not an instruction to rerun them.
+
+The [exact log](../docs/POLAR_DECODING_RESEARCH_LOG.md) retains deductions and computational limits;
+the [approximation log](../docs/POLAR_APPROXIMATION_LOG.md) records the reset and subsequent working algebra.
 
 `uv run python -m tests.published_baselines_test -v` checks polar SCL against tiny exhaustive ML, CRC arithmetic,
 native receiver execution, exact-energy invariants, CCS/author waveform equivalence (including both embedding options),

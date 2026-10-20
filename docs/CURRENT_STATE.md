@@ -1,119 +1,181 @@
-# ODMA-URA: Current Research State
+# Current state: polar multiuser decoding
 
-Updated 8 October 2026. This is the live research handoff; the [experiment ledger](EXPERIMENT_BANK.md) owns job status,
-and the [reports](README.md) retain derivations and historical decisions. No new receiver architecture is committed.
+Updated **20 October 2026**. This page owns the current research direction. The
+[experiment bank](EXPERIMENT_BANK.md) owns script/setup/result mappings; the
+[exact log](POLAR_DECODING_RESEARCH_LOG.md), [approximation log](POLAR_APPROXIMATION_LOG.md) and
+[decoder design log](POLAR_DECODER_DESIGN_LOG.md) own the reasoning and retained lessons.
+[Report 7](reports/07_polar_decoding_from_posterior.pdf)
+contains the exact Bayesian foundations, with adjacent [source](reports/07_polar_decoding_from_posterior.tex).
+[Report 9](reports/09_polar_bayesian_approximations.pdf), with [source](reports/09_polar_bayesian_approximations.tex),
+separately owns algebraically motivated assumptions and their error bounds. Report 8 defines the fixed encoder.
+[Report 10](reports/10_polar_decoder_designs.pdf), with [source](reports/10_polar_decoder_designs.tex),
+owns the mathematical decoder catalogue; implementation evidence is recorded in the design log.
 
-## Aim and current decision
+## Problem and fixed contract
 
-Develop tractable multiuser decoding that exploits useful encoder structure without giving up the recovery performance
-seen with explicit small-B codebooks. The immediate priority is **receiver inference and its computational cost**, not
-another broad search over encoder restrictions. This does not establish that encoding is optimal or unimportant.
+Derive a nonlearned receiver for the fixed ODMA–polar/CRC construction, retaining strong message recovery
+while reducing the work required by explicit full-alphabet inference. The receiver knows the encoder,
+active-user count K and physical noise variance; messages and their placement patterns are unknown.
 
-Two directions remain open: improve inference on the existing ODMA–polar construction, or retain polar coding while
-allowing a broader family of resource-placement/spreading operators. Polar coding and ODMA placement are separate
-choices. Job 034 now tests two modest mapping extensions with unchanged D2; receiver selection remains open.
+\[
+w=(p,v),\quad \phi(p,v)=S_p\operatorname{diag}(\sqrt{e_p})(-1)^{Lv},\qquad
+y=\sum_{k=1}^K\phi(w_k)+z,\quad z\sim\mathcal N(0,\sigma^2I_n).
+\]
 
-## Implemented next batch: 034
+Here L is the Nc-by-Bc binary CRC/polar generator, S_p inserts Nc symbols into n resources,
+P=2^Bp, V=2^Bc and M=PV=2^B. Every column has unit energy. Fix the code, placements and deterministic
+KL-balanced energies from [Report 8](reports/08_polar_energy_geometry.pdf). Balancing is a specified
+construction, not a certificate of optimal PUPE. Its feasibility/convergence must hold for each fixture.
+The selected research banks use B=12/14, Bc=6, Nc=32, CRC8 and n=256.
 
-[034](../jobs/034_polar_mapping/README.md) adds 12 job-33-matched runs: learned per-pattern polar-symbol energies and a
-shared orthogonal mixer before placement. Both start at exactly the original codebook, enforce unit energy in every
-forward call, and train jointly with D2. Fixed polar, native ODMA and dense/sparse controls are reused from 032/033.
-Smoke, B8 mini-learning and reduced-budget B14 checks pass; no production result is claimed. The polar frame identity
-accelerates exact D2 geometry without changing its recurrence or removing its full-message state.
+Start with IID uniform full messages. Distinct-message sampling is a separate, explicitly conditioned control;
+same-pattern collisions remain possible under both. The intended loss matches transmitted copies:
 
-Investigation 1 is theory first, not an implemented candidate receiver. [Report 7](reports/07_polar_d2_inference.pdf)
-derives D2 and polar updates, identifies their overlap, and reviews spreading/MMSE, soft cancellation, soft-output SCL
-and learned polar work. Unknown patterns, same-pattern collisions and credible extrinsic uncertainty remain central.
+\[
+\ell(a,\widehat a)=1-\frac1K\sum_w\min(a_w,\widehat a_w),\qquad \sum_w\widehat a_w\leq K.
+\]
 
-## What the evidence says
+The Bayes action allocates K copies using posterior tails Pr(a_w >= j | y). MAP, posterior means and
+membership-only lists generally give different decisions. The [metric record](PUPE_METRIC.md) explains why
+historical IID membership scores cannot be relabeled as multiplicity recovery. Distinct-message matched
+comparisons retain their PUPE where the evaluated output support/budget is unchanged.
 
-Job 033 is complete and supplies the same-codebook D2 controls missing from job 032. Representative production PUPE:
+## Where the research stands
 
-| B=14, n=256, K=26, 10 dB; distinct messages | PUPE |
-|---|---:|
-| ODMA–polar, native receiver | 0.55874 |
-| Same ODMA–polar codebook, trained D2 | 0.13712 |
-| Fixed dense, trained D2 | 0.09831 |
-| Fixed random sparse, support 32, trained D2 | 0.13957 |
-| Fixed hash + coordinate J8 amplitudes, trained D2 | 0.13552 |
+**The broad exact-derivation phase is complete for this contract.** Report 7 derives a complete finite
+Bayes decoder and alternative exact evaluations, lossless state reductions, polar pair/three-user contractions,
+identifiability limits and decision certificates. The exact log records their computational accounting.
+This is a sufficient foundation for approximation design; a general K4 expansion or another exact survey
+is not a prerequisite. Targeted exact work remains useful when a proposed approximation needs it.
 
-Replacing the ODMA receiver closes about 92% of its gap to dense D2 at this point. Dense still has an edge; the result
-favours investigating decoding, not declaring the encoders equivalent. Current ODMA–polar uses 64/256 patterns at
-B12/B14, not the four-mask ODMA control that performed poorly in earlier sparsity experiments.
+**No derived exact construction is established as tractable at the intended message length and load.**
+Count aggregation leaves roughly M^K/K! hypotheses at fixed K. Walsh/parity operators save real work but
+retain explicit alphabet or pattern dependence; small geometric interfaces need not have small state tables.
+There are concrete obstructions to simple exact merging, without a universal impossibility theorem.
+Compact encoding, memory savings and complete scalable decoding are distinct achievements.
 
-Coordinate amplitude banks remain useful compact encoder controls. Joint J8 is close to the unrestricted hash parent
-on the full B14 grid with 64x fewer amplitude values. Some production runs were training-sensitive; post-hoc decoder
-calibration improves their tails without changing the encoder. Keep those diagnostics separate from production rankings.
+**The broad approximation preparation is complete for the retained paths.**
+Report 9 develops shared posterior/decision error bounds and conditional reductions at the exact bottlenecks:
+support restriction, continuation quantization, regional/feature/connected interactions, residual moments,
+Fourier work, weighted sampling and decision-directed prefix queries. Its completion audit records finite
+constructions, source/count handling, error propagation and costs for entries A–T. This is not a claim
+that every useful approximation has been discovered or that the stated regimes hold for the selected bank.
+Three finite compositions show how the ingredients connect; these remain useful illustrations:
 
-Small-B CCS has exact multiuser aliases and approximate native alignment; it is not evidence against CCS at its native
-scale. All recent comparisons use known K and noise. Our native implementations/small-B adaptations are not blanket
-reproductions of published curves. See the [meeting report](reports/2026-10-07_supervisor_meeting/report.pdf).
+1. **Residual-guided independent importance decoding.** Conditional polar moments guide two child queries
+   per message bit. Ordered-slot importance weights recover the exact factorial count prior; sparse count-tail
+   readout avoids an explicit full-message array. A whole-configuration prior mixture gives a valid weight
+   bound. Pattern-moment work and importance concentration can still be prohibitive.
+2. **Deterministic prefix refinement.** Moment, spectral or other certified query providers bound the gain
+   available inside unresolved prefixes. Refine competitive cells and output actual full-message counts
+   with an excess-loss bound. Useful interval width and visited-prefix count are unproved.
+3. **Positive structured contraction.** Regional states and positive features retain total K and message
+   identity. Conditioning selected feature/state indices extends the forest calculation to cycles.
+   Optional importance or control-variate correction targets the original supported law. Local-state,
+   alphabet and joint-separator construction can still be exponential.
 
-## System and computational boundary
+The guided sampler also has a corrected block-chain variant: exact K2/K3 conditional updates retain all
+outside-user effects in the residual, and a fixed global proposal supplies a conservative finite-chain
+bound. The proof does not establish an advantage over independent sampling. Observation-weighted correction
+moments can sharpen worst-case errors, provided their own computation is charged. A factorial-moment
+hierarchy bounds multiplicity truncation; means alone are justified only with posterior collision control.
+These are conditional constructions, not validated favourable regimes or a selected receiver.
+The previous assumption menus and exploratory PUPE tables remain retired; their scripts are parked.
 
-Messages w have B bits, so M=2^B. A common codebook Phi has shape n x M and produces y=Phi a+z, where the nonnegative
-integer vector a counts transmissions. Binary message labels are distinct from real/complex channel symbols.
-Exact-unit-energy and nominal-energy families, and distinct-message and iid evaluation, are labelled separately.
+The preceding pass added three further deductions. **Exponential tilting** moves a residual closure toward the
+queried observation, gives relative-error and positive evidence bounds, and connects to the exact support
+dual; nonuniform polar partition/moment access can still be expensive. **Positive Gaussian auxiliary fields**
+give an exact conditional-product representation for the IID source, controlled field-domain restriction and
+direction removal. Naive Gaussian-field sampling can nevertheless have exponentially large variance, even
+at K=2. **Finite moment optimization and prefix-count consistency** tighten tail/gain bounds from information
+already computed, retaining the common evidence and total K. Mixed moments can add selected cross-cell
+information. None establishes a favourable regime for the current bank.
 
-- D0/D1 are historical global-message learned receivers. D0 has a diagnosed count-to-list readout limitation.
-- D2 is a known-K Bernoulli effective-channel approximation with learned variance scale and damping: 16 scalars for
-  eight layers. It visits all M messages and keeps M probabilities; it is neither exact Bayes nor AMP.
-- D3/D4 refine a supplied list. Production proposals still rank all M messages by matched-filter evidence.
-  Compact refinement is not scalable search; report proposal misses as well as final PUPE.
-- Procedural hash/coordinate amplitudes generate selected B100 codewords with exact energy, not tractable multiuser
-  decoding. Section-domain M-free execution likewise did not establish useful recovery.
+The completion pass closes their concrete construction dependencies. **Conditional polar character
+polynomials** provide finite tilted partition/moment and Fourier queries, including positive weights and
+nested error bounds. A positive likelihood-polynomial hierarchy converges without assuming Gaussian
+interference, with potentially prohibitive degree/tensor costs. **Field geometry** connects discarded
+directions to pairwise dispersion and gives a bounded Gaussian proposal in a stated global-curvature
+regime; a finite-ball alternative remains available outside it. **A variational common center** has a
+unique optimum within the identical-slot product family, a finite optimization procedure and an
+evidence-gap certificate, but exact optimization alone need not yield accurate inference.
+**Signed low-rank contractions** can supply marked queries through explicit positive error envelopes,
+whose own contraction cost is charged.
 
-The hard question is how to represent and update uncertainty without an M-sized state, not merely how to avoid storing Phi.
+Certified child intervals now define a minimax branch proposal with a precise all-prefix concentration
+bound. A finite moment counterexample shows that exact low-order moments and count consistency can still
+leave tails ambiguous. The optional distinct-source residual comparison uses its correct collision and
+source factors; a small prior collision probability is not a posterior target-equivalence guarantee.
+The final error account separates support loss, target approximation and numerical uncertainty, and removes
+guide bias only when the original target is exactly reweighted. These results complete the mathematical
+interfaces without claiming tight bounds, cheap pattern discovery or a scalable receiver.
 
-## Polar coding and placement: an open middle ground
+**Report 10 supplies the decoder-option catalogue; all thirteen families now have finite implementations.** It assembles
+one exact reference family and thirteen execution families: direct residual queries, a variational product
+law, message-prefix refinement, bounded configuration search, independent importance sampling, corrected
+block/global chains, sequential particles, quantized continuation states, positive factor contraction,
+connected expansions, Fourier queries, signed low-rank contraction and positive auxiliary fields.
+The DEC-01–DEC-13 identifiers are separate from historical D0–D4. Shared providers and corrections are
+variations, not an unbounded list of supposedly different receivers.
 
-A polar code uses a recursively structured binary transform, fixes selected input bits, and puts information in the
-remaining positions. These constraints define valid codewords and support recursive decoding without an exponential
-lookup table. They do not specify which physical resources carry the symbols. See [Arikan's paper](https://arxiv.org/abs/0807.3917).
+Each family closes message discovery or explicit traversal, legal inference, count-tail readout,
+allocation, stopping and cost/error accounting. New derivations show that an identical-slot product
+decoder only needs its highest min(K,M) word probabilities, that auxiliary-field proposals can be corrected
+on their joint space without an unavailable marginal tuple density, and that independent prefix/tempered
+particle batches supply unbiased unnormalized count queries with finite confidence. These facts do not
+establish useful concentration, cheap construction or a preferred architecture. All Report-9 entries
+A–T and the major Report-7 exact resources are mapped to their decoder roles.
 
-For the current linear CRC/polar encoder, split B=B_p+B_c bits into a pattern index p (2^B_p choices) and payload v:
+## Why this encoder and receiver problem
 
-~~~text
-v in GF(2)^B_c -> c=L v in GF(2)^N_c -> x(v)=(-1)^c/sqrt(N_c) -> phi(p,v)=W_p x(v).
-L: N_c x B_c binary effective generator; W_p: n x N_c real placement/spreading operator.
-~~~
+Jobs [033](../jobs/033_matched_d2/README.md) and [034](../jobs/034_polar_mapping/README.md) completed
+66/66 and 12/12 rows in their recorded audits. In the B14/K26/10 dB distinct-message cell, native ODMA–polar
+PUPE was .55874, the same codebook with D2 gave .13712, learned polar energies/D2 gave .10617 and fixed
+dense/D2 gave .09831. These measured comparisons motivate receiver work; dense/D2 is a comparator, not an optimum.
+Deterministic balancing has smaller-grid diagnostic support, rather than a matched full-grid PUPE result.
+D2 remains an explicit-M effective-channel approximation, with no derived AMP/state-evolution guarantee.
 
-Current ODMA uses W_p=S_p, a coordinate-insertion matrix. An extension could keep L fixed but change W_p through
-structured placements, permutations/signs or tractable spreading. W_p^T W_p=I preserves unit energy and within-pattern
-distances, but not necessarily cross-pattern distinguishability or multiuser recovery. It is one sufficient energy
-condition, not a requirement that every future operator must be an isometry.
+## Agreed approach: algebra within the Bayes decoder route
 
-An arbitrary learned matrix per complete message would restore the exponential problem. Even compact W_p can make
-the effective channel difficult for a polar decoder. Every proposed freedom needs both a forward and an inference budget.
-Neither polar invertibility nor a factor graph guarantees tractable noisy multiuser recovery. Pattern collisions must
-not be excluded merely because full-message collisions are rare. Only the two constrained mappings above are implemented;
-arbitrary learned placement/spreading and a tractable joint receiver are not.
+1. **Locate the exact bottleneck.** Start from an exact residual, convolution, interaction, elimination,
+   Fourier, connected or decision-certificate equation. Name the object whose size/work causes the scaling problem.
+2. **Use exact discoveries before assuming anything.** Character/parity identities, compatible projections,
+   reference changes, marked contractions and support bounds may expose a simpler remaining problem.
+3. **Derive a precise assumption and replacement.** State its parameter/regime, retained constraints,
+   discarded information and complete normalized calculation. The physical model, source law and Bayes target
+   remain fixed; MAP or residual minimization does not replace posterior count-tail inference.
+4. **Derive accuracy and full cost together.** Seek error bounds, exact error identities, limiting cases and
+   counterexamples. State unproved conditions explicitly, including the cost of obtaining a certificate.
+   Include construction, pattern discovery, all count/message association, memory and numerical precision.
+5. **Record the algebra clearly.** Decoder-composition questions and deductions enter the decoder design
+   log; settled constructions enter Report 10. Report 9 and its log retain approximation algebra, while
+   Report 7 keeps the exact foundations. Compare choices through their mathematics and computational
+   effect without selecting a branch from an empirical ranking.
 
-## Questions to resolve next
+**Current authorization:** the user has requested implementations of all thirteen families, shared smoke
+comparisons and a complete CPU job array. This supersedes the earlier pause before implementation. Encoder learning
+remains outside scope; historical D2 is trained as a comparator, while the new receivers are nonlearned.
 
-1. Understand polar encoding/decoding, then derive the joint activity, pattern and coded-payload posterior.
-2. Separate exact structural replacements for D2 operations from new inference approximations. Compare revisable
-   codeword lists with soft graph inference; D2's exact recurrence need not be preserved.
-3. Isolate soft cancellation, uncertainty calibration, hypothesis competition and known-K enforcement before crediting
-   learning. Keep physical noise, residual interference and decision calibration distinct; avoid double-counting observations.
-4. Compare with existing joint ODMA and soft polar receivers before claiming novelty. Weighted BP and conditioned
-   denoisers are established ideas; learn where a measured approximation/calibration benefit warrants it.
-5. At small B, measure inference loss on identical codebooks. At larger B, measure runtime, memory, proposal recall
-   where applicable and PUPE. Unknown activity and false alarms remain an unresolved requirement.
+**Active harness:** [tests/polar_decoder_benchmark.py](../tests/polar_decoder_benchmark.py) calls the
+[decoder bank](../framework/polar_decoders.py) through the shared count/metadata interface.
+REF and DEC-01 through DEC-13 are implemented, alongside existing D2 and ODMA controls. Each family
+has a declared finite variant, not every possible Report-10 combination. All use explicit alphabets;
+DEC-02/03/10/11/13 support IID only. Candidate-restricted paths and vacuous certificates are labelled.
+The [035 README](../jobs/035_polar_decoders/README.md) owns commands, exact parameters, output layout,
+comparison limits and B12/B14 CPU estimates. Full frames and count outputs, posterior regret on tiny
+cases, PUPE uncertainty, setup/training/inference costs and both reference bounds are retained.
+Uniform ODMA is unchanged; its balanced-energy version is an explicitly labelled adaptation.
 
-Starting references: [joint ODMA pattern/data recovery](https://ieeexplore.ieee.org/document/10105449/),
-[soft-output SCL](https://arxiv.org/abs/2412.03623), [learned polar graph decoding](https://arxiv.org/abs/1811.09801),
-and [ODMA–polar soft inference in MIMO](https://arxiv.org/abs/2608.28085) (different channel/pilot assumptions).
-The older [conditioned-inference brief](archive/conditioned_inference_brief.md) remains a hypothesis, not an agreed paper plan.
+**Next step:** run the prepared 90-job CPU comparison (B12/14, both mappings, three seeds, all thirteen
+families plus D2/ODMA), then assess PUPE, candidate coverage and concentration before tuning or combining
+paths. Each job runs both mappings and all K values sequentially; D2 is trained once per encoder/seed.
+Only four jobs run concurrently, at two CPUs each (eight total); grouping preserves the full workload.
+The array is not submitted. Exact enumeration is capped and excluded at research loads; tiny success is not
+evidence of B12/B14 recovery. Keep actual error, certificate tightness and computational cost separate.
 
-## Where to look
+## Deferred scope
 
-- [Experiment ledger](EXPERIMENT_BANK.md): dated completion, conclusions and exact run-contract links.
-- [Documentation map](README.md): meeting summary, seven technical reports and detailed historical evidence.
-- framework/learned_decoders.py and candidate_decoders.py: D2 and bounded-list receiver algebra.
-- baselines/polar.py and odma_polar.py: coding, placement and native receiver, already separate modules.
-- framework/prototype_amplitudes.py and hash_skeleton.py: retained generated-encoder controls.
-- framework/polar_mapping.py: unit-energy polar mappings and the small-B D2 certification adapter.
-
-Job 034 is ready for submission; receiver architecture remains a research decision. Code, manifests and original
-outputs are retained for reproduction; historical reports and their proposed next steps are not the current roadmap.
+Further encoder learning/placement search, the retired shared mixer, hash/amplitude searches and sectioned
+association work are outside the current decoder study. Historical code, manifests and Reports 1–6 remain
+available. Unknown K, fading and false-alarm-aware output losses require new contracts. No current evidence
+establishes dense optimality, paper-scale reproduction or complete B100 decoding.

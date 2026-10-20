@@ -20,6 +20,8 @@ from types import SimpleNamespace
 import numpy as np
 import torch
 
+from src.metrics import PUPE_DEFINITION, PUPE_VERSION, reported_counts
+
 from baselines import make_baseline, message_bits, message_indices
 from framework.candidate_decoders import CandidateRestrictedEffectiveChannelPGD, CandidateSet, LearnedCandidateGeometryPGD
 from framework.core import ComponentSpec, URASpec
@@ -131,7 +133,7 @@ def noise_variance(b, ebn0): return 1.0 / (2 * b * 10.0 ** (float(ebn0) / 10))
 
 def learned_batch(encoder, bits, standard_noise, ebn0):
     indices = torch.from_numpy(message_indices(bits)).long()
-    counts = torch.zeros(len(bits), encoder.num_codewords)
+    counts = torch.zeros(len(bits), encoder.num_codewords, dtype=encoder.dtype)
     counts.scatter_add_(1, indices, torch.ones_like(indices, dtype=counts.dtype))
     noise_var = noise_variance(encoder.spec.payload_bits, ebn0)
     y = encoder.matvec(counts) + np.sqrt(noise_var) * torch.as_tensor(standard_noise, dtype=encoder.dtype)
@@ -168,11 +170,12 @@ def objective(config, output, counts, indices):
 
 
 def decoded_lists(output, indices, k, b):
+    """Expand hard counts into a multiset; never discard estimated copies."""
     hard = output.counts.detach().cpu().numpy()
     result = []
     for row, values in enumerate(hard):
-        selected = np.flatnonzero(values > 0)
-        selected = selected[np.argsort(-values[selected], kind="stable")[:k]]
+        counts = reported_counts(values, k)
+        selected = np.repeat(np.arange(len(counts)), counts.astype(np.int64))
         if indices is not None:
             selected = indices[row, selected].cpu().numpy()
         result.append(message_bits(selected, b))
@@ -181,15 +184,21 @@ def decoded_lists(output, indices, k, b):
 
 def frame_metrics(truth, decoded, candidates=None):
     true_keys = [x.tobytes() for x in truth]
-    found = {x.tobytes() for x in decoded}
-    if len(decoded) > len(truth) or len(found) != len(decoded):
-        raise ValueError("Receiver must return a unique list of at most K messages")
+    decoded_counts = Counter(x.tobytes() for x in decoded)
+    found = set(decoded_counts)
+    if len(truth) == 0 or len(decoded) > len(truth):
+        raise ValueError("Receiver must return a multiset of at most K messages, with K positive")
     multiplicity = Counter(true_keys)
     missed = [key not in found for key in true_keys]
-    result = {"pupe": float(np.mean(missed)), "false_alarm": len(found - set(true_keys)) / max(1, len(found)),
+    matches = sum((multiplicity & decoded_counts).values())
+    false_instances = len(decoded) - matches
+    result = {"pupe": (len(truth) - matches) / len(truth), "pupe_metric_version": PUPE_VERSION,
+              "list_pupe": float(np.mean(missed)), "false_alarm": len(found - set(true_keys)) / max(1, len(found)),
+              "multiset_false_alarm_rate": false_instances / max(1, len(decoded)), "false_instances": false_instances,
               "strict_pupe": float(np.mean([miss or multiplicity[key] > 1 for key, miss in zip(true_keys, missed)])),
               "duplicate_users": float(np.mean([multiplicity[key] > 1 for key in true_keys])),
-              "any_duplicate": float(len(multiplicity) != len(truth)), "list_size": len(found)}
+              "any_duplicate": float(len(multiplicity) != len(truth)), "list_size": len(decoded),
+              "unique_list_size": len(found)}
     if candidates is not None:
         proposed = {x.tobytes() for x in candidates}
         result["candidate_recall"] = float(np.mean([key in proposed for key in true_keys]))
@@ -270,6 +279,8 @@ def evaluate(config, baseline, encoder, decoder, out_dir, native_progress=False)
     cells = []
     progress_path = out_dir / "native_progress.json"
     restored = ([] if not progress_path.exists() else json.loads(progress_path.read_text())) if native_progress else []
+    if any(row["metrics"].get("pupe_metric_version", 1) != PUPE_VERSION for row in restored):
+        raise ValueError("Cannot resume legacy membership-PUPE frames; use a new output directory")
     progress, frame_index = [], 0
     if decoder is not None: decoder.eval()
     for sampling in config["eval_sampling"]:
@@ -319,6 +330,7 @@ def evaluate(config, baseline, encoder, decoder, out_dir, native_progress=False)
                             frames.append(frame_metrics(truth, found, candidates))
                 values = np.array([row["pupe"] for row in frames])
                 cell = {"sampling": sampling, "K": k, "ebn0_db": ebn0, "frames": len(frames),
+                        "pupe_definition": PUPE_DEFINITION,
                         "means": {key: float(np.mean([row[key] for row in frames])) for key in frames[0]},
                         "pupe_standard_error_across_frames": float(values.std(ddof=1) / np.sqrt(len(values))) if len(values)>1 else None,
                         "decoder_seconds_per_frame": elapsed / len(frames), "frame_metrics": frames,
@@ -351,7 +363,8 @@ def run_experiment(config, out_dir, *, native_checkpoint=False, resume=False):
         raise ValueError("Batch and evaluation budgets must be positive")
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     source_files = sorted(Path("baselines").glob("*.py")) + sorted(Path("benchmarks").glob("*.py"))
-    source_files += sorted(Path("framework").glob("*.py")) + [Path("src/ura_bound.py"), Path("tests/ccs_amp_author.py")]
+    source_files += sorted(Path("framework").glob("*.py"))
+    source_files += [Path("src/metrics.py"), Path("src/ura_bound.py"), Path("tests/ccs_amp_author.py")]
     source_hashes = {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in source_files}
     out_dir = Path(out_dir)
     if (native_checkpoint or resume) and config["mode"] != "native":
@@ -400,6 +413,7 @@ def run_experiment(config, out_dir, *, native_checkpoint=False, resume=False):
     if source_hashes != {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in source_files}:
         raise RuntimeError("Source files changed during this run; refuse a misleading completed-result fingerprint")
     summary = {"status": "complete", "config": config, "revision": revision, "source_sha256": source_hashes,
+               "pupe_definition": PUPE_DEFINITION,
                "baseline": None if baseline is None else baseline.metadata(), "energy_audit_initial": energy,
                "initial_matrix_sha256": initial_hash, "training": training, "evaluation": cells,
                "decoder_parameters": 0 if decoder is None else sum(p.numel() for p in decoder.parameters()),

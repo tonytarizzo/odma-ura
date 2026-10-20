@@ -1,4 +1,4 @@
-"""Polar symbols with learned energy profiles or an orthogonal pre-placement mixer.
+"""Polar symbols with fixed or learned unit-energy profiles.
 
 The procedural codebook has no full-message axis. PolarExplicitEncoder is the
 small-B D2 certification adapter; its local payload table is not used for search.
@@ -20,8 +20,8 @@ class PolarMappedCodebook(nn.Module):
 
     def __init__(self, baseline, mapping="identity", learnable=False):
         super().__init__()
-        if mapping not in {"identity", "energy", "mixer"}:
-            raise ValueError("mapping must be identity, energy or mixer")
+        if mapping not in {"identity", "energy"}:
+            raise ValueError("mapping must be identity or energy; the job-034 mixer is retired")
         if len(set(baseline.power_levels)) != 1:
             raise ValueError("These comparisons require unit energy for every message")
         if learnable and mapping == "identity":
@@ -33,9 +33,7 @@ class PolarMappedCodebook(nn.Module):
         self.register_buffer("eye", torch.eye(self.code_length))
         generator = baseline.polar.encode(np.eye(baseline.polar.payload_bits, dtype=np.uint8)).T
         self.register_buffer("symbol_equivalence", torch.as_tensor((generator[:, None] == generator[None, :]).all(-1)))
-        self.register_buffer("upper", torch.triu_indices(self.code_length, self.code_length, offset=1))
-        shape = (len(self.positions), self.code_length) if mapping == "energy" else (self.upper.shape[1],)
-        values = torch.zeros(shape) if mapping != "identity" else torch.empty(0)
+        values = torch.zeros(self.positions.shape) if mapping == "energy" else torch.empty(0)
         if learnable:
             self.values = nn.Parameter(values)
         else:
@@ -47,12 +45,10 @@ class PolarMappedCodebook(nn.Module):
     @property
     def device(self): return self.eye.device
 
-    def mixer(self):
-        if self.mapping != "mixer": return self.eye
-        skew = torch.zeros_like(self.eye).index_put(tuple(self.upper), self.values)
-        skew = skew - skew.T
-        # Cayley coordinates contain the identity and preserve energy in forward().
-        return torch.linalg.solve(self.eye - skew, self.eye + skew)
+    def _load_from_state_dict(self, state_dict, prefix, *args, **kwargs):
+        # Original 034 energy checkpoints also stored these unused mixer indices.
+        state_dict.pop(prefix + "upper", None)
+        super()._load_from_state_dict(state_dict, prefix, *args, **kwargs)
 
     def amplitudes(self):
         if self.mapping == "energy":
@@ -61,7 +57,6 @@ class PolarMappedCodebook(nn.Module):
 
     def transform(self, signs, patterns):
         """Unnormalised BPSK signs (messages,Nc) -> unit-energy local symbols."""
-        if self.mapping == "mixer": return (signs @ self.mixer().T) / math.sqrt(self.code_length)
         return signs * self.amplitudes()[patterns]
 
     def codewords(self, bits):
@@ -77,10 +72,6 @@ class PolarMappedCodebook(nn.Module):
 
     def diagnostics(self):
         with torch.no_grad():
-            if self.mapping == "mixer":
-                mixer = self.mixer()
-                return {"orthogonality_max_error": float((mixer.T @ mixer - self.eye).abs().max()),
-                        "mixer_distance_from_identity": float((mixer - self.eye).norm())}
             energy = self.amplitudes().square()
             return {"max_pattern_energy_error": float((energy.sum(-1) - 1).abs().max()),
                     "minimum_symbol_energy": float(energy.min()), "maximum_symbol_energy": float(energy.max()),
@@ -116,9 +107,6 @@ class PolarExplicitEncoder(nn.Module):
 
     def local_codebooks(self):
         bank = self.codebook
-        if bank.mapping == "mixer":
-            values = self.payload_signs @ bank.mixer().T / math.sqrt(bank.code_length)
-            return values.T.unsqueeze(0).expand(len(bank.positions), -1, -1)
         return bank.amplitudes().unsqueeze(-1) * self.payload_signs.T.unsqueeze(0)
 
     def message_columns(self, indices):
@@ -148,12 +136,8 @@ class PolarExplicitEncoder(nn.Module):
     def gram_geometry(self):
         bank = self.codebook
         q = bank.symbol_equivalence.to(self.dtype) * self.num_payloads
-        if bank.mapping == "mixer":
-            u = bank.mixer()
-            local_frame = (u @ q @ u.T / bank.code_length).expand(len(bank.positions), -1, -1)
-        else:
-            a = bank.amplitudes()
-            local_frame = a[:, :, None] * q * a[:, None, :]
+        a = bank.amplitudes()
+        local_frame = a[:, :, None] * q * a[:, None, :]
         indices = bank.positions[:, :, None] * self.n + bank.positions[:, None, :]
         frame = local_frame.new_zeros(self.n * self.n).scatter_add(0, indices.reshape(-1), local_frame.reshape(-1))
         frame = frame.reshape(self.n, self.n)
@@ -164,7 +148,7 @@ class PolarExplicitEncoder(nn.Module):
         return diagonal, torch.maximum(row_energy, diagonal.square())
 
     def apply_constraints(self):
-        # Both parameterizations enforce energy in forward, not via an identity penalty.
+        # Energy is enforced in forward, not via an identity penalty.
         self._spectral_cache.clear()
         self._mean_energy_cache = None
 

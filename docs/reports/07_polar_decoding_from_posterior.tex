@@ -1,0 +1,2536 @@
+\documentclass[10pt,a4paper]{article}
+\newcommand{\ReportShortTitle}{Polar decoding from the posterior}
+\input{report_style.tex}
+\hypersetup{citecolor=accent}
+\newcommand{\E}{\mathbb E}
+\newcommand{\GF}{\operatorname{GF}}
+\newcommand{\calW}{\mathcal W}
+\newcommand{\ind}{\mathbf 1}
+\newcommand{\tr}{\operatorname{tr}}
+\begin{document}
+{\LARGE\bfseries Polar multiuser decoding from first principles}\par
+{\large Exact multiset inference and a complete Bayes decoder}\par
+{\color{muted}16 October 2026 --- Report 7; exact Bayesian foundations}
+
+\textbf{Research question.} Given the fixed, deterministically balanced polar encoder of Report 8, what information
+must an ideal receiver compute, and how can those calculations be completed exactly, even at prohibitive cost?
+We begin with the physical model and the decision loss. D2 is a useful measured reference, not the
+definition of either the problem or its solution.
+
+\textbf{What this report establishes.} We derive the exact posterior in three equivalent representations, the
+Bayes decision for multiplicity-aware PUPE, and a conditional polar-inference interface. We continue to exact
+residual likelihoods, full count distributions, and a finite inside/outside decoder over polar message prefixes.
+We also derive a decision certificate, finite Fourier and joint-separator evaluations, and an exact expansion
+in connected groups of users. Further exact results identify sufficient continuation states, sharpen completion
+and connected-remainder bounds, and locate the selected code's first same-pattern sum ambiguities.
+Compatible elimination schedules, mixed-pattern state lower bounds and finite computational audits now test
+how much these exact representations can actually compress. Overlap-parity contractions, reusable support
+directions, adverse-event prior masses and a weighted-tree recurrence now provide concrete further reductions.
+The three-user cycle is solved by streamed pair contractions, with full count probabilities and a precise
+description of the dependence a later closure assumption would discard. A synthesis now connects exact merging,
+reference choice, ambiguity and exact decision contrasts. This report contains exact identities, reductions,
+obstructions and certified decisions. Algebraically motivated approximations and their error bounds have a
+separate home in Report 9. Computational feasibility at research scale is still unresolved.
+
+\section{Fix the experiment before deriving the receiver}
+Use a synchronous, real, unit-gain Gaussian multiple-access channel:
+\begin{equation}
+ y=\sum_{k=1}^K\phi(w_k)+z,\qquad z\sim\mathcal N(0,\sigma^2 I_n),\qquad \|\phi(w)\|^2=1.
+ \label{eq:model}
+\end{equation}
+The receiver knows $K\geq1$, $\sigma^2>0$ and the entire encoding rule. It knows neither the messages nor their
+patterns. Initially $K<M$. There are no pilots, unknown fading coefficients or spatial observations in this model.
+With the existing physical convention, $\sigma^2=(2B\,10^{E_b/N_0\,[{\rm dB}]/10})^{-1}$.
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lY@{}}\toprule
+Symbol & Meaning and shape\\\midrule
+$w=(p,v)$ & Pattern index $p\in\{0,\ldots,P-1\}$ and payload $v\in\GF(2)^{B_c}$\\
+$P,V,M$ & $2^{B_p},2^{B_c},2^B=PV$; $B=B_p+B_c$\\
+$L$ & $N_c\times B_c$ binary generator including CRC, frozen positions and polar transform\\
+$b(v)$ & $(-1)^{Lv}\in\{-1,+1\}^{N_c}$, with the exponent evaluated modulo two\\
+$S_p,D_p,A_p$ & Insertion $S_p\in\R^{n\times N_c}$; $D_p=\diag(\sqrt{e_p})$; $A_p=S_pD_p$\\
+$\phi(p,v)$ & $A_pb(v)\in\R^n$; $S_p^TS_p=I$ and $\sum_i e_{p,i}=1$\\
+$a$ & Unlabeled message counts in $\Z_{\geq0}^{M}$, with $\one^Ta=K$\\\bottomrule
+\end{tabularx}
+\end{center}
+
+Freeze the code, placements $r(p,i)$ and the \emph{deterministic KL-balanced} energy bank from Report 8:
+\[
+ \min_{e\geq0}\ \sum_{p,i}\big[e_{p,i}\log(e_{p,i}/(1/N_c))-e_{p,i}+1/N_c\big],
+ \quad \sum_i e_{p,i}=1,\quad \sum_{p,i:r(p,i)=r}e_{p,i}=P/n.
+\]
+Its converged matrix-scaling solution is the present reference. It uses no received data or trained parameters.
+Feasibility and convergence must be checked. This construction balances resource energy; it does not prove optimal
+PUPE, remove repeated polar-symbol functions, or settle the best placement. Those encoder questions remain parked
+while we study decoding. The actual selected small-message code has $B_c=6,N_c=32$, CRC8 and $n=256$.
+
+\clearpage
+\section{Derive the common posterior}
+IID uniform message draws are the default generative model at every $B$. Distinct sampling is the conditional
+law given $D=\{w_i\ne w_j\text{ for all }i\ne j\}$, so
+$\Pr_{\rm dist}(W\mid y)=\Pr_{\rm IID}(W\mid y,D)$.
+Its prior difference has probability $1-(M)_K/M^K\leq K(K-1)/(2M)$, negligible when $K^2/M$ is small.
+We retain both exact formulas so that conditioning is explicit; rare prior collisions need not be rare for every
+individual observation.
+
+\subsection{Counts: the shortest exact statement}
+Let $\calW=\{0,\ldots,P-1\}\times\GF(2)^{B_c}$. Introduce the explicit matrix
+\emph{as a mathematical definition}:
+\begin{equation}
+ \Phi=[\phi(w)]_{w\in\calW}\in\R^{n\times M},\qquad M=2^B,\qquad y=\Phi a+z.
+\end{equation}
+This notation does not require a practical receiver to store it. Gaussian noise gives the likelihood
+$p(y\mid a)\propto\exp[-\|y-\Phi a\|^2/(2\sigma^2)]$. The prior depends on how transmissions are sampled:
+\begin{align}
+ \pi_{\rm dist}(a)&=\binom{M}{K}^{-1}\ind\{a\in\{0,1\}^M,\ \one^Ta=K\},\\
+ \pi_{\rm iid}(a)&=\frac{K!}{M^K\prod_w a_w!}
+                   \ind\{a\in\Z_{\geq0}^M,\ \one^Ta=K\}.
+ \label{eq:priors}
+\end{align}
+For IID sampling, $K!/\prod_w a_w!$ is the number of ordered transmission sequences giving those counts.
+For example, with two users, two different messages have twice the prior probability of two copies of one specified
+message. A uniform prior over count vectors would describe a different experiment.
+
+\begin{equation}
+ \boxed{\Pr(a\mid y)=\frac{1}{Z_y}\pi(a)
+          \exp\!\left[-\frac{\|y-\Phi a\|^2}{2\sigma^2}\right].}
+ \label{eq:posterior}
+\end{equation}
+$Z_y$ is the sum of the numerator over all allowed $a$. This posterior is the shared information target.
+Independent Bernoulli activities with mean $K/M$ do not impose exact cardinality; a fitted scalar offset imposing
+$\sum_w\E[a_w]=K$ is not a substitute for \eqref{eq:priors}.
+
+\subsection{Exchangeable slots: expose the code structure}
+Write $W=(w_1,\ldots,w_K)$, where slots are mathematical labels, not user identities. The slot prior is $M^{-K}$ for
+IID sampling and $(M)_K^{-1}\ind\{w_i\ne w_j\text{ for }i\ne j\}$ for distinct sampling, where
+$(M)_K=M(M-1)\cdots(M-K+1)$. Then
+\begin{equation}
+ \Pr(W\mid y)\propto\pi(W)
+       \exp\!\left[-\frac{\|y-\sum_k A_{p_k}b(v_k)\|^2}{2\sigma^2}\right].
+ \label{eq:slots}
+\end{equation}
+Summing \eqref{eq:slots} over all orderings with counts $a$ gives \eqref{eq:posterior}, including the factorial
+weight. The representations are equivalent; their \emph{modes} need not be. Maximizing a single IID slot assignment
+is maximum likelihood, whereas IID count MAP includes its multiplicity weight.
+
+To see the actual coupling, put $x_k=A_{p_k}b(v_k)$ and expand:
+\begin{align}
+ \left\|y-\sum_kx_k\right\|^2
+ &=\|y\|^2+K-2\sum_k y^Tx_k+2\sum_{k<j}x_k^Tx_j,\\
+ \Pr(W\mid y)&\propto\pi(W)
+   \exp\!\left[\frac{\sum_k y^Tx_k-\sum_{k<j}x_k^Tx_j}{\sigma^2}\right].
+ \label{eq:interactions}
+\end{align}
+The first sum is individual evidence; the second accounts for messages explaining the same observations.
+Taking the largest isolated correlations discards the second sum. Balancing an average frame operator does not
+make these pairwise interactions vanish.
+
+\textbf{Symmetry matters.} The exact posterior is invariant to permuting slots. In particular,
+$\E[a_w\mid y]=K\Pr(w_1=w\mid y)$. Slot marginals do not each identify a different physical user. Separation into
+different slot beliefs is an approximation or a conditional hypothesis, not an exact property of the posterior.
+
+\clearpage
+\section{What does an optimal decoder optimize?}
+\subsection{Multiplicity-aware PUPE and its exact optimal decision}
+The primary objective is recovery of transmitted message \emph{instances}. The receiver returns a multiset
+$\widehat a\in\mathbb Z_+^M$ with at most $K$ occurrences. One returned copy can match only one transmitted copy:
+\begin{equation}
+ \boxed{\ell_{\rm multi}(a,\widehat a)
+ =1-\frac1K\sum_w\min(a_w,\widehat a_w).}
+ \label{eq:loss}
+\end{equation}
+When both totals equal $K$, this is $\|a-\widehat a\|_1/(2K)$. For a shorter output use the first expression:
+missing copies still count as errors. For truth $(u,u,v)$, output $(u,v)$ has error $1/3$ and $(u,u,v)$ has zero
+error. Distinct-message truth reduces to ordinary message-list PUPE.
+
+Define posterior count tails $T_{w,j}(y)=\Pr(a_w\geq j\mid y)$ for $j=1,\ldots,K$. The elementary identity
+$\min(a_w,d)=\sum_{j=1}^d\ind\{a_w\geq j\}$ gives
+\begin{equation}
+ \E[\ell_{\rm multi}(a,\widehat a)\mid y]
+ =1-\frac1K\sum_w\sum_{j=1}^{\widehat a_w}T_{w,j}(y).
+ \label{eq:bayes}
+\end{equation}
+An exact Bayes action allocates $K$ copies by repeatedly choosing the largest next available tail
+$T_{w,\widehat a_w+1}$ and incrementing that message's count. This greedy allocation is globally optimal:
+each message has nonincreasing tails, so choosing its $j$th copy never requires skipping a more valuable
+earlier copy. Ties can be resolved while preserving these prefixes. Filling all $K$ positions cannot increase
+this loss. This specifies an ideal decision, not an efficient search across the $M$ messages.
+
+Under distinct sampling only $T_{w,1}=\Pr(a_w=1\mid y)$ is nonzero. The rule becomes top-$K$ inclusion probability.
+Under IID sampling posterior means $\eta_w=\E[a_w\mid y]=\sum_jT_{w,j}$ are generally insufficient: a large
+expected count does not specify the separate values of returning one or two copies.
+
+\subsection{MAP is a different decision}
+Count MAP minimizes $\ind\{\widehat a\ne a\}$, the error on the whole multiset. It need not minimize
+\eqref{eq:loss}. For example, consider this normalized posterior on pairs of four distinct messages:
+\[
+ \Pr(01,02,03,12,13,23\mid y)=(.30,.22,.01,.24,.01,.22).
+\]
+MAP selects $01$. The inclusion probabilities are $(.53,.55,.68,.24)$, so the Bayes action is $12$.
+Their conditional PUPE risks are $0.460$ and $0.385$, respectively. This is a decision-theoretic example, not a new
+measured operating point. An optimization route aimed at MAP must acknowledge this change of decision target.
+
+\subsection{Metric correction and historical comparisons}
+Before the 11 October 2026 correction, the main array/count and matched benchmark scorers used
+\[
+ \ell_{\rm list}(a,\mathcal L)=1-\frac1K\sum_{w\in\mathcal L}a_w.
+\]
+This credits every copy when a message appears once. Its Bayes list ranks $\eta_w$, but it was not the intended
+objective. It remains as \texttt{list\_pupe}; new primary scores have \texttt{pupe\_metric\_version=2}.
+Old files are unchanged. Distinct-message results with unchanged valid output support retain their PUPE;
+historical IID results require saved hard predictions or checkpoint re-evaluation to establish multiplicity recovery.
+
+The matched adapter now preserves hard-count copies. Count-array readout caps occurrences at $K$ by descending
+estimated count with stable index ties; already valid outputs are unchanged. This declared budget policy is not
+the Bayes allocation above. Raw count errors, overflow and false alarms remain diagnostics.
+The benchmark's \texttt{strict\_pupe} still treats every duplicated-message user as erroneous.
+
+The decoder investigation retains posterior count tails and the Bayes multiset decision in \eqref{eq:bayes}
+as its target. Approximating the calculation does not change this decision objective.
+
+\clearpage
+\section{The first exact polar operation}
+\subsection{Condition on the other messages, without pretending they are known}
+For a particular slot $k$, fix a \emph{hypothesized} assignment $W_{-k}$ and subtract its waveform:
+\begin{equation}
+ r_{-k}=y-\sum_{j\ne k}\phi(w_j).
+\end{equation}
+This is an operation inside inference; supplying the true $W_{-k}$ would be an oracle diagnostic. Let
+$\mathcal E_k$ contain all messages in the IID case and exclude $W_{-k}$ in the distinct case. Unit energy gives
+\begin{align}
+ \Pr(w_k=(p,v)\mid y,W_{-k})
+ &\propto\ind\{(p,v)\in\mathcal E_k\}
+          \exp[-\|r_{-k}-A_pb(v)\|^2/(2\sigma^2)]\\
+ &\propto\ind\{(p,v)\in\mathcal E_k\}
+          \exp[\tfrac12\lambda_p^Tb(v)],\qquad
+ \boxed{\lambda_p=\frac{2A_p^Tr_{-k}}{\sigma^2}.}
+ \label{eq:conditional}
+\end{align}
+The squared candidate energy is one, so it disappears from comparisons across both payloads and patterns.
+At an occupied coordinate the LLR is $2\sqrt{e_{p,i}}\,r_{-k,r(p,i)}/\sigma^2$. Polar constraints enter through
+$b(v)$, not by changing the physical variance.
+For $K=1$, $r_{-k}=y$: this is already the full posterior, with no multiuser approximation.
+
+\subsection{Three different operations, often mistakenly conflated}
+For any supplied $\lambda$, define
+\begin{equation}
+ Z_{\rm pol}(\lambda)=\sum_{v\in\GF(2)^{B_c}}\exp[\lambda^Tb(v)/2].
+ \label{eq:zpol}
+\end{equation}
+\begin{enumerate}
+\item \textbf{Maximize:} find the valid payload with largest $\lambda^Tb(v)/2$.
+      This is the conditional mode or a candidate-search operation.
+\item \textbf{Sum:} evaluate $Z_{\rm pol}$ and marginals; for instance
+      $\E[b_i\mid\lambda]=2\,\partial\log Z_{\rm pol}/\partial\lambda_i$.
+      Pattern probabilities require these sums.
+\item \textbf{Sample:} draw a payload from the distribution proportional to that exponential.
+      This supports posterior sampling, not just optimization.
+\end{enumerate}
+With uniform messages and no exclusion, $\Pr(p_k=p\mid y,W_{-k})=Z_{\rm pol}(\lambda_p)/\sum_qZ_{\rm pol}(\lambda_q)$.
+For distinct sampling, remove forbidden full-message terms from each pattern's sum.
+\emph{Choosing the pattern with the strongest single payload is not marginal pattern inference.}
+If a decoder uses normalized bit-channel probabilities, their pattern-dependent normalization constants must be
+restored before comparing different patterns. Using the unnormalized scores in \eqref{eq:zpol} avoids that ambiguity.
+
+Polar encoding has a compact XOR circuit. SC and bounded-list SCL exploit that circuit efficiently
+\cite{arikan,tal}, but a finite list does not guarantee the exact maximum, partition sum or sample in
+\eqref{eq:zpol}. In particular, future frozen/CRC constraints and pruning cannot be ignored when claiming exact
+posterior sampling. The exact conditional interface is established; a cheap exact implementation is not.
+
+\subsection{Continue the exact sum before choosing an approximation}
+The unconditional marginal is
+$\Pr(w_k\mid y)=\sum_{W_{-k}}\Pr(w_k\mid y,W_{-k})\Pr(W_{-k}\mid y)$.
+Replacing uncertain interference by one subtraction is a substantive approximation to this sum.
+Exact enumeration requires $\binom{M}{K}$ distinct or $\binom{M+K-1}{K}$ IID count states; compact slot notation still
+allows $M^K$ assignments. Polar structure compresses the description, not these sums automatically.
+
+Nothing in this identity requires choosing an approximation now. We next turn the sum into complete finite
+procedures and ask which states can be combined without losing the count tails needed by the decision.
+Approximation assumptions are developed separately in Report 9 from the bottlenecks of these exact procedures.
+
+\clearpage
+\section{Complete the exact residual-likelihood decoder}
+\label{sec:residual-exact}
+\subsection{One function for every possible explanation of a residual}
+For an allowed full-message alphabet $\mathcal S\subseteq\calW$, define
+\begin{align}
+ g(r)&=\exp[-\|r\|^2/(2\sigma^2)],\\
+ H_m^{\mathcal S}(r)&=
+ \sum_{(w_1,\ldots,w_m)\in\mathcal S^m}
+       g\!\left(r-\sum_{i=1}^m\phi(w_i)\right),\qquad H_0^{\mathcal S}(r)=g(r).
+ \label{eq:ordered-evidence}
+\end{align}
+$H_m$ is a sum of likelihoods, not a normalized density. Multiplication by
+$|\mathcal S|^{-m}(2\pi\sigma^2)^{-n/2}$ gives the observation density for $m$ IID uniform draws from $\mathcal S$.
+Keep the unnormalized definition when comparing different alphabets or different $m$.
+
+Separate the first message from its remaining $m-1$ companions:
+\begin{equation}
+ \boxed{H_m^{\mathcal S}(r)=
+        \sum_{w\in\mathcal S}H_{m-1}^{\mathcal S}(r-\phi(w)).}
+ \label{eq:residual-recursion}
+\end{equation}
+Each branch subtracts a \emph{hypothesis}; summing all branches integrates out the interference exactly.
+The base case contains the physical noise once. Adding noise variance or a new Gaussian likelihood at every
+recursion level would change the model.
+
+For a small example, $H_2(r)=\sum_u\sum_v g(r-\phi(u)-\phi(v))$. Different orderings of $u,v$ count separately,
+as the IID slot prior requires. Repeated messages are allowed, as are different payloads on the same pattern.
+Every pattern is included in the alphabet; no true pattern is supplied.
+
+\subsection{Connect the base operation to the polar partition function}
+With the full alphabet and unit energy,
+\begin{equation}
+ H_1^{\calW}(r)=
+ e^{-(\|r\|^2+1)/(2\sigma^2)}
+ \sum_{p=0}^{P-1}Z_{\rm pol}\!\left(\frac{2A_p^Tr}{\sigma^2}\right).
+ \label{eq:h1-polar}
+\end{equation}
+This follows by expanding $\|r-A_pb(v)\|^2$ and then summing valid payloads. Thus the exact polar evidence
+operation is the one-user boundary of an exact multiuser recursion.
+For an excluded alphabet, sum only its allowed payloads. Positive enumeration avoids cancellation from subtracting
+nearly equal partition sums.
+
+The recursion is already a terminating algorithm: recursively generate every valid message, evaluate the Gaussian
+at depth zero, and add. Naively there are $M^m$ leaves. Reusing identical subproblems can help, but writing a
+recurrence does not by itself reduce this exponential count. In particular, $H_m$ is a function on $\R^n$;
+it is not a table of only $m+1$ numbers.
+
+\textbf{What has improved?} Unknown interference is now a specified, evaluable function rather than an
+unspecified marginalization. The next step is to obtain the \emph{right} queries of that function for multiset PUPE.
+
+\clearpage
+\subsection{From residual evidence to every posterior count probability}
+Fix a full message $w$ and write $q_{w,j}=\Pr(a_w=j\mid y)$. Exactly $j$ of the $K$ labeled slots can contain $w$
+in $\binom Kj$ ways. The remaining slots must exclude $w$. Therefore
+\begin{equation}
+ \boxed{q_{w,j}=
+ \binom Kj\,
+ \frac{H_{K-j}^{\calW\setminus\{w\}}(y-j\phi(w))}
+      {H_K^{\calW}(y)},\qquad j=0,\ldots,K.}
+ \label{eq:count-probability}
+\end{equation}
+All terms are nonnegative. This is not an independence approximation: the residual function still sums the
+joint explanations of all remaining transmissions. As checks,
+$\sum_jq_{w,j}=1$ and $\sum_w\sum_j j q_{w,j}=K$.
+
+The exclusion is essential. If we instead allow the remaining slots to contain $w$, we obtain
+\begin{equation}
+ \E\!\left[\binom{a_w}{j}\middle|y\right]=
+ \binom Kj\,\frac{H_{K-j}^{\calW}(y-j\phi(w))}{H_K^{\calW}(y)}.
+ \label{eq:factorial-moment}
+\end{equation}
+This counts choices of $j$ marked copies, including states with more than $j$ copies.
+At $j=1$ it gives $\E[a_w\mid y]$, the quantity in the shared discussion.
+That mean alone is insufficient for the corrected loss. Instead form
+\[
+ T_{w,j}=\sum_{t=j}^Kq_{w,t}
+\]
+and use the allocation in \eqref{eq:bayes}. The physical model, exact inference, and optimal decision are now connected.
+
+\subsection{Distinct messages require a different recursion}
+Let $D_m^{\mathcal S}$ sum the same Gaussian weight over ordered tuples with distinct entries. Then
+\begin{equation}
+ D_0^{\mathcal S}=g,\qquad
+ D_m^{\mathcal S}(r)=\sum_{w\in\mathcal S}
+ D_{m-1}^{\mathcal S\setminus\{w\}}(r-\phi(w)).
+ \label{eq:distinct-recursion}
+\end{equation}
+Set $D_m^{\mathcal S}=0$ when $m>|\mathcal S|$. Here
+$q_{w,1}=K D_{K-1}^{\calW\setminus\{w\}}(y-\phi(w))/D_K^{\calW}(y)$,
+$q_{w,0}=1-q_{w,1}$ and higher counts have zero probability.
+This is the conditioned source model, not an IID recursion with a different final threshold.
+
+\subsection{A complete finite decoder, with its guarantee}
+\begin{enumerate}
+\item Generate valid $(p,v)$ messages using the fixed polar/CRC encoding rule.
+\item Compute $H_K(y)$ and the excluded-alphabet functions in \eqref{eq:count-probability}
+      (or their distinct counterparts).
+\item Normalize to $q_{w,j}$ for every $w,j$ and sum to obtain count tails.
+\item Allocate $K$ occurrences by the largest next tail, preserving each message's prefix of copies.
+\end{enumerate}
+All sums are finite, and $H_K(y)>0$ for $\sigma^2>0$. In exact arithmetic this algorithm returns a global
+minimum of posterior expected multiset PUPE for every observation. Integrating that conditional guarantee over
+$y$ gives minimum average PUPE under the stipulated prior. It promises neither zero error nor fast computation.
+
+For completeness, the same evidence functions also give exact sequential posterior sampling:
+choose a first slot with probability $H_{K-1}(y-\phi(w))/H_K(y)$, subtract it, and repeat with one fewer slot.
+These probabilities telescope to the full slot posterior. This finite construction needs exact evidence;
+it is stronger than a stationary-target statement for a finite Monte Carlo run, but just as potentially expensive.
+
+\clearpage
+\section{An exact inside/outside decoder over message prefixes}
+\label{sec:tree-exact}
+\subsection{Replace ordered tuples by positive signal-sum measures}
+The preceding algorithm repeatedly counts permutations. We can remove that repetition and share computations
+between message queries without changing the posterior.
+For a message subset $\mathcal S$, define the discrete measure
+\begin{equation}
+ \mu_{\mathcal S,k}
+ =\sum_{\substack{a:\,\supp(a)\subseteq\mathcal S\\\one^Ta=k}}
+       \beta(a)\,\delta_{\Phi a},
+ \qquad
+ \beta(a)=\prod_w\frac1{a_w!}\quad\text{(IID)}.
+ \label{eq:measure}
+\end{equation}
+$\delta_s$ means a point mass at waveform sum $s$. For distinct sampling restrict $a_w$ to $0,1$, so
+$\beta(a)=1$. These are unnormalized measures. Their total masses are
+$|\mathcal S|^k/k!$ for IID and $\binom{|\mathcal S|}{k}$ for distinct sampling.
+For the empty alphabet only $\mu_{\varnothing,0}=\delta_0$ is nonzero.
+
+For two measures, convolution adds their signals and multiplies their weights:
+$\delta_s*\delta_t=\delta_{s+t}$. If $\mathcal S=\mathcal A\mathbin{\dot\cup}\mathcal B$ is a disjoint union,
+\begin{equation}
+ \boxed{\mu_{\mathcal S,k}=
+        \sum_{q=0}^k\mu_{\mathcal A,q}*\mu_{\mathcal B,k-q}.}
+ \label{eq:measure-convolution}
+\end{equation}
+Proof: every count vector has a unique restriction to the two disjoint alphabets.
+Its total count and waveform add, and $\beta(a)$ factors. There is no binomial coefficient here:
+the leaf factorials already implement the IID prior.
+
+Now partition complete messages by their binary prefixes. The first $B_p$ levels select the pattern;
+the next $B_c$ levels select the payload. Each leaf is exactly one valid full message, whose waveform is
+constructed by polar encoding. The split is a partition of \emph{possible messages}, not of physical users.
+Unknown pattern occupancies and arbitrary same-pattern multiplicities remain in the sum.
+
+\subsection{The inside pass}
+For a node $u$, let $\mathcal S_u$ be its leaf alphabet and $I_u(k)=\mu_{\mathcal S_u,k}$.
+At the leaf for message $w$:
+\begin{equation}
+ I_w(k)=\frac1{k!}\delta_{k\phi(w)}\quad\text{(IID)},\qquad
+ I_w(0)=\delta_0,\ I_w(1)=\delta_{\phi(w)},\ I_w(k\geq2)=0\quad\text{(distinct)}.
+ \label{eq:leaf}
+\end{equation}
+At each parent apply \eqref{eq:measure-convolution} to its two children, keeping counts $0,\ldots,K$.
+The root yields the evidence
+\begin{equation}
+ \mathcal Z(y)=\int g(y-s)\,I_{\rm root}(K)(ds)
+ =H_K^{\calW}(y)/K!\quad\text{(IID)}
+ \label{eq:tree-evidence}
+\end{equation}
+and $D_K^{\calW}(y)/K!$ for distinct sampling. The omitted prior normalization is constant over all states
+of total $K$ and cancels from posterior ratios. Apply the Gaussian after summing signals; multiplying
+Gaussian scores of the child signals would incorrectly treat their shared observation as independent.
+
+\clearpage
+\subsection{The outside pass answers the missing count queries}
+Define $O_u(k)=\mu_{\calW\setminus\mathcal S_u,k}$, the measure for messages outside node $u$.
+Initialize $O_{\rm root}(0)=\delta_0$ and $O_{\rm root}(k>0)=0$.
+If $u$ has parent $t$ and sibling $v$, its complement is the disjoint union of the parent's complement and $v$:
+\begin{equation}
+ \boxed{O_u(k)=\sum_{q=0}^k O_t(q)*I_v(k-q).}
+ \label{eq:outside}
+\end{equation}
+A pass from root to leaves therefore computes the complementary measures for every message.
+At a leaf,
+\begin{equation}
+ \boxed{q_{w,j}=\frac{\beta_w(j)}{\mathcal Z(y)}
+       \int g(y-j\phi(w)-t)\,O_w(K-j)(dt),}
+ \label{eq:tree-query}
+\end{equation}
+where $\beta_w(j)=1/j!$ in the IID case and is $1$ for $j=0,1$, $0$ otherwise in the distinct case.
+For IID sampling, substituting $O_w(m)=\mu_{\calW\setminus\{w\},m}$ and
+$H_m=m!\int g\,d\mu$ recovers \eqref{eq:count-probability}, including its binomial coefficient.
+
+\textbf{The full algorithm is now explicit:} build the prefix tree, compute all inside measures, propagate
+outside measures, evaluate \eqref{eq:tree-query}, sum count tails, and allocate the $K$ decoded occurrences.
+No candidate proposer, noise approximation, true pattern, training, or unspecified marginal oracle is required.
+The tiny implementation in \path{tests/polar_exact_inference_test.py} executes these steps.
+
+\subsection{What may be compressed, and what must be retained}
+If two configurations produce exactly the same sum $s$, their weights may be added in an inside or outside
+measure: every subsequent convolution and Gaussian evaluation uses only that sum.
+This is an exact local compression. However, the root sum distribution alone does not determine $q_{w,j}$.
+Different configurations with the same signal can have different message counts. The outside pass keeps the
+query's own leaf separate, so its count information survives the aggregation.
+
+For example, if messages $u$ and $v$ have the same waveform, observing that waveform does not reveal which was
+sent. Summing their evidence is valid; assigning the combined evidence to one arbitrarily chosen message is not.
+The certificates deliberately include this ambiguity to check the distinction.
+
+\subsection{Where the computational burden has moved}
+Let $s_u(k)$ be the number of distinct stored sum states at node $u$. Combining two children costs, before
+coalescing equal states,
+$\sum_{k=0}^K\sum_{q=0}^k s_{\rm left}(q)s_{\rm right}(k-q)$ pair additions,
+each also requiring signal-key work. Outside passes have the same kind of cost.
+Without useful coincidences, $s_u(k)$ can be $\binom{|\mathcal S_u|+k-1}{k}$ for IID sampling.
+Thus this construction removes slot permutations and reuses shared sums; it does not establish polynomial
+complexity or sub-exhaustive payload search.
+
+The full tree has $M$ leaves. It can generate waveforms procedurally and avoid storing the dense $n\times M$
+matrix, while still having exponential dependence on $B$. This is a complete exact decoder and a reference
+for future reductions, not a claim of scalable execution. Small certificates use floating point arithmetic;
+large evidence calculations require scaled/log-domain sums, and rigorous numerical bounds require controlled rounding.
+
+\clearpage
+\section{Use polar algebra without losing association}
+\label{sec:polar-exact}
+\subsection{Group identical parity functions exactly}
+Write the $i$th row of $L$ as $\ell_i\in\GF(2)^{B_c}$, and define the binary characters
+$\chi_g(v)=(-1)^{g^Tv}$. Then $b_i(v)=\chi_{\ell_i}(v)$.
+For the distinct row set $\mathcal G$, collect
+\[
+ C_{p,g}=\sum_{i:\ell_i=g}\sqrt{e_{p,i}}\,S_p[:,i],
+ \qquad
+ \phi(p,v)=\sum_{g\in\mathcal G}C_{p,g}\chi_g(v).
+\]
+For counts $a_{p,v}$ the total waveform is therefore
+\begin{equation}
+ s(a)=\sum_{p,g}C_{p,g}\,t_{p,g},\qquad
+ t_{p,g}=\sum_v a_{p,v}\chi_g(v)\in\{-K,\ldots,K\}.
+ \label{eq:integer-signature}
+\end{equation}
+Use the integer array $t$ as the convolution key and the known $C$ only when evaluating the physical signal.
+Addition of keys is exact; no tolerance-based merging of real waveforms is needed. Equal signatures can be
+combined even when their underlying count vectors differ, with the outside-query safeguard above.
+Different signatures may also produce the same physical signal; retaining them separately is redundant but correct.
+
+The selected $32\times6$ generator has 29 distinct rows, including the zero character. That is a small exact
+reduction of the signature dimension, not a disappearance of its state explosion.
+If all $2^{B_c}$ characters were retained, the Walsh inverse would recover each pattern's counts:
+\[
+ a_{p,v}=2^{-B_c}\sum_{g\in\GF(2)^{B_c}}t_{p,g}\chi_g(v).
+\]
+Only a subset is transmitted here. General count recovery cannot assume that this incomplete transform is
+invertible; restricted-$K$ identifiability is a separate question.
+
+\subsection{An exact one-user transform, with a precise limit}
+For supplied LLRs, group $h_g=\tfrac12\sum_{i:\ell_i=g}\lambda_i$ and put $h_g=0$ for missing characters.
+Then every payload log score is
+\[
+ f(v)=\tfrac12\lambda^Tb(v)=\sum_g h_g\chi_g(v),\qquad
+ Z_{\rm pol}(\lambda)=\sum_v e^{f(v)}.
+\]
+The unnormalized Walsh transform computes all $f(v)$ in $O(B_c2^{B_c}+N_c)$ operations rather than
+$O(N_c2^{B_c})$ separate codeword scores. This is an exact finite-alphabet improvement; it still enumerates
+the payload alphabet. Exponentiation and the multiuser interactions are not diagonalized by this transform.
+
+\subsection{Why an aggregate XOR butterfly needs more state}
+For two users, incoming bit pairs $(0,0),(1,1)$ and $(0,1),(1,0)$ both have one one in each input column.
+Their per-user XOR outputs are respectively $(0,0)$ and $(1,1)$.
+Thus counts of ones on the two input wires do not determine the output count: we also need their
+joint pairing across users. A polar butterfly on marginal counts alone is not an exact recursion.
+Full joint separator states, or an equivalent lossless association representation, could be propagated instead,
+but their size must be derived. The prefix convolution above avoids this unsupported simplification by
+constructing valid complete-codeword signatures before combining them.
+
+\clearpage
+\subsection{An equivalent exact polar and pattern factorization}\label{sec:bit-factorization}
+For slot $k$, introduce payload bits $v_k$, polar input bits $u_k$, and intermediate bits at all butterfly stages.
+The local polar kernel has the indicator
+\begin{equation}
+ f_{\rm ker}(a,b,c,d)=\ind\{c=a\oplus b,\ d=b\}.
+\end{equation}
+Frozen input bits equal zero. Information positions contain the payload and its deterministic CRC; the CRC can be
+represented by its binary linear constraints. Let $\mathcal P_k$ be the product of these indicators, including
+payload insertion. It allows exactly one internal encoding path for each $v_k$.
+
+Introduce real-valued variables $x_{k,r}$ supported on their finite encoder-induced alphabets, with mapping factors
+\begin{equation}
+ \mathcal M_k=\prod_{r=1}^{n}
+ \ind\!\left\{x_{k,r}=\sum_{i=1}^{N_c}
+       \ind\{r(p_k,i)=r\}\sqrt{e_{p_k,i}}\,(-1)^{c_{k,i}}\right\}.
+\end{equation}
+There is \emph{one shared pattern variable} $p_k$ across all resources of a slot. Replacing it by independent on/off
+choices at each resource would admit invalid patterns. Conditional on $p_k$, each resource has at most one local
+symbol from that slot; different slots may use the same pattern.
+
+\begin{equation}
+ \Pr(p,v,u,c,x,\ldots\mid y)\propto
+ \pi(W)\prod_k\mathcal P_k\mathcal M_k
+ \prod_{r=1}^{n}\exp\!\left[-\frac{(y_r-\sum_kx_{k,r})^2}{2\sigma^2}\right].
+ \label{eq:graph}
+\end{equation}
+For distinct sampling, retain the all-different constraint on \emph{full} messages in $\pi(W)$.
+For IID sampling it is absent. Summing out the deterministic internal variables gives \eqref{eq:slots} exactly.
+Thus counts, slots and the bit/pattern graph describe the same distribution before approximation.
+
+Every resource factor has a finite joint sum, and exact variable elimination recovers the same posterior.
+The local XOR circuit does not bound the size of intermediate joint factors. In particular, ordinary scalar
+messages on the loopy graph are not an additional exact decoder. Section~\ref{sec:elimination-exact} treats
+exact elimination; assumptions about messages or interference belong to the separate approximation report.
+
+\clearpage
+\section{What an exact decoder may safely forget}
+\label{sec:exact-reductions}
+\subsection{First remove observation directions that cannot distinguish messages}
+Let $\mu=M^{-1}\sum_w\phi(w)$ and
+$V=\operatorname{span}\{\phi(w)-\mu:w\in\calW\}$. Choose an orthonormal basis matrix $Q$ for $V$, and write
+$P_V=QQ^T$. Every allowed sum of $K$ messages lies in $K\mu+V$, so
+\begin{equation}
+ \|y-\Phi a\|^2
+ =\|Q^T(y-K\mu)-Q^T(\Phi a-K\mu)\|^2
+  +\|(I-P_V)(y-K\mu)\|^2.
+ \label{eq:sufficient-observation}
+\end{equation}
+The last term is identical for every hypothesis. It cancels from every posterior ratio. Thus
+$Q^T(y-K\mu)$ is an exactly sufficient observation for this decoder. Its noise covariance is still
+$\sigma^2 I$; no interference variance or Gaussian approximation has been introduced.
+
+The space can be found without enumerating the full payload alphabet. Character orthogonality gives
+\begin{equation}
+ \mu=\frac1P\sum_p C_{p,0},\qquad
+ \Sigma=\frac1P\sum_{p,g}C_{p,g}C_{p,g}^T-\mu\mu^T,\qquad V=\operatorname{range}\Sigma.
+ \label{eq:variation-moments}
+\end{equation}
+Use $C_{p,0}=0$ if the zero character is absent. To prove the last equality, note that
+$d^T\Sigma d=\operatorname{Var}_w(d^T\phi(w))$ vanishes exactly when $d^T\phi(w)$ is constant over all messages.
+This is the same encoder moment used in Report 8, now interpreted as a sufficient-statistic calculation.
+
+\subsection{The actual bank rules out a global dimension reduction}
+For the selected code on one \emph{known} pattern, the 28 nonzero character vectors have disjoint nonempty
+supports, so they are linearly independent. At known occupancy, the signal variation therefore has dimension
+28, rather than 32. The zero character contributes a known offset; repeated characters contribute no new
+directions. If occupancy is unknown, that offset must instead be retained as a state variable.
+
+For the full $B=12/14$, $n=256$ banks and seeds 3201--3203, however, $V=\R^{256}$.
+This has a structural certificate, not just a numerical rank estimate:
+\begin{enumerate}
+\item Each nonzero $C_{p,g}$ belongs to $V$, since it is the character-weighted average of the pattern's
+      codewords, with coefficients summing to zero.
+\item A character occurring at one symbol isolates a coordinate axis. In a repeated-character vector, subtract
+      already isolated axes; if one support coordinate remains, that axis also belongs to $V$.
+\item This isolates 254, 254, 253 axes at $B=12$ and 255 at each $B=14$ seed. The only constant symbol is
+      position zero in the local code. Differences between pattern means, anchored at an already isolated
+      mean coordinate, isolate the remaining axes in all six banks.
+\end{enumerate}
+All used coefficients are positive, so no numerical threshold is required. Consequently the global projection
+above saves no dimensions here. It remains useful after conditioning or at smaller alphabet cuts.
+
+\clearpage
+\subsection{A stronger rule at a fixed cut: only preserve interaction with the future}
+Split the message alphabet into disjoint sets $A,B$. Fix $q$ messages in $A$ and $h=K-q$ in $B$.
+Let $\mathcal T_{B,h}$ be the allowed future sums, and choose any point $t_0$ in their affine hull. Define
+\[
+ V_{B,h}=\operatorname{span}\{t-t_0:t\in\mathcal T_{B,h}\},\qquad P_{B,h}=Q_{B,h}Q_{B,h}^T.
+\]
+For a partial sum $s$ from $A$ and a completion $t$ from $B$, orthogonal decomposition gives
+\begin{align}
+ g(y-s-t)
+ &=\eta_h(s)\,
+ \exp\!\left[-\frac{\|Q_{B,h}^T(y-t_0-s)-Q_{B,h}^T(t-t_0)\|^2}{2\sigma^2}\right],
+ \label{eq:continuation-projection}\\
+ \eta_h(s)&=\exp\!\left[-\frac{\|(I-P_{B,h})(y-t_0-s)\|^2}{2\sigma^2}\right].
+ \nonumber
+\end{align}
+Thus all partial states with the same $Q_{B,h}^Ts$ can be merged after multiplying their weights by
+$\eta_h(s)$. Every later completion sees precisely the same remaining likelihood. For a count query, merge
+the coefficients of its marker polynomial, not just the scalar weights. This retains the count information
+required by the loss even when message identities have different past explanations.
+
+This criterion is also necessary for merging two signal states \emph{up to a scalar weight} while preserving
+each allowed continuation. Indeed
+\[
+ \log\frac{g(y-s-t)}{g(y-s'-t)}
+ =\frac{(s-s')^T(y-t)-(\|s\|^2-\|s'\|^2)/2}{\sigma^2}
+\]
+is independent of $t$ if and only if $s-s'\perp V_{B,h}$.
+The conclusion concerns proportional likelihood rows with the same future feasibility; it is not a universal
+minimality theorem for every algebraic representation.
+
+No multiuser enumeration is needed merely to find this space. For IID sampling and $h\geq1$ it equals
+$\operatorname{span}\{\phi(u)-\phi(v):u,v\in B\}$: compare completions differing in one user.
+For distinct sampling the same proof works when $1\leq h<|B|$, by fixing $h-1$ other messages outside
+$\{u,v\}$. For $h=0$, or distinct $h=|B|$, there is just one future sum and the space is zero.
+For nonempty $B$, use $t_0=h|B|^{-1}\sum_{w\in B}\phi(w)$, the mean of the admissible future sums.
+If $B$ is empty, only $h=0$ is feasible and $t_0=0$.
+
+\textbf{Boundary of the rule.} Disjoint alphabet cuts make the prior and distinct exclusions compatible with this
+merging. Two labeled histories with different used-message sets generally have different legal futures; projection
+equality alone cannot merge them. The weights also depend on the cut, occupancy and observation. Equation
+\eqref{eq:continuation-projection} is an exact cut calculation, not permission to multiply the Gaussian likelihood
+again at every recursion level. A complete elimination order must consume each likelihood factor once.
+
+\clearpage
+\subsection{A small geometric separator need not be a small table or tensor}
+If no future message touches a resource, that resource lies outside $V_{B,h}$ and its likelihood may be absorbed
+into the current weight. This gives a resource-frontier interpretation of the projection rule. More general
+linear relations can remove additional directions even when supports overlap.
+
+The actual polar payload prefixes provide a concrete local profile. Once a pattern and $\ell$ leading payload
+bits are fixed, restrict each character row to its remaining $6-\ell$ bits. Equal restricted rows merge;
+zero rows contribute only a known offset. The merged vectors still have disjoint supports, so the number of
+distinct nonzero restricted rows is the exact one-message variation dimension. For $\ell=0,\ldots,6$ it is
+\[
+ 28,\quad23,\quad15,\quad7,\quad3,\quad1,\quad0.
+\]
+For IID positive occupancy these are also the future-sum variation dimensions. Distinct sampling has the
+same dimensions at interior occupancies, and dimension zero when all remaining messages must be selected.
+This establishes useful local reductions, while leaving the number of distinct sum states to be determined.
+
+At $\ell\geq2$, every character on the remaining bits is present. Write $V'=2^{6-\ell}$.
+The full Walsh inverse therefore recovers the restricted payload counts from the local sum and known occupancy
+$h$. There are exactly $\binom{V'+h-1}{h}$ different local sum states under IID sampling and $\binom{V'}h$
+under distinct sampling. For example, $V'=16,h=4$ gives 3,876 IID or 1,820 distinct states.
+Equal-signal merging cannot reduce these local banks. This statement concerns the full local signal, or its
+projection onto its own variation space; a projection against a different future alphabet is a separate question.
+
+There are nevertheless two different size questions:
+\begin{enumerate}
+\item How many coordinates describe the retained projection?
+\item How many distinct values, or linearly independent likelihood rows, occur in those coordinates?
+\end{enumerate}
+The first can be small while the second remains large. A one-dimensional example proves the point.
+Suppose partial and future sums take scalar values $i,j\in\{0,\ldots,d-1\}$. Expanding the Gaussian gives
+\[
+ e^{-(y-i-j)^2/(2\sigma^2)}
+ = e^{-y^2/(2\sigma^2)}
+   e^{(yi-i^2/2)/\sigma^2}e^{(yj-j^2/2)/\sigma^2}
+   \underbrace{e^{-ij/\sigma^2}}_{E_{ij}}.
+\]
+The first three factors are a constant and nonzero row/column scalings. They do not change rank.
+Put $x_j=e^{-j/\sigma^2}$. Then $E_{ij}=x_j^i$ is a Vandermonde matrix, with
+\[
+ \det E=\prod_{0\leq j<\ell<d}(x_\ell-x_j)\ne0
+ \qquad(\sigma^2>0).
+\]
+Its rank is $d$, however large $d$ becomes, even though the shared signal coordinate is one-dimensional.
+Consequently a rank-one bilinear interaction in the log-likelihood does not imply a rank-one likelihood tensor.
+Exact low-rank contraction needs a property of the actual likelihood table, not just of the Gram interaction.
+
+\textbf{What has been gained.} We now have a precise safe state-reduction rule, a direct connection to polar
+characters and resource elimination, and an obstruction to an unjustified exact low-rank shortcut.
+The remaining question is the number of reachable projected states at useful cuts in this particular bank.
+Neither full-bank observation rank nor this counterexample answers that more local question.
+
+\clearpage
+\section{Turn the exact cut reduction into a compatible schedule}
+\label{sec:nested-schedule}
+\subsection{Future spaces shrink along each legal branch}
+The preceding projection rule describes one cut. To obtain an algorithm, we must also show how to move between
+cuts without losing information or multiplying the same likelihood twice.
+Order the patterns and eliminate one entire pattern at a time. A local choice is a payload-count vector $a_p$,
+with occupancy $m=\one^Ta_p$, waveform $x=\sum_v a_{p,v}\phi(p,v)$ and weight
+$\beta_p(a_p)=\prod_v1/a_{p,v}!$ for IID sampling. For distinct sampling, require binary local counts and use
+weight one. Patterns form disjoint message alphabets, so these local prior weights multiply exactly.
+
+After $i$ patterns, let $q$ be the number of assigned users and $h=K-q$ the remaining number.
+Let $t_{i,h}$ be any point in the affine hull of the legal remaining sums, and let $P_{i,h}$ project onto their
+variation space. These are the objects already derived at a fixed cut. For a nonempty remaining alphabet $S_i$,
+one may take $t_{i,h}=h|S_i|^{-1}\sum_{w\in S_i}\phi(w)$. Handle empty or singleton-completion cases as above.
+
+Consider a legal transition from the old cut to the new cut by choosing $a_p$. Write $P_o,t_o$ for the old
+geometry and $P_n,t_n$ for the new geometry, whose remaining occupancy is $h-m$.
+Every new future sum $t$ gives a legal old future sum $x+t$. Therefore
+\begin{equation}
+ \operatorname{range}P_n\subseteq\operatorname{range}P_o,\qquad
+ x+t_n-t_o\in\operatorname{range}P_o.
+ \label{eq:nested-future-spaces}
+\end{equation}
+The first statement follows by subtracting two such completions. The second follows because affine averages
+of legal old completions remain in their affine hull. Both hold at the distinct-source boundary occupancies too.
+
+For an old partial sum $s$, retain $\theta=P_os$. Define the new state and newly resolved residual by
+\begin{equation}
+ \theta'=P_n(\theta+x),\qquad
+ d=(P_o-P_n)(y-\theta-x-t_n).
+ \label{eq:nested-transition}
+\end{equation}
+Since the spaces are nested, $P_o-P_n$ is itself an orthogonal projector. It selects the directions that could
+previously vary but can no longer vary after this local choice.
+The previously absorbed likelihood factors obey
+\begin{equation}
+ \boxed{\eta_n(s+x)=\eta_o(s)\exp[-\|d\|^2/(2\sigma^2)].}
+ \label{eq:likelihood-telescope}
+\end{equation}
+To prove it, split $I-P_n=(I-P_o)+(P_o-P_n)$ into orthogonal projectors.
+By \eqref{eq:nested-future-spaces}, the first projected residual is exactly the old one.
+The second depends on $s$ only through $\theta$. This proves both the update and its independence from any
+discarded part of the old state.
+
+\clearpage
+\subsection{A complete projected-state recurrence}
+Let $F_i(q,\theta)$ be the sum of past prior weights multiplied by the likelihood directions already resolved
+at cut $i$, aggregated at $\theta=P_{i,K-q}s$. Initialize
+\[
+ F_0(0,0)=\exp\!\left[-\frac{\|(I-P_{0,K})(y-t_{0,K})\|^2}{2\sigma^2}\right].
+\]
+For every legal local count vector, apply
+\begin{equation}
+ F_{i+1}(q+m,\theta')\mathrel{+}=
+ F_i(q,\theta)\,\beta_p(a_p)\,
+              \exp[-\|d\|^2/(2\sigma^2)].
+ \label{eq:projected-forward}
+\end{equation}
+Keep the cardinality $q$ in the key: it determines both future feasibility and the appropriate affine geometry.
+Sum over all pattern occupancies, including zero. No transmitted pattern is supplied to this algorithm.
+At the final cut only $q=K$ is allowed, the future variation is zero, and $\theta'=0$.
+The final value is exactly
+\[
+ F_P(K,0)=\sum_a\beta(a)g(y-\Phi a)=\mathcal Z.
+\]
+Indeed the incremental orthogonal factors in \eqref{eq:likelihood-telescope} telescope to the single physical
+Gaussian. This supplies an exact elimination schedule, not a sequence of independent pseudo-observations.
+
+\subsection{Recover all count queries through the same transitions}
+The scalar forward pass alone gives evidence. Let $T_i(s,s')$ denote its total transition weight between
+states $s=(q,\theta)$ and $s'$, summing local choices that induce the same transition.
+Initialize the backward value $B_P(K,0)=1$ and recurse
+\[
+ B_i(s)=\sum_{s'}T_i(s,s')B_{i+1}(s').
+\]
+For a message $w$ in the pattern eliminated at step $i$, define $T_i^{w,j}$ by retaining only local choices
+with $a_w=j$. Then
+\begin{equation}
+ \boxed{\Pr(a_w=j\mid y)=
+ \frac{1}{\mathcal Z}\sum_{s,s'}F_i(s)\,T_i^{w,j}(s,s')\,B_{i+1}(s').}
+ \label{eq:frontier-count-query}
+\end{equation}
+Every full count configuration has exactly one such transition, so it contributes once, with its original weight.
+An equivalent implementation carries a marker $z^{a_w}$ through the forward recurrence.
+If several local multisets share a waveform, their scalar weights may merge, but their marked weights or
+$T_i^{w,j}$ contributions must remain available. This is the same identity-preservation requirement as before.
+
+\textbf{What is complete here.} The cut reduction now has a sequential update, initialization, terminal evidence,
+and every count query needed by the Bayes decision. It remains potentially exponential. Computing an exact
+projector or testing equality of real-valued projected states is itself a representation problem; a numerical
+rank threshold would introduce an additional approximation.
+
+\clearpage
+\subsection{A simpler executable specialization: finalize each resource once}
+Instead of the full affine projection, retain each resource touched by both a processed pattern and an
+unprocessed pattern. This set is the \emph{resource frontier}. It is a conservative state: it may retain more
+coordinates than necessary, but it loses no information.
+
+When a pattern is processed, add its local waveform to the stored partial sums. If this is the last pattern
+that can touch resource $r$, multiply the transition by
+$\exp[-(y_r-s_r)^2/(2\sigma^2)]$ and discard that coordinate. Every physical resource is finalized exactly once.
+Resources no pattern ever touches contribute their noise-only likelihood at initialization.
+The same forward/backward transition formula gives all count laws.
+Knowing the remaining occupancy can allow additional reductions; this simple specialization uses support
+frontiers to keep the implementation transparent.
+
+The finite reference in \path{tests/polar_exact_computation.py} implements this procedure, including local
+equal-signal aggregation and both source laws. It represents the supplied binary floating point amplitudes
+as integers with a common power-of-two denominator when constructing sum keys. Thus state merging introduces
+no tolerance or extra quantization of the supplied numerical encoder. Gaussian weights still use floating
+arithmetic, so the implementation is not a formal interval certificate for the ideal real-valued construction.
+
+For the existing balanced $P=4,V=4,n=12,K=3$ fixture, all 24 pattern orders agree with exhaustive inference.
+The best and worst orders by peak forward state count are:
+\begin{center}
+\begin{tabular}{@{}llrrr@{}}\toprule
+Source & Pattern order & Peak forward states & Stored transitions & Peak frontier\\\midrule
+IID & $(0,3,2,1)$ & 286 & 1,202 & 8\\
+IID & $(1,2,3,0)$ & 455 & 1,471 & 8\\
+Distinct & $(0,3,2,1)$ & 196 & 788 & 8\\
+Distinct & $(1,2,3,0)$ & 299 & 967 & 8\\\bottomrule
+\end{tabular}
+\end{center}
+This fixture has 816 IID or 560 distinct full count configurations.
+The table reports reachable states and stored transitions, not wall-clock speedup or total-memory equivalence.
+The forward/backward implementation stores the transition graph as well as forward values.
+Even with the same largest frontier dimension, the number of reachable values changes substantially with order.
+
+These calculations establish that compatible elimination and lossless merging can be executed and checked.
+They do not establish useful scaling at the selected $B=12/14$ sizes. The next section examines those banks
+structurally, without attempting to enumerate their multiuser states.
+
+\clearpage
+\section{How many mixed-pattern states can remain distinguishable?}
+\label{sec:mixed-state-counts}
+\subsection{Private coordinates give a lower bound without enumeration}
+Consider a cut whose processed pattern set is $A$, with exactly one user on each of its $q$ patterns.
+This is a subfamily of legal partial hypotheses under both source laws. Suppose coordinate $r$ is used by
+pattern $p\in A$ but by no other pattern in $A$. Its partial signal is
+$\sqrt{e_{p,i}}\,(-1)^{\ell_i^Tv_p}$, so a positive known amplitude leaves its parity bit identifiable.
+Use only such coordinates whose coordinate axes are known to lie in the future variation space.
+
+Let $r_p$ be the binary rank of the corresponding rows of $L$. Those coordinates have $2^{r_p}$ different
+sign patterns as $v_p$ varies. The private coordinate sets are disjoint across $p$, so their combinations give
+\begin{equation}
+ \boxed{\text{number of distinct retained partial states}\ \geq\
+             2^{\sum_{p\in A}r_p}.}
+ \label{eq:private-state-bound}
+\end{equation}
+Any change in one of these coordinates remains visible after future-space projection, since its axis belongs
+to that space. The proportional-likelihood criterion then prevents merging the resulting states up to a scalar.
+Other partial occupancies may create additional states; this lower bound needs only the specified subfamily.
+
+\subsection{Apply the certificate to the actual selected banks}
+For all six selected banks, after processing the first eight patterns, the remaining pattern alphabet still
+has affine variation $\R^{256}$. The support-based axis certificate proves this, independently of numerical
+rank thresholds. Each of the eight processed patterns has private-row rank six. Hence there are at least
+\[
+ 64^8=2^{48}=281{,}474{,}976{,}710{,}656
+\]
+distinguishable partial states at this cut. This applies when future occupancy is positive: IID $K>8$, or
+distinct sampling with $1\leq K-8<64(P-8)$. At zero future occupancy all signal directions may instead be
+absorbed into the final likelihood; that is a different cut.
+
+The same calculation at other natural-order cuts gives the following exponents in \eqref{eq:private-state-bound}:
+\begin{center}
+\begin{tabular}{@{}lrrrr@{}}\toprule
+Seed, either $B=12$ or $14$ & $q=4$ & $q=8$ & $q=12$ & $q=16$\\\midrule
+3201 & 24 & 48 & 65 & 62\\
+3202 & 24 & 48 & 68 & 67\\
+3203 & 24 & 48 & 64 & 65\\\bottomrule
+\end{tabular}
+\end{center}
+At all these cuts the future axis certificate gives all 256 axes. The exponents need not increase with $q$:
+adding patterns removes some previously private coordinates. They are certified lower bounds, not exact counts.
+
+\textbf{Scope of this obstruction.} An explicit table that only merges proportional continuation rows is enormous
+at these cuts. A partial hypothesis still has a compact description, and a factored or symbolic calculation may
+avoid materializing the table. This is not a proof that every exact decoder needs this much memory, nor a
+complexity lower bound for all elimination orders.
+
+\clearpage
+\subsection{Resource-frontier ordering helps, but does not make these banks narrow}
+The exact resource-frontier widths can be counted without decoding.
+Compare natural pattern order with a deterministic greedy order choosing the next pattern that minimizes
+the resulting frontier width, breaking ties by pattern index:
+\begin{center}
+\begin{tabular}{@{}lrrr@{}}\toprule
+$B$ & Seed & Natural peak width & Greedy peak width\\\midrule
+12 & 3201 & 248 & 234\\
+12 & 3202 & 251 & 234\\
+12 & 3203 & 252 & 231\\
+14 & 3201 & 256 & 254\\
+14 & 3202 & 256 & 254\\
+14 & 3203 & 256 & 254\\\bottomrule
+\end{tabular}
+\end{center}
+The greedy rule chooses an evaluation order; it does not approximate inference.
+It is not claimed to minimize frontier width globally. These two schedules leave wide frontiers, while the
+tiny calculation already showed that width alone does not determine the number of reachable states.
+
+\subsection{A precise minimum for linear contraction, with a narrower scope}
+Fix finite partial and completion signal sets $\{s_i\}$ and $\{t_j\}$ at fixed cardinalities. Their coupling is
+the matrix $G_{ij}=g(y-s_i-t_j)$, and evidence contracts it as $a^TGb$.
+If a linear state $a^TU$ followed by a linear readout $Vb$ must preserve this for \emph{all} partial and
+completion weights, then $G=UV$. The smallest possible intermediate dimension is exactly
+\[
+ r=\operatorname{rank}G.
+\]
+The lower bound follows from $\operatorname{rank}(UV)\leq r$; a rank factorization attains it.
+Polynomial count markers can pass through the same linear factorization coefficient by coefficient.
+Allowing signed factors may introduce cancellation; requiring nonnegative factors is an additional restriction.
+
+Observation-dependent row and column scalings do not change this rank:
+\[
+ G_{ij}=e^{-\|y\|^2/(2\sigma^2)}
+ e^{(y^Ts_i-\|s_i\|^2/2)/\sigma^2}
+ \underbrace{e^{-s_i^Tt_j/\sigma^2}}_{E_{ij}}
+ e^{(y^Tt_j-\|t_j\|^2/2)/\sigma^2}.
+\]
+Thus exact cut rank is independent of $y$ at fixed signal sets and noise variance.
+Disjoint signal subspaces give a rank-one coupling; the scalar Vandermonde example gives arbitrarily large rank.
+Numerically small singular values would justify an approximation only after an error analysis; they are not
+exact zeros.
+
+This separates three questions: equality of continuation rows, linear dependence of different rows, and the cost
+of evaluating a structured representation without enumerating its rows. The $2^{48}$ certificate settles the
+first at one concrete cut. It does not settle the second or third for the full bank.
+
+\clearpage
+\section{Contract polar interactions through their overlap parities}
+\label{sec:pair-contraction}
+\subsection{What one pattern pair actually needs to know}
+The large-state obstruction motivates a more local question: can a required matrix operation be performed
+without forming its full message-pair matrix? For the polar encoder, the answer is yes.
+This is an exact structured contraction, even when the matrix is full rank.
+
+Let $I_{pq}$ be the resources shared by patterns $p$ and $q$, and let $i_p(r)$ be the local symbol placed
+on shared resource $r$. Their Gram entry is
+\begin{equation}
+ c_{pq}(v,u)=\phi(p,v)^T\phi(q,u)
+ =\sum_{r\in I_{pq}}\sqrt{e_{p,i_p(r)}e_{q,i_q(r)}}\,
+       (-1)^{\ell_{i_p(r)}^Tv+\ell_{i_q(r)}^Tu}.
+ \label{eq:overlap-gram}
+\end{equation}
+Thus it depends on $v$ only through the parity vector
+$\alpha_{pq}(v)=(\ell_{i_p(r)}^Tv)_{r\in I_{pq}}$, and on $u$ only through $\alpha_{qp}(u)$.
+All parity arithmetic here is binary. Put
+\[
+ r_{pq}=\operatorname{rank}_{\mathrm{GF}(2)}L_{I_{pq},p}.
+\]
+There are exactly $2^{r_{pq}}$ attainable left parity vectors, regardless of how many repeated or constant
+generator rows occur on the overlap. Enumerating just these vectors yields a table with
+$2^{r_{pq}+r_{qp}}$ entries instead of $V^2$, where $V=2^{B_c}$.
+
+The same grouping applies to the exact pair factor $b=e^{-c/\sigma^2}$, its signed correction $f=b-1$,
+and $F=|f|$. For any one of these kernels $J_{pq}$ and any input weights $x_q(u)$, first form
+\[
+ X_q(\beta)=\sum_{u:\alpha_{qp}(u)=\beta}x_q(u),
+ \qquad
+ (J_{pq}x_q)(v)=\sum_\beta\overline J_{pq}(\alpha_{pq}(v),\beta)X_q(\beta).
+\]
+This is an exact identity for arbitrary signed weights. It requires grouping, multiplication by the smaller
+table, and copying the result to payloads with the same left parity vector. No singular-value threshold is used.
+The table is an upper bound on required representation size, not a claim of minimum rank.
+
+\subsection{Within one pattern, use XOR convolution}
+For $p=q$, the Gram entry is a function only of payload XOR:
+\[
+ c_{pp}(v,u)=\sum_i e_{p,i}(-1)^{\ell_i^T(v\oplus u)}.
+\]
+Consequently $J_{pp}(v,u)=\kappa_p(v\oplus u)$. If
+$\widehat x(g)=\sum_v(-1)^{g^Tv}x(v)$ denotes the unnormalized Walsh transform, then
+\begin{equation}
+ J_{pp}x=\frac1V\operatorname{Walsh}(\widehat\kappa_p\,\widehat x).
+ \label{eq:pair-walsh-contraction}
+\end{equation}
+Applying the unnormalized Walsh operation twice gives $V$ times the input; the factor $1/V$ appears once.
+This costs $O(V\log V)$ arithmetic and stores $V$ kernel values.
+For distinct sampling, set $b_{pp}(v,v)=0$, hence $f_{pp}(v,v)=-1$ and $F_{pp}(v,v)=1$.
+Only the zero-XOR kernel value changes, so the convolution remains valid.
+
+\clearpage
+\subsection{Assemble the full unknown-pattern operator}
+Sum the pattern-pair contributions over every $q$ for each output pattern $p$. This retains all unknown
+patterns. Disjoint patterns have $c=0$, so their $f$ and $F$ blocks vanish. For $b$, add the all-ones
+background: $bx=\one(\one^Tx)+fx$.
+The finite reference implements both $f$ and $F$ in \path{tests/polar_exact_reuse.py}.
+Signed corrections and Walsh arithmetic can suffer cancellation; exact algebra is not a controlled-rounding
+machine certificate.
+
+The selected-bank census counts all unordered intersecting pairs. The dense comparison already exploits
+symmetry and omits disjoint blocks:
+\begin{center}
+\begin{tabular}{@{}lrrr@{}}\toprule
+$B$ & Seed & Overlap-parity table entries & Dense/table ratio\\\midrule
+12 & 3201 & 1,130,735 & 7.24\\
+12 & 3202 & 1,149,633 & 7.13\\
+12 & 3203 & 1,176,303 & 6.96\\
+14 & 3201 & 19,375,511 & 6.83\\
+14 & 3202 & 19,318,283 & 6.85\\
+14 & 3203 & 19,133,478 & 6.92\\\bottomrule
+\end{tabular}
+\end{center}
+In addition, same-pattern kernels need $PV$ values and parity-group maps require indices.
+The ratio concerns pair-table entries, not total memory or measured speedup. Each cross-pattern multiply
+also groups and copies $V$ weights at each endpoint. This remains explicit in the pattern and payload alphabets.
+
+These are local contractions. Eliminating a variable with several neighbours can create a larger joint factor;
+the small pair tables do not make that joint factor disappear. Their concrete use below is to evaluate weighted
+tree bounds without building the dense $M\times M$ interaction matrix.
+
+\subsection{A complete exact two-user decoder follows immediately}
+For $K=2$, this operator also completes inference itself. Use the one-user reference
+$\nu_w\propto e^{y^T\phi(w)/\sigma^2}$ and the exact pair factor $b$ for the chosen source law.
+Compute
+\[
+ s=b\nu,\qquad Z_2=\nu^Ts.
+\]
+The ordered two-slot posterior is $\nu_u\nu_vb(u,v)/Z_2$.
+Both slot permutations contribute when a word occurs once; there is only one ordered pair when both slots
+contain that word. Therefore
+\begin{equation}
+ q_{w,2}=\frac{\nu_w^2b(w,w)}{Z_2},\qquad
+ q_{w,1}=\frac{2\nu_ws_w}{Z_2}-2q_{w,2},\qquad
+ q_{w,0}=1-q_{w,1}-q_{w,2}.
+ \label{eq:structured-two-user}
+\end{equation}
+For IID, $b(w,w)=e^{-1/\sigma^2}$; for distinct sampling it is zero.
+Use these probabilities to form the count tails and allocate two output copies as in Section~3.
+This includes unknown patterns and same-pattern collisions. The finite test compares every count probability
+with exhaustive inference. The next section handles the first cycle, at $K=3$.
+
+\clearpage
+\section{Three users: close the triangle exactly}
+\label{sec:three-user}
+\subsection{Three pair interactions, with no new physical assumptions}
+Keep the fixed encoder, known $K=3$, Gaussian likelihood and either source law. Write
+\[
+ \nu_w=\frac{e^{y^T\phi(w)/\sigma^2}}{\sum_u e^{y^T\phi(u)/\sigma^2}},\qquad
+ B_{uv}=e^{-\phi(u)^T\phi(v)/\sigma^2}
+ \begin{cases}1,&\text{IID},\\ \ind\{u\ne v\},&\text{distinct}.\end{cases}
+\]
+Here $B$ is the $M\times M$ pair matrix, not the message-bit length; subscripts distinguish its entries.
+Expanding the squared residual as in \eqref{eq:interactions} gives
+\begin{equation}
+ \Pr(w_1=u,w_2=v,w_3=t\mid y)
+ =\frac{\nu_u\nu_v\nu_t B_{uv}B_{vt}B_{tu}}{Z_3}.
+ \label{eq:triangle-posterior}
+\end{equation}
+Every pair of slots interacts, so the graph is a triangle. The normalized one-user weights $\nu$ are only a
+convenient reference; they are not the actual marginals. Constant likelihood and source-normalization factors
+cancel. All pattern choices and allowed full-message repeats remain in this sum.
+
+Put $D_\nu=\diag(\nu)$ and $A=D_\nu^{1/2}BD_\nu^{1/2}$. Then
+\begin{equation}
+ \boxed{Z_3=\tr(A^3),\qquad \E[a_w\mid y]=\frac{3(A^3)_{ww}}{Z_3}.}
+ \label{eq:triangle-trace}
+\end{equation}
+Indeed, $A_{uv}A_{vt}A_{tu}=\nu_u\nu_v\nu_t B_{uv}B_{vt}B_{tu}$; the trace sums every ordered triangle.
+Fixing its first vertex gives the diagonal entry, and exchangeability supplies the factor three.
+$Z_3$ is the normalizer of this reference-weight expression, not the physical evidence including its prefactor.
+The identity does not require $A$ to be positive semidefinite, and it does not justify discarding eigenmodes.
+For IID, expected counts alone are still insufficient for minimum multiset-PUPE decoding.
+
+\subsection{Where the first joint factor appears}
+Eliminating the middle slot leaves the endpoint factor
+\begin{equation}
+ C(u,t)=\sum_v\nu_v B_{uv}B_{vt}=(BD_\nu B)_{ut},\qquad
+ \Pr(u,t\mid y)=\frac{\nu_u\nu_t B_{ut}C(u,t)}{Z_3}.
+ \label{eq:triangle-separator}
+\end{equation}
+Both endpoints depend on the \emph{same} unknown middle message. In particular,
+\[
+ C(u,t)=(B\nu)_u(B\nu)_t+
+ \operatorname{Cov}_{V\sim\nu}(B_{uV},B_{tV}).
+\]
+Replacing the joint factor by a product drops this covariance. A fast pair operator does not by itself make
+the covariance vanish or make the joint factor small. We can nevertheless obtain the needed count queries
+without storing the entire joint table.
+
+\clearpage
+\subsection{A complete decoder from one streamed contraction per message}
+For a specified full message $w$, let $\lambda_w=B_{ww}$ and define
+\[
+ x_w(u)=\nu_u B_{wu}\ind\{u\ne w\}.
+\]
+Separate the ordered triples by whether they contain one, two or three copies of $w$. Their unnormalized
+posterior masses are
+\begin{align}
+ N_1(w)&=3\nu_w\,x_w^TBx_w,\label{eq:triangle-one}\\
+ N_2(w)&=3\nu_w^2\lambda_w\sum_{u\ne w}\nu_uB_{wu}^2,
+ \label{eq:triangle-two}\\
+ N_3(w)&=\nu_w^3\lambda_w^3.\label{eq:triangle-three}
+\end{align}
+For $N_1$, choose which of the three slots contains $w$ and sum the other two slots, both excluding $w$.
+Their mutual interaction remains in $B$. For $N_2$, choose the singleton slot: the repeated pair contributes
+$\lambda_w$, and its two interactions with the singleton give $B_{wu}^2$. For $N_3$, all three edges are
+diagonal. These are positive sums, including same-pattern collisions under IID.
+
+Every triple has exactly three message occurrences, so its weight is counted three times in
+$\sum_w\sum_{j=1}^3 jN_j(w)$. Therefore
+\begin{equation}
+ Z_3=\frac13\sum_w\{N_1(w)+2N_2(w)+3N_3(w)\},\qquad
+ q_{w,j}=\frac{N_j(w)}{Z_3}\quad(j=1,2,3),\quad
+ q_{w,0}=1-\sum_{j=1}^3q_{w,j}.
+ \label{eq:triangle-counts}
+\end{equation}
+For distinct sampling $\lambda_w=0$, automatically giving $q_{w,2}=q_{w,3}=0$. For IID,
+$\lambda_w=e^{-1/\sigma^2}$ and all three terms are required.
+Form the tails $T_{w,j}=\sum_{r=j}^3q_{w,r}$ and allocate three copies by Section~3. This completes the exact
+Bayes decoder, including the output decision, rather than only evaluating its evidence.
+
+For each $w$, generate one row of $B$, construct $x_w$, apply the structured pair operator to it, and save
+the three numerators. Normalize after processing every $w$. This uses $M$ pair-operator applications,
+$O(M^2)$ additional scalar work, and $O(M)$ working storage \emph{in addition to} the operator's stored
+kernels, overlap tables and maps. No $M^3$ tensor or full $M^2$ pair table is required. The count vector still
+has $M=2^B$ entries, and the repeated contractions may be expensive. This is a memory reduction and an exact
+computational specification, not a full-bank runtime result.
+
+\textbf{Numerical representation matters.} Algebraically, $Bx=\one\sum_u x_u+fx$. Numerically, this can subtract
+nearly equal quantities. At $\sigma^2=.02$, the IID unit-energy diagonal is $e^{-50}>0$, but ordinary double
+precision evaluates $1+\operatorname{expm1}(-50)$ as zero. The new positive reference uses direct $B$ overlap
+tables and positive XOR sums within a pattern, costing $O(PV^2)$ there instead of the faster Walsh arithmetic.
+No cancellation-prone reconstruction from $f$ is needed. Extreme underflow or overflow still requires explicit
+rescaling or higher precision; the checks below are floating-point comparisons, not rounding certificates.
+
+\clearpage
+\subsection{Combine both neighbours' parity requirements before grouping}
+There is also a direct polar-specific contraction for a fixed ordered pattern triple $(p_1,p_2,p_3)$.
+For slot $i$, let $J_i$ contain the local symbols whose resources overlap \emph{either} other pattern. Define
+\[
+ \alpha_i(v)=(L_{J_i}v)\bmod2,\qquad
+ r_i=\operatorname{rank}_{\GF(2)}L_{J_i},\qquad
+ m_i(\alpha)=\sum_{v:\alpha_i(v)=\alpha}\nu_{(p_i,v)}.
+\]
+Both adjacent pair factors are determined by this one joint signature. The fixed-pattern contribution is
+\begin{equation}
+ Z_{p_1p_2p_3}=
+ \sum_{\alpha_1,\alpha_2,\alpha_3}
+ m_1(\alpha_1)m_2(\alpha_2)m_3(\alpha_3)
+ \overline B_{12}(\alpha_1,\alpha_2)
+ \overline B_{13}(\alpha_1,\alpha_3)
+ \overline B_{23}(\alpha_2,\alpha_3).
+ \label{eq:triangle-quotient}
+\end{equation}
+There are $2^{r_1+r_2+r_3}$ attainable signature triples. This counts a direct sum's states, not a lower bound
+on every contraction algorithm. Grouping separately for each edge and then treating those groups as independent
+would lose the fact that both signatures come from the same payload.
+
+To recover a specified message's count law, replace each unary by the polynomial
+\[
+ m_i(\alpha;z)=m_i(\alpha)+
+ \ind\{p_i=p_w,\ \alpha=\alpha_i(v_w)\}\nu_w(z-1).
+\]
+Only the weight of message $w$ is multiplied by $z$. The coefficient of $z^j$ in the triangle contraction is
+its unnormalized count-$j$ mass. Thus unmarked payloads can share a class while the query retains the marked
+message's identity. If two patterns coincide, their shared resources expose the full generator. For the
+injective payload code used here, these classes identify the whole payload, so distinct-message exclusions
+remain exact. A noninjective generator would need an additional identity state.
+
+Sum over all ordered pattern triples; no true pattern is supplied to the receiver. Because evidence and count
+queries are slot-permutation invariant, one may instead sum pattern multisets, weighting each by
+$3!/\prod_p n_p!$, where $n_p$ is its occupancy. Same-pattern triples remain included.
+
+\textbf{How much grouping survives?} For the selected $B_c=6,N_c=32$, CRC8 code, enumerate the 56 triples of
+\emph{distinct} patterns among the first eight patterns of each $B=12$ bank:
+\begin{center}
+\begin{tabular}{@{}rrrrr@{}}\toprule
+Seed & Minimum states & Median states & Maximum states & All three ranks six\\\midrule
+3201 & 1,024 & 131,072 & 262,144 & 14/56\\
+3202 & 16,384 & 131,072 & 262,144 & 15/56\\
+3203 & 1,024 & 65,536 & 262,144 & 12/56\\\bottomrule
+\end{tabular}
+\end{center}
+An ungrouped payload triple has $64^3=262,144$ states. The joint signature frequently retains much of this
+alphabet, and sometimes all of it: for seed 3201, patterns $(0,1,6)$ have $(r_1,r_2,r_3)=(6,6,6)$.
+These are exact counts for the stated 168 triples, not a random sample or a census of the full bank.
+They illustrate why two small edge interfaces need not compose into an equally small joint interface.
+
+\clearpage
+\subsection{An exact identity for what deleting the closing edge loses}
+The completed triangle lets us examine a possible future assumption precisely. Define a reference
+$Q_{\rm open}$ by removing the \emph{Gaussian} interaction between slots 1 and 3 but keeping their original
+unary weights and \emph{all source-law constraints}. Let
+\[
+ R(W)=e^{-\phi(w_1)^T\phi(w_3)/\sigma^2}.
+\]
+For IID, the reference has a chain factor graph. For distinct sampling it still enforces $w_1\ne w_3$ as
+well as the two other exclusions; it is not a tree model with independent endpoints. On either legal support,
+\begin{equation}
+ P(W\mid y)=\frac{Q_{\rm open}(W)R(W)}{\E_{\rm open}R},\qquad
+ \E_P H-\E_{\rm open}H
+ =\frac{\operatorname{Cov}_{\rm open}(H,R)}{\E_{\rm open}R}.
+ \label{eq:triangle-closure-covariance}
+\end{equation}
+The second identity follows by expanding the covariance. With
+$H=\ind\{a_w\geq j\}$, it gives the exact error in every count tail. It does not assume the deleted edge is
+weak. Small unweighted Gram correlations alone do not bound this observation-weighted covariance.
+
+The reference singles out slot endpoints and need not preserve exchangeability. Count observables must
+therefore aggregate all three slots. The covariance identity is retained as an exact comparison resource;
+no edge-deletion approximation or empirical regret ranking is adopted in this report.
+
+\subsection{Why the trace shortcut stops at three users}
+The three-user formula should not be extrapolated as $Z_K=\tr(A^K)$. A trace of a matrix power closes a
+\emph{cycle}; the physical Gaussian model contains every pair, a \emph{complete graph}. These coincide for
+three vertices. For four, the cycle lacks two interactions. Under distinct sampling it also misses the
+corresponding full-message exclusions.
+
+A simple exact counterexample uses four orthogonal unit waveforms, $y=0$ and distinct sampling. Then
+$\nu_w=1/4$, $B=\one\one^T-I$, and
+\[
+ Z_4=\frac{4!}{4^4}=\frac{24}{256},\qquad
+ \tr\big((B/4)^4\big)=\frac{3^4+3}{4^4}=\frac{84}{256}.
+\]
+The cycle sum includes repeats at opposite vertices; the physical distinct-source posterior forbids them.
+Higher $K$ can still be solved by the exact constructions already given, but closing a single chain is no
+longer sufficient. This is a boundary of this shortcut, not an impossibility theorem for other reductions.
+
+The general finite decoder, the complete first-cycle contraction and the exact growth of joint parity
+requirements are now explicit. Further assumptions can refer to these calculations and the covariance
+identities without treating pairwise interfaces as a complete solution for larger K. Report 9 owns that
+algebraic investigation; the present report continues with exact decision certificates.
+
+\clearpage
+\section{Certify the Bayes decision without finishing every sum}
+\label{sec:certificate}
+\subsection{Positive bounds on unexplored count subtrees}
+Another exact endpoint is a finite search that stops when its \emph{decision} is proved.
+Order the $M$ full messages and build a tree assigning their counts.
+A node has fixed counts $c_1,\ldots,c_d$, remaining users $h=K-\sum_{i\leq d}c_i$,
+remaining alphabet size $m=M-d$, and residual $r=y-\sum_{i\leq d}c_i\phi_i$.
+Its completions have total signal norm at most $h$, since each message has unit norm. Hence
+\[
+ \|r-s_{\rm remaining}\|\geq \max(0,\|r\|-h).
+\]
+The sum of the coefficients $\beta(a)$ over the node's completions is known exactly:
+\begin{equation}
+ B_{\rm node}=
+ \begin{cases}
+ \displaystyle\frac{m^h}{h!\prod_{i\leq d}c_i!},&\text{IID},\\[1mm]
+ \displaystyle\binom mh,&\text{distinct and the prefix is valid}.
+ \end{cases}
+ \label{eq:subtree-prior}
+\end{equation}
+For IID this is the multinomial theorem; for distinct sampling it counts subsets.
+Use $0^0=1$ and zero weight for infeasible nodes. The remaining evidence mass is bounded by
+\begin{equation}
+ U_{\rm node}=B_{\rm node}
+ \exp\!\left[-\frac{\max(0,\|r\|-h)^2}{2\sigma^2}\right].
+ \label{eq:subtree-bound}
+\end{equation}
+This ball bound is often loose. Its advantage is a short proof and no oracle assumptions.
+It remains valid when the unexplored messages overlap in resources or share a pattern.
+
+Let $\mathcal E$ contain evaluated leaves, and let $\mathcal F$ be a disjoint frontier covering every other
+valid state exactly once. With $\omega(a)=\beta(a)g(y-\Phi a)$, define
+\[
+ Z_-=\sum_{a\in\mathcal E}\omega(a),\qquad
+ Z_+=Z_-+\sum_{b\in\mathcal F}U_b.
+\]
+Then $Z_-\leq\mathcal Z\leq Z_+$. Refining a frontier node replaces its bound by bounds on its children or by
+exact leaf weights. No posterior state is silently discarded.
+
+\subsection{Bound only what the loss asks for}
+Define the unnormalized count-tail numerator
+$N_{w,j}=\sum_a\omega(a)\ind\{a_w\geq j\}$, so $T_{w,j}=N_{w,j}/\mathcal Z$.
+Simple valid bounds are
+\begin{align}
+ L_{w,j}&=\sum_{a\in\mathcal E}\omega(a)\ind\{a_w\geq j\},\\
+ U_{w,j}&=L_{w,j}
+     +\sum_{\substack{b\in\mathcal F:\\a_w\geq j\text{ possible in }b}}U_b .
+ \label{eq:tail-bounds}
+\end{align}
+Possibility follows from the fixed prefix and remaining count budget, without decoding a completion.
+Because every candidate has the same positive denominator $\mathcal Z$, ranking these unnormalized
+numerators is sufficient. Computing accurate evidence normalization is not required to certify the output.
+
+\clearpage
+\subsection{A sufficient stopping rule, and why it proves optimality}
+For a proposed allocation $\widehat a$ with $\sum_w\widehat a_w=K$, test
+\begin{equation}
+ \boxed{\min_{w:\widehat a_w>0}L_{w,\widehat a_w}
+ \ \geq\
+ \max_{w:\widehat a_w<K}U_{w,\widehat a_w+1}.}
+ \label{eq:decision-certificate}
+\end{equation}
+The left side bounds each message's last selected occurrence from below; the right side bounds each message's
+next unselected occurrence from above. Earlier tails of a message are no smaller than its last selected tail,
+and later tails are no larger than its next unselected tail. Therefore every selected occurrence has at least
+as much posterior value as every unselected occurrence. This proves a Bayes-optimal allocation, including ties.
+For the distinct model, tails beyond the first are zero.
+
+An exact search can now repeat: evaluate or split an unresolved node, update the bounds, propose an allocation
+by greedy lower tails, and test \eqref{eq:decision-certificate}. If certification fails, continue.
+After all leaves are evaluated, lower and upper bounds coincide and the ordinary Bayes allocation certifies.
+Thus exhaustive completion is a guaranteed finite fallback in the mathematical algorithm, not a heuristic
+candidate list. Some observations can certify earlier; no typical-case speedup has been established.
+
+For a concrete illustration, take $K=2$ and unnormalized tail intervals
+\[
+ N_{u,1}\in[8,9],\quad N_{u,2}\in[1,2],\qquad
+ N_{v,1}\in[6,7],\quad N_{v,2}\in[0,1],
+\]
+with every other first-tail upper bound at most $3$. Returning one $u$ and one $v$ is certified:
+the smallest selected lower bound is $6$ and the largest unselected upper bound is at most $3$.
+Neither the exact numerators nor their common normalizer need be known.
+These intervals are illustrative, not a measured decoder outcome.
+
+\subsection{A loss bound when the exact decision is not yet certified}
+Write $A(\widehat a)=\{(w,j):1\leq j\leq\widehat a_w\}$. If $Z_->0$, a conservative certificate is
+\begin{equation}
+ 0\leq R(\widehat a\mid y)-R^*(y)
+ \leq \min\!\left\{1,\,
+ \frac{\displaystyle\max_{A:\,|A|=K,\ {\rm prefixes}}\sum_{(w,j)\in A}U_{w,j}
+       -\displaystyle\sum_{(w,j)\in A(\widehat a)}L_{w,j}}
+      {K Z_-}\right\}.
+ \label{eq:risk-certificate}
+\end{equation}
+The proof replaces the unknown optimal numerator sum by an upper bound, the proposed sum by a lower bound,
+and the positive denominator by $Z_-$. The bounds in \eqref{eq:tail-bounds} are nonincreasing in $j$,
+so the maximization over upper tails uses the same prefix-respecting greedy allocation.
+This bounds \emph{decision loss}; it need not certify an accurate approximation of the entire posterior.
+
+\textbf{Exactness and the next theoretical question.} A complete exact decoder has now been derived twice:
+positive convolution with outside queries, or exhaustive refinement until a decision certificate holds.
+Polar structure provides lossless signatures and a one-user transform, but no affordable general separator
+state or sharp typical-case complexity bound yet. Tightening those exact states or bounds is still a valid
+next step. Neither the algebra nor this stopping point forces a switch to any of the three routes below.
+If learning is considered later, the evidence functions or decision bounds identify concrete quantities to
+approximate; no learned component is required here.
+
+\clearpage
+\section{Tighter completion bounds from the encoding rule}
+\label{sec:completion-dual}
+\subsection{Use the convex hull only to bound unfinished inference}
+Return to a count-tree node with residual $r$, remaining alphabet $S$ and remaining count $h$.
+Let $\mathcal T_{S,h}$ contain its possible completion signals. The exact minimum residual is
+$d_{\rm int}^2=\min_{t\in\mathcal T_{S,h}}\|r-t\|^2$.
+Replacing this finite set by its convex hull can only decrease that minimum. Write
+$\mathcal C_{S,h}=\operatorname{conv}\mathcal T_{S,h}$ and define its support function
+\[
+ H_{S,h}(u)=\max_{t\in\mathcal C_{S,h}}u^Tt.
+\]
+It asks a simple question: how far can a legal completion point in direction $u$?
+Its exact form follows from the source law:
+\begin{equation}
+ H_{S,h}(u)=
+ \begin{cases}
+ h\max_{w\in S}u^T\phi(w),&\text{IID},\\
+ \displaystyle\sum_{\ell=1}^h s_{(\ell)}(u),
+       \quad s_w(u)=u^T\phi(w),&\text{distinct},
+ \end{cases}
+ \label{eq:completion-support}
+\end{equation}
+where $s_{(1)}\geq s_{(2)}\geq\cdots$ are scores of distinct messages in $S$.
+Set $H_{S,0}=0$; discard infeasible nodes. IID can repeat the maximizing message. Distinct sampling must choose
+the $h$ different maximizing messages. Equivalently, the two hulls are
+\[
+ \mathcal C_{S,h}^{\rm IID}=\{\Phi_Sx:x\geq0,\ \one^Tx=h\},\qquad
+ \mathcal C_{S,h}^{\rm dist}=\{\Phi_Sx:0\leq x\leq1,\ \one^Tx=h\}.
+\]
+The second polytope is the convex hull of cardinality-$h$ indicator vectors: a fractional vertex would have
+at least two fractional coordinates, which can be perturbed in opposite directions while preserving the sum.
+
+For any trial vector $u$, completing a square gives
+\[
+ \|r-t\|^2
+ =\|r-t-u\|^2+2u^T(r-t)-\|u\|^2
+ \geq 2u^Tr-\|u\|^2-2H_{S,h}(u).
+\]
+Therefore
+\begin{equation}
+ \boxed{L(u)=2u^Tr-\|u\|^2-2H_{S,h}(u)\ \leq\ d_{\rm int}^2.}
+ \label{eq:completion-dual-bound}
+\end{equation}
+No convergence of an optimizer is needed for this inequality. One valid trial vector already provides a bound.
+Combining trials with the old ball bound yields
+\[
+ L_{\rm node}=\max\{0,\ \max(0,\|r\|-h)^2,\ L(u_1),\ldots,L(u_J)\},\qquad
+ U_{\rm node}=B_{\rm node}e^{-L_{\rm node}/(2\sigma^2)}.
+\]
+Use this upper evidence bound in exactly the same frontier, count-tail and decision certificates as before.
+The count prior has not been relaxed or changed.
+
+\clearpage
+\subsection{What optimizing the bound achieves}
+The best dual bound is precisely the convex distance:
+\begin{equation}
+ \sup_u L(u)=\min_{t\in\mathcal C_{S,h}}\|r-t\|^2.
+ \label{eq:completion-dual-equality}
+\end{equation}
+Here is a direct proof. Let $t_*$ be the Euclidean projection of $r$ onto the compact convex hull.
+Optimality along each line segment from $t_*$ implies
+$(r-t_*)^T(t-t_*)\leq0$ for every $t$ in the hull. Thus for $u_*=r-t_*$,
+$H_{S,h}(u_*)=u_*^Tt_*$. Substitution into $L$ gives $\|r-t_*\|^2$.
+Together with the lower-bound inequality, this proves equality.
+
+The convex distance need not equal the finite-set distance. It is a bound used within an exact decoder,
+not a replacement of the posterior by continuous counts. A numerical convex solver can suggest $u$;
+evaluate a valid support upper bound afterward to establish a valid lower bound on distance.
+An approximate primal objective alone has the wrong direction for this purpose.
+
+\subsection{The exact polar interface returns in a second role}
+At a fixed pattern, each support score is
+$u^TA_pb(v)$. The maximum can therefore use the exact polar maximization operation from Section 4,
+with its appropriate payload-prefix or exclusion constraints. Across patterns take the maximum; for the
+distinct support, obtain the exact best $h$ different full messages across all patterns.
+Exhaustive payload scores or an exact search suffice, even when computationally expensive.
+
+An upper bound $\overline H(u)\geq H_{S,h}(u)$ is also safe: replacing $H$ by $\overline H$ decreases $L$.
+For example, searching a superset of $S$ gives a valid, possibly weaker bound.
+By contrast, an incomplete candidate list produces a \emph{lower} estimate of the maximum and can make the
+certificate false. Ordinary bounded SCL output therefore cannot be inserted as a support oracle without an
+additional proof bounding its omitted candidates.
+
+Two small examples show what the stronger geometry can accomplish. Let the available unit waveforms be the
+two coordinate vectors $e_1,e_2$, with $h=2$:
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}lcccY@{}}\toprule
+Residual & Ball bound & IID hull & Distinct hull & Explanation\\\midrule
+$(-1,-1)$ & $0$ & $8$ & $8$ & Positive completions cannot approach a negative residual.\\
+$(2,0)$ & $0$ & $0$ & $2$ & Repetition reaches the residual; distinct selection cannot.\\\bottomrule
+\end{tabularx}
+\end{center}
+Entries are squared-distance lower bounds. For the first row, $u=(-2,-2)$ already attains 8.
+For the second distinct row, $u=(1,-1)$ attains 2.
+Neither example depends on learning, a posterior approximation or an oracle for the transmitted messages.
+
+\textbf{What remains to investigate.} A useful implementation must balance the cost of improving $u$ and its
+support bound against simply splitting the count-tree node. The exact derivation now permits either choice
+while retaining the same stopping guarantee. It does not yet establish a tractable search for the full bank.
+
+\clearpage
+\section{An exact Fourier representation of the convolution}
+\label{sec:fourier-exact}
+\subsection{Change the basis of the state, keeping its information}
+The signal-sum measures in Section~\ref{sec:tree-exact} can be represented by their Fourier coefficients.
+This is an alternative implementation of the same convolution, not another posterior.
+Use the integer polar signatures from \eqref{eq:integer-signature}: write each message as
+$\phi(w)=C t_w$, where $t_w\in\{-1,0,1\}^d$ and $C$ contains the known real amplitude/insertion coefficients.
+For the direct grouped construction $d=P|\mathcal G|$.
+
+A sum of at most $K$ messages lies in $[-K,K]^d\cap\Z^d$. Choose $Q=2K+1$ and regard this set as the
+centered representatives of $(\Z/Q\Z)^d$. Every admissible integer sum has a unique residue.
+For frequencies $\ell\in\{0,\ldots,Q-1\}^d$, put
+\[
+ \theta_\ell=2\pi\ell/Q,\qquad
+ \rho_\ell=\sum_{w\in\calW}e^{-{\rm i}\theta_\ell^Tt_w}.
+\]
+The Fourier transform of $\delta_{t_w}$ is its phase $e^{-{\rm i}\theta_\ell^Tt_w}$.
+Multiplying phases adds signatures, so convolution becomes multiplication.
+For the cardinality-$K$ measure,
+\begin{equation}
+ \widehat\mu_K(\ell)=
+ \begin{cases}
+ \rho_\ell^K/K!,&\text{IID},\\
+ [u^K]\displaystyle\prod_{w\in\calW}
+       (1+u e^{-{\rm i}\theta_\ell^Tt_w}),&\text{distinct}.
+ \end{cases}
+ \label{eq:fourier-measure}
+\end{equation}
+$[u^K]$ means the coefficient of $u^K$. The IID formula is the transform of $K$ ordered draws, divided by
+$K!$ to give the count weights $1/\prod_w a_w!$. The distinct product chooses each message zero or one time.
+
+\subsection{Invert first, then apply the physical likelihood}
+The finite inverse transform is
+\begin{equation}
+ \mu_K(t)=Q^{-d}\sum_\ell
+       \widehat\mu_K(\ell)e^{{\rm i}\theta_\ell^Tt},\qquad
+ \mathcal Z(y)=\sum_{t\in[-K,K]^d}\mu_K(t)\,g(y-Ct).
+ \label{eq:fourier-inverse}
+\end{equation}
+These are finite exact sums. Complex terms combine into nonnegative real coefficients in exact arithmetic.
+The real balanced amplitudes need not lie on any numerical lattice: only the \emph{integer signatures} are
+transformed. The physical map $C$ and Gaussian noise remain unchanged.
+
+Using a smaller grid without an additional argument would merge different admissible sums modulo $Q$.
+Their physical Gaussian likelihoods need not agree, so that aliasing would be an approximation.
+Likewise, quantizing the real amplitudes before an FFT is unnecessary here and would change the encoder.
+
+\clearpage
+\subsection{A count marker makes this a complete PUPE decoder}
+Evidence alone is insufficient. For a target message $w_*$ introduce a formal variable $z$ whose power counts
+copies of that message, and form
+\begin{equation}
+ F_\ell(u,z)=\prod_{w\in\calW}
+ \left[\sum_{j=0}^K\beta_w(j)u^j
+ z^{j\ind\{w=w_*\}}e^{-{\rm i}j\theta_\ell^Tt_w}\right],
+ \label{eq:fourier-marker}
+\end{equation}
+with $\beta_w(j)=1/j!$ for IID sampling and $\beta_w(j)=\ind\{j\leq1\}$ for distinct sampling.
+Terms with degree in $u$ greater than $K$ can be discarded exactly.
+For IID, the same cardinality coefficient can be written
+\[
+ [u^K]F_\ell(u,z)=
+ \frac1{K!}\left(\sum_w z^{\ind\{w=w_*\}}
+                      e^{-{\rm i}\theta_\ell^Tt_w}\right)^K.
+\]
+The coefficient of $z^j$ records states with exactly $j$ copies of $w_*$. Applying the inverse transform and
+the Gaussian weight gives
+\begin{align}
+ A^{\rm F}_{w_*,j}(y)&=
+ \sum_{t\in[-K,K]^d}g(y-Ct)\,
+ Q^{-d}\sum_\ell [u^Kz^j]F_\ell(u,z)e^{{\rm i}\theta_\ell^Tt},\\
+ q_{w_*,j}&=A^{\rm F}_{w_*,j}/\sum_{a=0}^K A^{\rm F}_{w_*,a}.
+ \label{eq:fourier-query}
+\end{align}
+These are exact-count numerators. Sum the probabilities over $j$ as before to obtain the count tails. Repeating the marked query over full messages completes the Bayes decoder.
+
+\subsection{What changes computationally}
+The positive-measure algorithm stores reachable sums. This representation stores frequency samples on a full
+grid and uses powers or coefficient products. The transform can remove repeated convolution work when the
+effective signature dimension is small. But the direct grid has $(2K+1)^d$ entries.
+For the current $P=64$, $|\mathcal G|=29$ representation, $d=1856$: a dense grid is plainly infeasible.
+Sparsity of the reachable integer states is often far more valuable than a fast dense transform.
+
+It is still a useful exact alternative because it states precisely what a spectral or low-rank representation
+would have to preserve. Reducing the number of retained frequencies, introducing a rank cutoff, or merging
+integer states requires an error analysis; none is implied by the Fourier identity itself.
+The finite certificate checks a two-dimensional unit-energy alphabet under both priors, including every count
+probability. It does not run this grid for the full polar bank.
+
+\subsection{A bound linking Fourier compression to decision certification}
+Let $\Gamma_\ell=\sum_t g(y-Ct)e^{{\rm i}\theta_\ell^Tt}$.
+Equation \eqref{eq:fourier-inverse} gives $\mathcal Z=Q^{-d}\sum_\ell\widehat\mu_K(\ell)\Gamma_\ell$.
+If only frequencies in $\Lambda$ are evaluated, the omitted contribution obeys
+\begin{equation}
+ |\mathcal Z-\mathcal Z_\Lambda|
+ \leq Q^{-d}\sum_{\ell\notin\Lambda}|\widehat\mu_K(\ell)|\,|\Gamma_\ell|.
+ \label{eq:fourier-bound}
+\end{equation}
+For IID draws, write $\psi_\ell=\rho_\ell/M$. Then $|\psi_\ell|\leq1$ and
+$|\widehat\mu_K(\ell)|=M^K|\psi_\ell|^K/K!$.
+Thus modes strictly below unit magnitude are damped by the power $K$, although the grid and its dimension also
+matter. Unit-magnitude modes need not decay. Analogous bounds apply to each marked numerator.
+These are absolute bounds; small relative or posterior-tail error additionally needs a positive evidence bound.
+Computing useful omitted-mode bounds cheaply remains open. The finite identity supplies a possible connection
+to Section~\ref{sec:certificate}, not a guarantee that a short Fourier expansion suffices.
+
+\clearpage
+\section{Exact elimination with joint separator states}
+\label{sec:elimination-exact}
+\subsection{Sum variables in a different order}
+The polar/CRC circuit, pattern selectors and resource likelihoods define finite factors of the slot posterior.
+An alternative exact algorithm eliminates these variables directly instead of building complete-message sum tables.
+Let $x$ collect all finite variables and let $\prod_a f_a(x_{\mathcal S_a})$ be an unnormalized weight whose sum
+equals the desired evidence. Deterministic circuit factors ensure that every valid slot assignment has exactly
+one valid extension to its internal encoding variables. Include full-message exclusion factors for distinct sampling.
+
+To eliminate a variable $x_i$, collect every factor containing it, multiply them, and sum it out:
+\begin{equation}
+ \widetilde f(x_{\mathcal N_i})
+ =\sum_{x_i}\prod_{a:i\in\mathcal S_a}f_a(x_{\mathcal S_a}),
+ \qquad
+ \mathcal N_i=\left(\bigcup_{a:i\in\mathcal S_a}\mathcal S_a\right)\setminus\{i\}.
+ \label{eq:eliminate}
+\end{equation}
+Replace those factors by $\widetilde f$ and continue. Distributivity proves that each step preserves the
+remaining marginal exactly. A joint table over $\mathcal N_i$ records everything the eliminated variable can
+communicate to the rest of the graph. It cannot generally be replaced by separate one-variable tables.
+
+For example, summing the middle variable in a chain creates
+\[
+ \widetilde f(x_1,x_3)=\sum_{x_2}f(x_1,x_2)h(x_2,x_3),
+\]
+which usually couples its two neighbors.
+Eliminating an endpoint first avoids creating this larger interaction at that step.
+The final sum is the same, but the intermediate cost differs.
+
+This is the exact variable-elimination/junction-tree framework \cite{wainwright}.
+In tensor language, the factors are arrays and the summed variables are contracted indices.
+These descriptions refer to the same sum; calling it a tensor contraction does not by itself make it cheaper.
+
+\subsection{Carry count information through elimination}
+For one target message $w_*$, attach a marker $z^{\ind\{w_k=w_*\}}$ to every slot. The final polynomial is
+\begin{equation}
+ P_{w_*}(z)=
+ \sum_W\pi(W)\,g\!\left(y-\sum_k\phi(w_k)\right)
+             \prod_{k=1}^K z^{\ind\{w_k=w_*\}}
+ =\sum_{j=0}^K A_{w_*,j}z^j.
+ \label{eq:elimination-marker}
+\end{equation}
+Run \eqref{eq:eliminate} with polynomial-valued factors, adding coefficients when summing and convolving them
+when multiplying. Degree at most $K$ suffices because there are only $K$ markers.
+Then $q_{w_*,j}=A_{w_*,j}/P_{w_*}(1)$, followed by the established tail allocation.
+The marker is an exact full-message equality test, not an independent decision about each payload bit.
+
+\clearpage
+\subsection{What makes an elimination order tractable}
+The main cost is the number of joint assignments in the largest intermediate factor.
+For binary variables, retaining $b$ boundary bits means as many as $2^b$ entries; pattern variables have larger
+domains. Polynomial markers add a count dimension and polynomial arithmetic, but do not remove this dependence.
+The smallest achievable maximum boundary size is related to graph treewidth \cite{wainwright}.
+The relevant graph is the chosen factorization, including CRC, pattern consistency and any exclusion constraints.
+
+This gives a precise version of the earlier polar question: find an elimination order whose boundaries preserve
+cross-user pairing while remaining small. Ordinary local loopy BP does not retain these full joint boundaries.
+The XOR counterexample in Section~\ref{sec:polar-exact} rules out one proposed smaller state, not every
+lossless boundary representation. An exact rank factorization of a boundary table could also save storage;
+discarding nonzero rank components would introduce an approximation.
+
+\subsection{Conditioning can reveal exact separations}
+One exact strategy enumerates a chosen set of variables first, eliminates the rest conditional on them, and
+finally sums the conditional answers. If all patterns $(p_1,\ldots,p_K)$ are fixed, connect two slots whenever
+their occupied resource sets overlap. Different connected components use disjoint observations.
+The Gaussian likelihood then factors by component, apart from an observation-only factor on unused resources.
+Within a component, use full joint polar inference. Same-pattern users belong to the same component.
+
+For IID payloads the conditional sum factors immediately. Distinct-message exclusions occur only among slots
+with the same pattern and therefore remain inside a component. Summing the \emph{unnormalized} answers over
+all pattern assignments restores the full posterior. In particular, distinct sampling must not assign equal
+normalized weight to every pattern assignment: they can admit different numbers of valid payload assignments.
+
+If the largest conditional component has only two or three slots, then two- or three-user exact subsolvers can
+suffice inside that conditional problem, regardless of total $K$. This is a structural separation, not a claim
+that more distant users have negligible influence. Enumerating the patterns may still cost $P^K$.
+
+For the selected $n=256,N_c=32$ banks with $P=64,256$ and seeds 3201--3203, the support-overlap graph on the
+entire pattern bank is connected, with about $98.9$--$99.3\%$ of possible edges.
+Thus disjoint-support decomposition alone does not split that bank. This read-only structural check is neither
+a measured elimination width nor a proof against finer conditional or polar-circuit reductions.
+
+\textbf{Exact computational endpoint.} Eliminate finite variables in any complete order while preserving
+joint tables and count markers. The result is the same optimal multiset decoder as before.
+The open algebraic task is to find a small exact boundary or a favorable conditioning scheme for this encoder.
+The certificate checks the full count law under two elimination orders on the tiny polar fixture, and a
+separate chain where a different order changes the largest table from 9 to 27 entries.
+
+\clearpage
+\section{An exact expansion in connected groups of users}
+\label{sec:connected-exact}
+\subsection{Separate isolated evidence from pair interactions}
+The Gaussian log-likelihood already contains only individual and pairwise terms, as in \eqref{eq:interactions}.
+To expose what those pairs do collectively, define the normalized one-user reference
+\begin{equation}
+ \nu_y(w)=\frac{e^{y^T\phi(w)/\sigma^2}}{Z_1(y)},\qquad
+ Z_1(y)=\sum_u e^{y^T\phi(u)/\sigma^2}.
+ \label{eq:one-user-reference}
+\end{equation}
+For unit-energy messages and a uniform prior, this is the exact one-user posterior, with patterns summed as part
+of the message alphabet. It is a reference distribution for the following identity; the true $K$-slot posterior
+is not a product of these marginals.
+
+Define the pair factor and its departure from one:
+\begin{equation}
+ b(u,v)=
+ \begin{cases}
+ e^{-\phi(u)^T\phi(v)/\sigma^2},&\text{IID},\\
+ \ind\{u\ne v\}e^{-\phi(u)^T\phi(v)/\sigma^2},&\text{distinct},
+ \end{cases}
+ \qquad f(u,v)=b(u,v)-1.
+ \label{eq:mayer-factor}
+\end{equation}
+Then, exactly,
+\[
+ \Pr(W\mid y)\ \propto\
+       \prod_{i=1}^K\nu_y(w_i)\prod_{i<j}b(w_i,w_j).
+\]
+The distinct model is included by a zero pair factor on duplicate messages.
+In either model $b$ is nonnegative, but $f$ can have either sign.
+
+\subsection{Expand the finite product and group connected terms}
+For a target message $w_*$ let $J(W)=\sum_i\ind\{w_i=w_*\}$ and define
+\begin{equation}
+ \mathcal B_k(z)=
+ \E_{\nu_y^{\otimes k}}\!\left[z^{J(W)}\prod_{i<j}(1+f(w_i,w_j))\right],
+ \qquad \mathcal B_0(z)=1.
+ \label{eq:graph-partition}
+\end{equation}
+Expanding the product chooses a subset of the $\binom k2$ pairs. Draw each chosen pair as an edge between
+its slot labels. A term is thus a graph; its connected components partition the slots.
+Different components involve disjoint variables, so their sums factor under the product reference.
+
+For $m\geq1$, collect all connected graphs on $m$ labeled slots:
+\begin{equation}
+ \mathcal C_m(z)=
+ \E_{\nu_y^{\otimes m}}\!\left[
+ z^{J(W)}
+ \sum_{\substack{G\ {\rm connected}\\{\rm on}\ \{1,\ldots,m\}}}
+       \prod_{(i,j)\in E(G)}f(w_i,w_j)\right].
+ \label{eq:connected-block}
+\end{equation}
+The singleton graph has no edges, so $\mathcal C_1(z)=\sum_w\nu_y(w)z^{\ind\{w=w_*\}}$.
+A connected group means its users are linked by pair interactions. It does not introduce a new many-body
+physical channel term.
+
+\clearpage
+\subsection{An exact recursion over connected blocks}
+In any graph, slot 1 belongs to one connected component of size $m$.
+Choose its other $m-1$ slots in $\binom{k-1}{m-1}$ ways, sum the connected component, and sum an arbitrary
+graph on the remaining slots. Exchangeability makes each choice have the same weight. Hence
+\begin{equation}
+ \boxed{\mathcal B_k(z)=
+ \sum_{m=1}^k\binom{k-1}{m-1}
+                 \mathcal C_m(z)\mathcal B_{k-m}(z).}
+ \label{eq:connected-recursion}
+\end{equation}
+For example,
+\[
+ \mathcal B_2=\mathcal C_1^2+\mathcal C_2,\qquad
+ \mathcal B_3=\mathcal C_1^3+3\mathcal C_1\mathcal C_2+\mathcal C_3.
+\]
+The connected three-user term includes three two-edge chains and one triangle:
+\[
+ \mathcal C_3(z)=\E_{\nu_y^{\otimes3}}\!
+ \left[z^{J(W)}
+ \left(f_{12}f_{13}+f_{12}f_{23}+f_{13}f_{23}+f_{12}f_{13}f_{23}\right)\right].
+\]
+Equivalently, as a formal series whose coefficients are needed only through degree $K$,
+\[
+ \sum_{k=0}^K\frac{t^k}{k!}\mathcal B_k(z)
+ =\exp\!\left(\sum_{m=1}^K\frac{t^m}{m!}\mathcal C_m(z)\right)\pmod{t^{K+1}}.
+\]
+Connected groups are the coefficients of the logarithm of this generating function.
+All dependence was generated by pair factors; retaining only two-user connected terms is not generally exact.
+
+\subsection{Recover the multiset decision}
+The one-user normalizers and the observation-only Gaussian factor do not depend on $J(W)$.
+Consequently
+\begin{equation}
+ \boxed{q_{w_*,j}=
+ \frac{[z^j]\mathcal B_K(z)}{\mathcal B_K(1)}.}
+ \label{eq:connected-query}
+\end{equation}
+For IID sampling,
+$H_K(y)=e^{-(\|y\|^2+K)/(2\sigma^2)}Z_1(y)^K\mathcal B_K(1)$;
+replace $H_K$ by $D_K$ for distinct sampling.
+Compute the connected polynomials up to $K$, apply \eqref{eq:connected-recursion}, extract every count law,
+and perform the same optimal tail allocation. This is another exact evaluation of the required quantities.
+
+\subsection{Exact expansion and the role of unevaluated terms}
+The finite expansion is always an identity; it requires no convergence assumption.
+Its naive evaluation is expensive: $\mathcal C_m$ sums message assignments and connected graphs, up to
+$M^m2^{\binom m2}$ combinations before exploiting symmetry. Signed terms can also cancel strongly.
+The method is related to the classical Mayer expansion; convergence results for other particle systems
+require their own hypotheses and are not imported here \cite{pulvirenti}.
+
+Exact inference uses the complete expansion or proves that unevaluated contributions cannot change the
+Bayes decision. A partial connected polynomial need not have nonnegative coefficients or preserve all source
+exclusions. The next section derives positive bounds on the unevaluated contributions, allowing exact
+certification without treating a partial signed sum as a posterior. Assumptions that discard the remainder
+without such a certificate belong to Report 9.
+
+\clearpage
+\section{Bound the unevaluated connected groups}
+\label{sec:connected-bound}
+\subsection{Weight interactions by the observation, not just their worst case}
+The connected identity suggests a further exact procedure: evaluate small connected blocks, bound all others,
+and stop only if the multiset decision is certified. This requires a finite remainder bound; we do not assume
+that the first two or three blocks suffice.
+
+Use the same $\nu_y$ and $f$ as above. Define
+\begin{equation}
+ F(u,v)=|f(u,v)|,\qquad
+ \epsilon=\max_{u,v}F(u,v),\qquad
+ \alpha=\max_u\sum_v\nu_y(v)F(u,v).
+ \label{eq:weighted-interaction}
+\end{equation}
+The quantity $\alpha\leq\epsilon$ measures the largest average interaction with a message drawn from the
+one-user reference. It depends on the observation. It is not a physical noise variance or a fitted parameter.
+
+For each block size $m$, define the positive connected sum
+\[
+ A_m=\E_{\nu_y^{\otimes m}}
+       \sum_{G\ {\rm connected}}\prod_{(i,j)\in E(G)}F(w_i,w_j),\qquad A_1=1.
+\]
+If $\|P\|_1$ denotes the sum of absolute coefficients of a polynomial, then
+$\|\mathcal C_m\|_1\leq A_m$. The marker merely sorts assignments by their count, so taking absolute values
+and summing coefficients is bounded by the unmarked positive graph sum.
+
+Every connected graph contains a spanning tree. Summing over all trees may overcount it, which is safe for
+a positive bound. For a fixed tree, bound the factors from optional non-tree edges by $1+\epsilon$.
+There are $\binom m2-(m-1)=(m-1)(m-2)/2$ such edges.
+Average the tree-edge product by removing one leaf at a time: the sum over a leaf's message, conditional
+on its parent, is at most $\alpha$. There are $m-1$ leaves removed before the last vertex.
+Finally there are $m^{m-2}$ labeled spanning trees, as counted by their length-$(m-2)$ Pr\"ufer sequences.
+Consequently
+\begin{equation}
+ \boxed{A_m\leq a_m:=
+ m^{m-2}\alpha^{m-1}(1+\epsilon)^{(m-1)(m-2)/2}\quad(m\geq2),\qquad a_1=1.}
+ \label{eq:tree-majorant}
+\end{equation}
+This is a finite inequality for the declared decoder, including the distinct-message exclusion factor.
+It imports no high-temperature or infinite-volume convergence theorem.
+Smaller valid positive bounds, or exact values of $A_m$, can replace individual $a_m$.
+
+Computing $\alpha$ directly still involves the alphabet and its pair interactions. A cheap upper bound on it
+is safe, but may be uninformative. In the distinct model, $F(u,u)=1$ even at arbitrarily large noise variance;
+therefore hard exclusions cannot be treated as disappearing weak interactions.
+
+\clearpage
+\subsection{Sum the weighted trees exactly instead of using their worst root}
+There is a stronger finite majorant with a computable structure. Define
+\[
+ Q_m=\E_{\nu_y^{\otimes m}}\sum_{T\ {\rm labeled\ tree}}\prod_{(i,j)\in E(T)}F(w_i,w_j),
+ \qquad Q_1=1.
+\]
+Retain this exact positive tree sum in the spanning-tree argument, instead of replacing each leaf average
+by $\alpha$. Then
+\begin{equation}
+ A_m\leq \overline a_m:=Q_m(1+\epsilon)^{(m-1)(m-2)/2}
+ \leq a_m.
+ \label{eq:weighted-tree-majorant}
+\end{equation}
+This alone does not help unless $Q_m$ can be obtained more cheaply than enumerating its trees and messages.
+
+Fix the root's message to $w$. Removing that root separates a labeled tree into an unordered collection of
+child subtrees. Each child with message $v$ contributes its edge weight $F(w,v)$ and source weight $\nu_y(v)$.
+Choosing the disjoint label sets of the children gives the factorial coefficients of an exponential.
+Thus the rooted exponential generating functions obey the formal identity
+\begin{equation}
+ T_w(z)=z\exp\!\left(\sum_v F(w,v)\nu_y(v)T_v(z)\right),\qquad
+ Q_m=(m-1)!\sum_w\nu_y(w)[z^m]T_w(z).
+ \label{eq:rooted-tree-series}
+\end{equation}
+Only coefficients through degree $K$ are needed. This is finite polynomial arithmetic, with no convergence
+condition and no large-$K$ limit.
+
+Here is an explicit coefficient algorithm. Write $t_{w,m}=[z^m]T_w$,
+$\ell_{w,j}=\sum_vF(w,v)\nu_y(v)t_{v,j}$, and
+$e_{w,n}=[z^n]\exp(\sum_{j\geq1}\ell_{w,j}z^j)$.
+Initialize $e_{w,0}=t_{w,1}=1$. Differentiating the exponential gives
+\[
+ e_{w,n}=\frac1n\sum_{j=1}^n j\ell_{w,j}e_{w,n-j},\qquad t_{w,n+1}=e_{w,n}.
+\]
+At degree $n$, all required $t_{v,n}$ are already known. Compute the new vector
+$\ell_{\cdot,n}=F(\nu_y\,t_{\cdot,n})$, then the next coefficients.
+Through order $K$ this needs $K-1$ matrix-vector products, $O(K^2M)$ additional scalar operations,
+and $O(KM)$ coefficient storage. The exact polar operator in Section~\ref{sec:pair-contraction} can supply
+those products.
+
+For a check, put $d=F\nu_y$. The first cases are
+\[
+ Q_2=\nu_y^Td,\qquad Q_3=3\sum_w\nu_y(w)d_w^2.
+\]
+The old three-user bound used $3\max_wd_w^2$ instead. Constant interaction $F=c$ recovers
+$Q_m=m^{m-2}c^{m-1}$. Tests also enumerate all labeled trees through five vertices for a nonconstant kernel.
+Substitute $\overline a_m$ for $a_m$ in the following remainder recurrence. It is never weaker in exact
+arithmetic, but optional-edge overcounting, the $1+\epsilon$ factors and signed cancellation can still make
+the resulting bound loose.
+
+\clearpage
+\subsection{Turn block bounds into a bound on the complete count polynomial}
+Let $\widetilde{\mathcal B}^{(b)}_K$ be the recurrence in \eqref{eq:connected-recursion} evaluated with the
+exact $\mathcal C_m$ through $m=b$ and zero blocks above $b$. Define positive scalar recurrences
+\[
+ R_0^{(b)}=1,\qquad
+ R_k^{(b)}=\sum_{m=1}^{\min(k,b)}\binom{k-1}{m-1}a_mR_{k-m}^{(b)}.
+\]
+Then
+\begin{equation}
+ \boxed{\|\mathcal B_K-\widetilde{\mathcal B}^{(b)}_K\|_1
+ \leq\delta_b:=R_K^{(K)}-R_K^{(b)}.}
+ \label{eq:connected-remainder}
+\end{equation}
+To see why, expand the exact answer over partitions into connected components. The difference contains exactly
+the partitions with at least one component larger than $b$. The polynomial norm is submultiplicative, so
+each such partition is bounded by the product of its $a_m$ values. The positive recurrence sums those products,
+and the subtraction removes the partitions already retained. It gives $\delta_K=0$.
+
+An independent coarse bound is
+$\sum_{\ell=b}^{\binom K2}\binom{\binom K2}{\ell}\epsilon^\ell$:
+an omitted graph must contain at least $b$ edges. Take the smaller of any valid bounds.
+The weighted tree bound can improve this crude estimate, but neither is promised small for the present encoder.
+Both can grow rapidly with $K$ or with strong interactions.
+
+\subsection{Certify a decision even when an intermediate polynomial has negative coefficients}
+For a queried message write
+$\widetilde N_{w,j}=\sum_{\ell\geq j}[z^\ell]\widetilde{\mathcal B}^{(b)}_K(z)$ and
+$\widetilde Z=\widetilde{\mathcal B}^{(b)}_K(1)$. Then
+\[
+ |N_{w,j}-\widetilde N_{w,j}|\leq\delta_b,\qquad
+ |\mathcal B_K(1)-\widetilde Z|\leq\delta_b.
+\]
+All queries use the same positive normalizer $\mathcal B_K(1)$.
+Thus valid unnormalized intervals are
+\[
+ L_{w,j}=\max(0,\widetilde N_{w,j}-\delta_b),\qquad
+ U_{w,j}=\max(0,\widetilde N_{w,j}+\delta_b),
+\]
+with $Z_-=\max(0,\widetilde Z-\delta_b)$ and $Z_+=\widetilde Z+\delta_b>0$.
+One may tighten $U_{w,j}$ by $Z_+$. Normalized tails obey
+\[
+ \frac{L_{w,j}}{Z_+}\leq T_{w,j}\leq
+ \begin{cases}\min(1,U_{w,j}/Z_-),&Z_->0,\\1,&Z_-=0.\end{cases}
+\]
+The selected-versus-unselected interval test of Section~\ref{sec:certificate} applies directly, before
+normalization. If it separates the count tails, the resulting action is exactly Bayes optimal even though not
+all connected blocks were evaluated. If it does not, increase the block size, improve the bounds, or use another
+exact representation. Full evaluation remains the finite endpoint.
+
+Negative coefficients in $\widetilde{\mathcal B}$ are not probabilities and must not be normalized as if they
+were. They are nevertheless permissible as a partial signed calculation accompanied by a rigorous error interval.
+This distinction connects the earlier truncation counterexample to an exact certification procedure.
+Floating point evaluation of the bounds still needs controlled rounding for machine-certified guarantees.
+
+\textbf{A finite early-stop example.} Take the four unit waveforms $\{e_1,e_2,-e_1,-e_2\}$, IID $K=4$,
+$y=(0.7,-0.2)$ and $\sigma^2=5$. Propose one copy of each message. The computed bounds are:
+\begin{center}
+\begin{tabular}{@{}rrrr@{}}\toprule
+Block size $b$ & Remainder $\delta_b$ & Selected lower & Next-copy upper\\\midrule
+1 & 0.832126 & 0 & 1.155913\\
+2 & 0.185467 & 0.527514 & 0.499847\\
+3 & 0.031415 & 0.671503 & 0.344105\\\bottomrule
+\end{tabular}
+\end{center}
+At $b=2$ the selected lower bounds already exceed every next-copy upper bound.
+The two-user calculation, together with the unevaluated-group bound, therefore certifies the exact four-user
+Bayes action. Exhaustive inference independently agrees. This is a constructed finite illustration, not a
+performance result for the polar bank or a claim that size two always suffices.
+
+\clearpage
+\section{Compute only the comparisons needed by the decision}
+\label{sec:decision-computation}
+\subsection{Compare count tails jointly instead of bounding each one separately}
+For a proposed allocation $\widehat a$, consider removing its last copy of message $u$ and adding the next copy
+of message $v\ne u$. Put $j=\widehat a_u>0$ and $\ell=\widehat a_v+1$. The unnormalized expected-match advantage
+of retaining that selected copy is
+\begin{equation}
+ D_{u,j;v,\ell}
+ =N_{u,j}-N_{v,\ell}
+ =\sum_a\omega(a)\big[\ind\{a_u\geq j\}-\ind\{a_v\geq\ell\}\big].
+ \label{eq:decision-contrast}
+\end{equation}
+All such advantages being nonnegative is equivalent to the allocation being Bayes optimal.
+Necessity follows because a negative one gives an improving one-copy exchange.
+For sufficiency, the diminishing count tails ensure that these last-selected versus next-unselected comparisons
+also order every selected occurrence above every unselected occurrence.
+Comparisons within the same message are already nonnegative by tail monotonicity.
+
+The earlier interval certificate bounds each tail separately. It can lose cancellation: an unexplored state
+in which both indicators equal one contributes to both tails but contributes zero to their difference.
+For a count-tree frontier node $b$, let $E_b^-$ mean that a completion with
+$a_u<j$ and $a_v\geq\ell$ is possible. With the same upper evidence mass $U_b$ as before, a sharper bound is
+\begin{equation}
+ \boxed{D_{u,j;v,\ell}\ \geq\
+ \sum_{a\in\mathcal E}\omega(a)
+       \big[\ind\{a_u\geq j\}-\ind\{a_v\geq\ell\}\big]
+ -\sum_{b\in\mathcal F:E_b^-\ {\rm possible}}U_b.}
+ \label{eq:direct-contrast-bound}
+\end{equation}
+If the negative event is impossible, every completion has nonnegative contrast and needs no penalty.
+If it is possible, its total negative contribution is at worst $-U_b$.
+Positive lower bounds on node mass could improve this further, but are not required here.
+
+Feasibility is finite arithmetic on count ranges. Fix the prefix counts, impose
+$a_u\leq j-1$, $a_v\geq\ell$, nonnegativity, total $K$, and the distinct-source upper caps when applicable.
+The remaining intervals admit a completion exactly when their lower endpoints sum to at most $K$ and their
+upper endpoints sum to at least $K$, with no empty interval. No transmitted-message oracle is used.
+
+At the same frontier, \eqref{eq:direct-contrast-bound} is at least as strong as subtracting independent tail
+intervals. It penalizes a subset of the nodes that could increase the unselected tail.
+Certify the action once every required contrast lower bound is nonnegative; otherwise continue exact refinement.
+This preserves common uncertainty rather than estimating the entire posterior more accurately.
+
+The same reasoning helps the connected expansion. Its positive omitted-graph bound $\delta_b$ controls the
+integral of any observable bounded in magnitude by one. A difference of two indicators has this property.
+Hence its contrast error is at most $\delta_b$, rather than the $2\delta_b$ obtained by separately bounding
+two tails. This does not guarantee a useful bound, but avoids one unnecessary loss.
+
+\clearpage
+\subsection{A controlled finite audit of bound strength}
+Use the existing balanced polar fixture $B=4$, $P=4$, $V=4$, $N_c=8$, CRC4, $n=12$, $K=3$.
+For each source law and each $\sigma^2\in\{0.05,0.3,1\}$, generate four observations with random seeds
+9100--9103: first draw the three messages under that source law, then draw Gaussian noise.
+There are 24 observations in total, with 816 IID or 560 distinct count hypotheses per observation.
+This is a small computational audit, not an error-rate study of the research-scale encoder.
+
+Within each observation all methods use the same count-tree order, obtained by decreasing matched score
+$y^T\phi(w)$ with a deterministic tie break. Refine the frontier node with largest upper evidence mass.
+Propose the allocation using the evaluated lower tails. Compare three bounds:
+\begin{enumerate}
+\item \textbf{Ball:} the original norm bound.
+\item \textbf{Box:} also bound each completion coordinate by its smallest and largest possible value.
+      For IID these are $h\min_w\phi_r(w)$ and $h\max_w\phi_r(w)$; for distinct sampling, sum the $h$ smallest
+      or largest coordinate values of different remaining messages. Distance to this containing box is a
+      valid squared-distance lower bound. Keep the stronger of it and the ball bound.
+\item \textbf{Dual:} additionally take up to eight conditional-gradient steps in the completion hull, starting
+      at the feasible point $h$ times the remaining alphabet mean. Each step uses the exact remaining-alphabet
+      support and evaluates \eqref{eq:completion-dual-bound}. Keep the largest valid bound seen.
+      The convex solve need not converge.
+\end{enumerate}
+The resulting mean percentages of full count hypotheses evaluated before certification are:
+\begin{center}
+\begin{tabular}{@{}llrrrr@{}}\toprule
+Source & $\sigma^2$ & Ball / intervals & Box / intervals & Dual / intervals & Dual / contrasts\\\midrule
+IID & 0.05 & 59.68 & 23.53 & 3.25 & 3.22\\
+IID & 0.30 & 87.44 & 55.51 & 25.06 & 23.62\\
+IID & 1.00 & 91.54 & 67.25 & 43.69 & 43.11\\
+Distinct & 0.05 & 63.13 & 20.31 & 1.34 & 0.98\\
+Distinct & 0.30 & 94.60 & 57.19 & 24.29 & 22.46\\
+Distinct & 1.00 & 95.80 & 71.38 & 52.72 & 51.03\\\bottomrule
+\end{tabular}
+\end{center}
+All 144 combinations of observation, bound and certificate agree with exhaustive Bayes inference to the stated
+floating tolerances. Both certificate variants were tested with all three bounds; the table shows the most
+informative comparisons. The contrast improvement is modest here; the main reduction comes from stronger
+completion geometry. We do not extrapolate these four-observation averages to other loads or message lengths.
+
+\clearpage
+\subsection{Count the work needed to obtain the savings}
+The dual bounds are not free. For the dual/contrast method, the mean work counts in the same audit are:
+\begin{center}
+\begin{tabular}{@{}llrrr@{}}\toprule
+Source & $\sigma^2$ & Evaluated hypotheses & Support calls & Individual message scores\\\midrule
+IID & 0.05 & 26.25 & 322.00 & 3,682.00\\
+IID & 0.30 & 192.75 & 1,888.00 & 15,565.75\\
+IID & 1.00 & 351.75 & 3,288.25 & 22,894.00\\
+Distinct & 0.05 & 5.50 & 192.00 & 2,318.00\\
+Distinct & 0.30 & 125.75 & 1,720.50 & 13,627.00\\
+Distinct & 1.00 & 285.75 & 3,194.75 & 20,546.25\\\bottomrule
+\end{tabular}
+\end{center}
+A support call scores every message in the node's remaining alphabet; the last column counts those scores.
+These are operation counts, not comparable units of elapsed time. Node construction, likelihood evaluation
+and certificate comparisons also cost work. In particular, this audit does not show that the reference search
+is faster than vectorized exhaustive inference on such tiny systems.
+
+It does establish a more specific fact: the final Bayes decision can often be certified without evaluating most
+count hypotheses, using the actual polar fixture rather than only a constructed four-message example.
+Whether this pays computationally depends on cheaper support bounds, reuse between nodes, and the decision
+margin of the observation. The bound and the exact support interface now give explicit objects to investigate.
+
+\subsection{The current connected majorant does not yet pass the same check}
+On these same 24 observations, compute the exact one- and two-user connected blocks and bound the omitted
+three-user block by $3\alpha^2(1+\epsilon)$. Use even the stronger direct-contrast error bound just described.
+It certifies none of the 24 outputs. Relative to the independently computed exact normalizer
+$\mathcal B_3(1)$, the remainder-bound ranges are:
+\begin{center}
+\begin{tabular}{@{}llrr@{}}\toprule
+Source & $\sigma^2$ & Minimum $\delta_2/\mathcal B_3(1)$ & Maximum\\\midrule
+IID & 0.05 & $1.88\,10^{15}$ & $7.25\,10^{31}$\\
+IID & 0.30 & $228.36$ & $13{,}240.39$\\
+IID & 1.00 & $0.677$ & $1.610$\\
+Distinct & 0.05 & $1.93\,10^8$ & $6.87\,10^{24}$\\
+Distinct & 0.30 & $76.73$ & $8{,}959.65$\\
+Distinct & 1.00 & $1.137$ & $3.325$\\\bottomrule
+\end{tabular}
+\end{center}
+This is a failure of this sufficient certificate on these cases. It neither proves a large actual truncation
+error nor excludes sharper connected bounds or a different exact decomposition.
+The earlier four-message early-stop example remains valid, but is not evidence of useful certification here.
+
+Reproduce the complete audit with \texttt{uv run python -m tests.polar\_exact\_computation}.
+Generated audit data are kept outside the repository; the derivation, procedure, seeds and reported tables
+are retained here. All numerical certificates are checked against exhaustive reference decisions; formal
+machine certification would additionally require controlled-rounding bounds.
+
+\clearpage
+\section{Reuse valid bounds and charge only the adverse prior mass}
+\label{sec:bound-reuse}
+\subsection{A support direction can serve many different subtrees}
+The finite audit exposed repeated support scoring as a substantial cost. The dual inequality does not require
+a direction tailored to the current residual. Any previously computed direction remains valid.
+
+For a count-tree node with prefix depth $d$, residual $r$ and remaining count $h$, let
+$S_d$ be the remaining message suffix. For each cached direction $u_j$, store its full-alphabet scores
+$s_{j,w}=u_j^T\phi(w)$. Precompute
+\[
+ H_{j,d,h}=
+ \begin{cases}
+ h\max_{w\in S_d}s_{j,w},&\text{IID},\\
+ \text{sum of the $h$ largest scores in $S_d$},&\text{distinct}.
+ \end{cases}
+\]
+At every descendant, the same valid bound is
+\begin{equation}
+ L_{d,h}(r)=\max\{L_{\rm box},\ \max_j(2u_j^Tr-\|u_j\|^2-2H_{j,d,h})\}.
+ \label{eq:cached-support-bound}
+\end{equation}
+Here $L_{\rm box}$ includes zero and the ball bound as before. No new message score is needed for these
+dual trials. Along an edge assigning $c$ copies of word $w$, one may update
+$u_j^Tr'=u_j^Tr-cs_{j,w}$ instead of taking a fresh residual-direction dot product.
+The small reference computes the dots directly and reports their count separately.
+
+The cached vectors may be poor directions after the residual changes substantially. This weakens the bound
+and may increase exact search, but it does not approximate the posterior or invalidate a certified decision.
+New directions can be added adaptively if their computational cost is worthwhile.
+Suffix maxima require $O(JM)$ preparation; maintaining the top $K$ scores per suffix can use
+$O(JMK)$ preparation and storage. The simple finite code sorts suffixes directly; the better preparation bound
+describes a straightforward maintained-list implementation, not a timing measurement.
+
+For the controlled comparison below, take up to eight directions visited by the root's conditional-gradient
+calculation and reuse only those. Each is scored once on the whole $M=16$ alphabet: all tested roots use eight
+directions, giving 128 individual message scores in total. The box bounds, cached trial evaluations and
+certificate comparisons still require work. No support directions are learned.
+
+\clearpage
+\subsection{Use the prior mass of the event that could reverse a decision}
+The previous direct-contrast bound charged the full node mass whenever a negative event was possible.
+The model also tells us exactly how much prior mass is assigned to that event.
+
+At node $b$, let $\beta_b(a)$ be the unnormalized prior weights of its completions, including its fixed prefix,
+and let $B_b=\sum_a\beta_b(a)$. Suppose the completion bound gives a common likelihood envelope
+$g(y-\Phi a)\leq G_b$, so $U_b=B_bG_b$.
+For $E^-_{u,j;v,\ell}=\{a_u<j,\ a_v\geq\ell\}$, define
+\[
+ \rho_b^-=
+ \frac{\sum_a\beta_b(a)\ind\{E^-_{u,j;v,\ell}\}}{B_b}.
+\]
+Then the node's negative contribution has magnitude at most $U_b\rho_b^-$, and
+\begin{equation}
+ \boxed{D_{u,j;v,\ell}\geq D_{u,j;v,\ell}^{\rm evaluated}
+                  -\sum_{b\in\mathcal F}U_b\rho_b^-.}
+ \label{eq:prior-weighted-contrast}
+\end{equation}
+The proof is simply to apply the common envelope only to the adverse subset before summing prior weights.
+Since $0\leq\rho_b^-\leq1$, this improves the feasibility-only bound at the same frontier.
+It uses a conditional \emph{prior} probability, not a posterior probability or an independence approximation.
+
+For two different, still-unassigned words among $m$ remaining messages, and $h$ remaining transmissions,
+the IID conditional count law is
+\[
+ \Pr_{\rm prior}(a_u=a,a_v=b\mid\text{prefix})
+ =\frac{h!}{a!b!(h-a-b)!}\frac{(m-2)^{h-a-b}}{m^h}.
+\]
+Use $a,b\geq0$, $a+b\leq h$, and $0^0=1$. For distinct sampling it is
+\[
+ \Pr_{\rm prior}(a_u=a,a_v=b\mid\text{prefix})
+ =\frac{\binom{m-2}{h-a-b}}{\binom mh},\qquad a,b\in\{0,1\},
+\]
+with infeasible binomial coefficients zero. Sum over $a<j,b\geq\ell$.
+Already assigned words have deterministic counts; when only one unassigned word is involved, use its
+binomial or hypergeometric marginal. A single remaining word has deterministic count $h$.
+All required probabilities can be cached by $(m,h)$ and the thresholds, separately for each source law.
+
+One can go further by deriving a likelihood envelope specifically for $E^-$, incorporating its count bounds
+into the support calculation. The present result does not need that extra work: it already makes the prior
+and the decision criterion improve the existing geometric bound together.
+
+\clearpage
+\subsection{What the new controlled comparison establishes}
+Use exactly the preceding 24 observations, message orders, refinement rule and exhaustive references.
+The table gives mean percentages of count hypotheses evaluated before certification:
+\begin{center}
+\begin{tabular}{@{}llrrrr@{}}\toprule
+Source & $\sigma^2$ & Cached / feasible & Cached / prior & Fresh / feasible & Fresh / prior\\\midrule
+IID & 0.05 & 13.54 & 12.90 & 3.22 & 3.00\\
+IID & 0.30 & 41.82 & 40.01 & 23.62 & 22.37\\
+IID & 1.00 & 54.75 & 54.57 & 43.11 & 43.11\\
+Distinct & 0.05 & 14.20 & 11.47 & 0.98 & 0.54\\
+Distinct & 0.30 & 45.80 & 42.77 & 22.46 & 20.67\\
+Distinct & 1.00 & 62.32 & 61.47 & 51.03 & 51.03\\\bottomrule
+\end{tabular}
+\end{center}
+``Feasible'' uses the direct negative-event feasibility penalty; ``prior'' uses
+\eqref{eq:prior-weighted-contrast}. ``Fresh'' takes up to eight new dual steps at each nonterminal node.
+The cached/prior variant uses 128 message scores per observation, versus group means of
+1,974--22,894 for fresh/prior. It additionally evaluates 930--4,052 cached residual-direction dot products
+on average across these groups. Thus fewer support scores are purchased with more branching and bound queries.
+All 120 runs, including a box-bound control, attain the exhaustive Bayes gain to the stated floating tolerance.
+These operation counts identify a tradeoff; a runtime advantage has not been established.
+
+The weighted-tree recurrence was checked on the same observations. For the omitted three-user block,
+the new bound divided by the old bound lies in these ranges:
+\begin{center}
+\begin{tabular}{@{}llrr@{}}\toprule
+Source & $\sigma^2$ & Minimum ratio & Maximum ratio\\\midrule
+IID & 0.05 & $1.97\,10^{-7}$ & $1.06\,10^{-4}$\\
+IID & 0.30 & 0.0524 & 0.5620\\
+IID & 1.00 & 0.5758 & 0.7042\\
+Distinct & 0.05 & $1.13\,10^{-6}$ & 0.00920\\
+Distinct & 0.30 & 0.2007 & 0.4336\\
+Distinct & 1.00 & 0.5365 & 0.6791\\\bottomrule
+\end{tabular}
+\end{center}
+Despite these improvements, the new sufficient bound still certifies \textbf{0 of 24} decisions.
+Summing the trees more accurately has not removed the remaining overcounting and worst-edge penalties.
+This result gives no justification for treating omitted connected groups as negligible.
+
+Reproduce this audit and the six-bank pair-storage census:
+\begin{quote}\small\ttfamily
+uv run python -m tests.polar\_exact\_reuse
+\end{quote}
+The full-alphabet pair contractions, two-user posterior, prior-event probabilities, reused support bounds and
+rooted-tree recurrence have separate finite checks. The large-bank table is a structural census, not a measured
+large-bank decoder run. Formal machine certificates still require rounding control.
+
+\clearpage
+\section{Identifiability on one pattern, through the first exact aliases}
+\label{sec:identifiability}
+Same-pattern collisions are common enough that they cannot be excluded as an implementation convenience.
+For IID messages a tagged user's pattern collides with probability $1-(1-1/P)^{K-1}$.
+For uniformly distinct full messages the exact probability is
+\[
+ 1-\frac{\binom{M-V}{K-1}}{\binom{M-1}{K-1}},
+\]
+with an impossible numerator event assigned probability zero. Different payloads can share the same pattern under
+either law.
+
+\subsection{Separate ambiguity of the encoder from difficulty of decoding}
+Suppose exactly two users share a \emph{known} pattern, other interference has been removed, and noise is zero.
+Assume every $e_{p,i}>0$. The receiver can invert insertion/scaling:
+\begin{equation}
+ t=D_p^{-1}S_p^T\big(\phi(p,v)+\phi(p,v')\big)=b(v)+b(v')\in\{-2,0,2\}^{N_c}.
+\end{equation}
+Let $d=v\oplus v'$. If $\ell_i^T$ denotes row $i$ of $L$, then
+\begin{equation}
+ t_i=0\ \Longleftrightarrow\ \ell_i^Td=1,\qquad
+ t_i/2=(-1)^{\ell_i^Tv}\quad\hbox{when }\ell_i^Td=0.
+ \label{eq:pair}
+\end{equation}
+The zero/nonzero pattern gives all bits of $Ld$. If $\operatorname{rank}_{\GF(2)}L=B_c$, it uniquely determines $d$.
+For $d\ne0$, let $L_0(d)$ contain the rows with $\ell_i^Td=0$. The remaining signs give the linear equations
+$L_0(d)v=c_0$. Since $L_0(d)d=0$, their rank is at most $B_c-1$.
+
+\begin{equation}
+ \boxed{\begin{gathered}
+ \text{The unordered pair is uniquely determined for difference }d\ne0\\
+ \Longleftrightarrow\quad \operatorname{rank}_{\GF(2)}L_0(d)=B_c-1.
+ \end{gathered}}
+ \label{eq:rank}
+\end{equation}
+If the rank equals $B_c-1$, the solutions are exactly $v$ and $v+d$, the two orderings of the same pair.
+If the rank is smaller, the solution affine space has more than two points and contains multiple unordered pairs
+with the same sum. For $d=0$, $t=2b(v)$ identifies the repeated payload by full rank of $L$.
+
+\textbf{New local certificate.} The current $32\times6$ effective generator with CRC8 has rank six.
+For all 63 nonzero $d$, the restricted rank is five. Independently enumerating all
+$\binom{64+1}{2}=2{,}080$ unordered payload pairs gives 2,080 distinct sign sums.
+Thus two messages on a fixed pattern have no exact sum alias for this selected code. Positive energy shaping
+does not change this conclusion: it is an invertible diagonal map on the pattern support.
+
+\textbf{What it does not establish.} Small energies can amplify noise after inversion. In a noisy mixture,
+recognizing exact zero coordinates is not a decoder. Unknown patterns, cross-pattern alternatives and distance
+to competing sums require additional analysis. The following extension settles the first same-pattern aliases,
+but does not justify a one-message-per-pattern model or certify the full $K$-user encoder.
+
+More generally, if two allowed count vectors satisfy $\Phi a=\Phi a'$, the likelihood cannot distinguish them at
+any SNR. Near aliases determine difficult noisy comparisons. Before assigning every error to approximate inference,
+use exact tiny-system posteriors and sum-distance diagnostics to distinguish these cases.
+
+\clearpage
+\subsection{Three messages remain identifiable; four do not}
+Continue with the selected $B_c=6,N_c=32$, CRC8 code and one known pattern.
+An exhaustive \emph{integer} sign-sum calculation gives:
+\begin{center}
+\begin{tabular}{@{}rrrr@{}}\toprule
+Payload count & Unordered multisets & Distinct sign sums & Ambiguous sum classes\\\midrule
+2 & 2,080 & 2,080 & 0\\
+3 & 45,760 & 45,760 & 0\\
+4 & 766,480 & 766,052 & 404\\\bottomrule
+\end{tabular}
+\end{center}
+At four users, 392 classes contain two multisets and 12 contain four; all other classes are singletons.
+Every one of the 832 ambiguous multisets contains four distinct payloads. The first ambiguity therefore occurs
+at four users under \emph{both} source laws, not merely because IID sampling permits repeated messages.
+
+One explicit equality, using decimal indices for the repository's six-bit payload vectors, is
+\begin{equation}
+ b(12)+b(15)+b(57)+b(58)
+ =b(20)+b(23)+b(33)+b(34).
+ \label{eq:four-user-alias}
+\end{equation}
+It is preserved by every fixed $A_p$, including all positive balanced energy choices in this investigation.
+It is not a floating point near-collision.
+
+\subsection{Why the equality holds: characters cannot distinguish these two cosets}
+Let $U$ be a binary linear subspace. Orthogonality on that subspace gives
+\[
+ \sum_{v\in a+U}\chi_g(v)
+ =\chi_g(a)\sum_{u\in U}\chi_g(u)
+ =\begin{cases}|U|\chi_g(a),&g\in U^\perp,\\0,&g\notin U^\perp.\end{cases}
+\]
+For the zero case, pair each $u$ with $u+u_0$ where $g^Tu_0=1$; their signs cancel.
+Consequently the two cosets $a+U$ and $a+d+U$ have identical observed character sums if and only if
+\begin{equation}
+ g^Td=0\quad\text{for every }g\in\mathcal G\cap U^\perp.
+ \label{eq:coset-alias}
+\end{equation}
+Here $U=\{0,3,53,54\}$ is the span of the binary vectors 3 and 53, $a=12$ and $d=24$.
+The two cosets are exactly the sets in \eqref{eq:four-user-alias}.
+Direct binary checks of the generator verify \eqref{eq:coset-alias}.
+This is an algebraic explanation of the alias, not just an enumeration result.
+
+More generally let $H_{\mathcal G}$ have entries $(H_{\mathcal G})_{g,v}=\chi_g(v)$.
+An integer difference $z=a-a'$ is an ambiguity precisely when
+$H_{\mathcal G}z=0$ and $\one^Tz=0$, with both count vectors allowed by the source law.
+Its positive and negative parts have the same mass. Minimizing that mass over nonzero feasible differences
+finds the first possible alias; for this code the minimum is four. Under distinct sampling the entries of a
+reduced difference are restricted to $\{-1,0,1\}$.
+This connects incomplete Walsh observations to a concrete integer-kernel question.
+
+\clearpage
+\subsection{Compute the irreducible risk, with the conditioning stated}
+Consider a separate noiseless experiment with exactly four users, all on one \emph{known} pattern, and payloads
+drawn uniformly from the 64 possibilities under either source law. Let
+$\mathcal A_s=\{a:H_{\mathcal G}a=s,\ \one^Ta=4\}$ be the compatible count class.
+An exact observation identifies the class, but its posterior within that class is only
+\begin{equation}
+ \Pr(a\mid s)=\frac{\beta(a)}{\sum_{a'\in\mathcal A_s}\beta(a')},
+ \qquad a\in\mathcal A_s.
+ \label{eq:noiseless-class}
+\end{equation}
+This remains the prior ratio between equal-signal hypotheses at every positive noise variance and every $y$.
+More computation cannot distinguish their identical likelihoods.
+
+All members of the ambiguous four-user classes have four distinct payloads, hence equal $\beta=1$ under both
+source laws. Within each class their payload sets are pairwise disjoint. A class of size $c$ therefore has
+posterior inclusion probability $1/c$ for each represented payload. The best four-occurrence output gains
+$4/c$ matches in expectation, giving conditional multiset risk $1-1/c$.
+Choosing one entire class member or mixing four supported payloads both attain this Bayes risk.
+
+The total risk numerator over unordered count states is
+\[
+ 392\cdot2\cdot\tfrac12+12\cdot4\cdot\tfrac34=428.
+\]
+Under IID draws each such four-distinct multiset has probability $4!/64^4$; under distinct draws it has
+probability $1/\binom{64}{4}$. Thus the exact Bayes risks in this conditional noiseless experiment are
+\begin{equation}
+ R_{\rm IID}^{(4,\ {\rm known}\ p)}
+ =\frac{4!\,428}{64^4}=0.0006122589\ldots,\qquad
+ R_{\rm dist}^{(4,\ {\rm known}\ p)}
+ =\frac{428}{\binom{64}{4}}=0.0006736169\ldots.
+ \label{eq:four-user-risk}
+\end{equation}
+These are not the full bank's measured PUPE, nor an estimate of the practical importance of four-way pattern
+collisions. The experiment conditions on all four users sharing a known pattern and supplies an exact signal.
+Unknown patterns and observation noise introduce additional uncertainty.
+
+The equality nevertheless embeds in larger systems: append the same other messages to both sides of
+\eqref{eq:four-user-alias}. Under distinct sampling those extra messages must respect the no-duplicate constraint.
+This proves the existence of larger ambiguous frames without claiming that they are common or dominate error.
+
+\textbf{Consequence for decoder research.} Exact inference must preserve the probability mass and count tails of
+all compatible explanations. A correct receiver can return a Bayes action while remaining uncertain about the
+transmitted multiset. The finding does not reopen encoder optimization here; it records a limitation of the
+frozen construction that no proposed exact or approximate decoder should be expected to remove.
+
+\clearpage
+\section{Exact reference changes, invariants and decision contrasts}
+\label{sec:synthesis}
+\subsection{The same dependence appears in two different representations}
+Several exact conclusions fit together: continuation-row proportionality, removable unary factors,
+message ambiguity and marked decision contrasts share common algebraic structure.
+The companion \path{docs/POLAR_DECODING_RESEARCH_LOG.md} records the synthesis and computational limits.
+The deductions here concern this model; they are not claims of new general mathematical techniques.
+
+Start with the positive Gaussian pair factor $b(u,v)=e^{-\phi(u)^T\phi(v)/\sigma^2}$. Dividing it by any
+positive $a(u)d(v)$ and multiplying the endpoint unary weights by $a$ and $d$ changes no configuration weight.
+Thus some apparent interaction can be reassigned exactly to individual-message evidence. The invariant is
+\begin{equation}
+ \log\frac{b(u,v)b(u',v')}{b(u,v')b(u',v)}
+ =-\frac{[\phi(u)-\phi(u')]^T[\phi(v)-\phi(v')]}{\sigma^2}.
+ \label{eq:cross-ratio}
+\end{equation}
+On a full positive rectangular table, every such ratio being one is equivalent to factorization into unary
+functions: fix one row and column and reconstruct every entry. Distinct-source zeros cannot be handled by
+taking their logarithms; those hard constraints remain unchanged.
+
+Now replace the endpoints by a partial signal $s$ and a legal future signal $t$. The same four-point expression
+is $-(s-s')^T(t-t')/\sigma^2$. Its vanishing for every future pair is precisely the continuation-row
+proportionality criterion of Section~\ref{sec:exact-reductions}. Thus pair dependence and retained continuation
+information are two views of the same interaction. A large Gram entry may include a removable common component;
+its magnitude alone does not measure irreducible dependence.
+
+\subsection{Choose the exact reference before judging a connected remainder}
+For any vector $m$, put $x_w=\phi(w)-m$ and define
+\begin{equation}
+ \nu_w^{(m)}\propto e^{[y-(K-1)m]^T\phi(w)/\sigma^2},\qquad
+ b^{(m)}(u,v)=e^{-x_u^Tx_v/\sigma^2}.
+ \label{eq:centred-reference}
+\end{equation}
+Keep the original distinct-message exclusions if applicable. Expanding the product's exponent shows that its
+unnormalized weight differs from the original by only $e^{-\binom K2\|m\|^2/\sigma^2}$. The posterior is identical.
+The physical codewords have not changed; the shifted $x_w$ are an algebraic representation, not a new encoder.
+
+The connected expansion may now use this reference. Its $f^{(m)}=b^{(m)}-1$, weighted tree sums and sufficient
+remainder bounds can differ. Under distinct sampling the hard zeros must be included when forming $f$, whose
+diagonal remains $-1$. For a fixed target $K$, freeze the chosen reference throughout the block recurrence;
+recomputing it for each smaller block size would invalidate the coefficient identity.
+
+A constructed example illustrates the distinction. Four unit vectors share a component of norm
+$\sqrt{1-.05^2}$ and have transverse directions $(.05,0),(0,.05),(-.05,0),(0,-.05)$. At $\sigma^2=.3$,
+the maximum original $|b-1|$ exceeds $.96$. Centering out their common component reduces it below $.009$
+without changing any posterior probability. The actual polar bank has full global variation span; this example
+does not establish a similarly useful center there. It shows why a failed sufficient bound at one reference
+does not rule out all references.
+
+The positive pair contraction remains available. With $d_w=e^{m^T\phi(w)/\sigma^2}$,
+\begin{equation}
+ B^{(m)}x=e^{-\|m\|^2/\sigma^2}D_dB(D_dx),\qquad D_d=\diag(d).
+ \label{eq:centred-operator}
+\end{equation}
+This adds only pointwise operations to a $B$ application, including the same distinct-source zeros. But
+$|B^{(m)}-1|$ is \emph{not} this diagonal scaling of $|B-1|$. Its old parity tables may need extra state or a
+different bound. Improved remainder size must therefore be assessed alongside contraction cost and numerical
+stability. Recentring leaves the four-point ratios in \eqref{eq:cross-ratio} unchanged.
+
+\clearpage
+\subsection{Known cardinality gives an exact count-factor reparameterization}
+Write $A=\Phi^T\Phi/\sigma^2$ and $l=\Phi^Ty/\sigma^2$. For any $\lambda\in\R^M$, put
+\[
+ A'=A-\lambda\one^T-\one\lambda^T,\qquad l'=l-K\lambda.
+\]
+For every legal count vector with $\one^Ta=K$,
+\[
+ l'^Ta-\tfrac12a^TA'a
+ =l^Ta-K\lambda^Ta-\tfrac12a^TAa+(\one^Ta)\lambda^Ta
+ =l^Ta-\tfrac12a^TAa.
+\]
+The source prior and posterior are unchanged. $A'$ need not be a physical positive-semidefinite Gram matrix;
+it represents the same finite count weights on the known-cardinality domain. This identity can expose
+removable pair contributions, but supplies neither a cheap choice of $\lambda$ nor permission to omit the
+remaining interactions. The notation does not require constructing a full $M$-by-$M$ table.
+
+\subsection{Joint interfaces control exact regional contraction}
+The K2/K3 solvers eliminate internal variables while retaining their joint boundary dependence. The census
+in Section~\ref{sec:three-user} shows that two neighbours can expose a whole payload. A smaller region need
+not have a smaller interface, and unknown patterns and occupancies remain summation variables. Exact
+conditional calculations with true patterns supplied would instead be oracle calculations. Discarding a
+boundary dependence is an additional assumption, treated in Report 9.
+
+\clearpage
+\subsection{Exact conditional identities inside ambiguous signal classes}
+Let $S=\Phi a$. Inside an exact equal-signal class $\mathcal A_s$, the likelihood is constant, so
+\begin{equation}
+ P(a\mid S=s,y)=\frac{\pi(a)}{\sum_{a'\in\mathcal A_s}\pi(a')}
+ =:p_0(a\mid s).
+ \label{eq:alias-conditional}
+\end{equation}
+These weights are independent of $y$: factorial weights under IID and uniform weights over legal count vectors
+under distinct sampling. The four-user aliases in Section~\ref{sec:identifiability} are concrete instances.
+An approximation that invents observation-based certainty within such a class breaks this exact constraint.
+
+Given any positive approximation $Q$, preserve its class mass but restore the correct conditional weights:
+$\bar Q(a)=Q_S(s)p_0(a\mid s)$. The KL chain rule gives
+\[
+ D(P\|Q)=D(P_S\|Q_S)+\E_{P_S}D(p_0(\cdot\mid S)\|Q(\cdot\mid S)),
+\]
+and the analogous decomposition for $D(Q\|P)$. The second term vanishes after this correction. Consequently
+neither KL direction increases, and
+\[
+ \operatorname{TV}(P,\bar Q)=\operatorname{TV}(P_S,Q_S)\leq\operatorname{TV}(P,Q).
+\]
+This does not guarantee a better Bayes allocation on every observation: distributional error and the sign of a
+particular decision contrast are different quantities. Finding complete alias classes may itself be expensive.
+Known disjoint groups of equal-signal configurations can enforce the same local conditional rule without
+claiming that all full-bank aliases have been enumerated.
+
+For a count-tail contrast $H$, the exact signal-level observable is
+$\bar H(s)=\E_{p_0(\cdot\mid s)}H(a)$, and $\E_PH=\E_{P_S}\bar H(S)$. A class with zero conditional contrast
+contributes zero to that comparison's numerator. This connects identity-preserving markers with decision-focused
+compression; selecting an arbitrary representative identity would not preserve the observable.
+
+Slot permutations give a separate simplification. Averaging a slot approximation over all user permutations
+preserves its count distribution and hence every multiset decision. It removes artificial slot labels but
+cannot correct a wrong count law. Restoring equal-signal conditionals can change counts because different
+multisets may have the same signal. These two symmetries should not be conflated.
+
+\subsection{Exact reweighting of decision contrasts}
+On common legal support, write $P=QR/\E_QR$. For any competing-copy contrast $H$,
+\begin{equation}
+ \E_PH-\E_QH=\frac{\operatorname{Cov}_Q(H,R)}{\E_QR}
+ =\int_0^1\operatorname{Cov}_{Q_t}(H,\log R)\,dt,
+ \quad Q_t\propto Q R^t.
+ \label{eq:combined-sensitivity}
+\end{equation}
+The integral follows by differentiating a normalized finite sum. It generalizes the closing-edge identity;
+computing it may still be expensive. A small derivative at $t=0$ alone is not a bound on the whole change.
+
+If $R=R_1R_2$, corrections telescope under successively updated distributions, not under one fixed $Q$.
+For independent uniform $U,V\in\{-1,1\}$, take $H=UV$, $R_1=1+U/2$, $R_2=1+V/2$. Either factor alone leaves
+$\E H=0$; together they give $\E H=1/4$. Thus separate screening can miss a combined effect. Support deletion
+requires an omitted-mass argument first; the positive same-support interpolation does not cover it directly.
+
+\clearpage
+\section{Exact-stage status and retained verification record}
+The fixed known-$K$ model has a complete finite decoder from observation to multiset output, a proof of
+minimum posterior expected PUPE and independent finite evaluations. Optimality is relative to the stated
+source law and loss; noise and exact encoding ambiguity still permit errors.
+
+Historical mathematical checks are indexed below. They are retained evidence, not a request to run another
+suite or a substitute for the derivations. The 16 October separation of exact and approximate work adds no
+implementation, decoder test or performance experiment.
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}lY@{}}\toprule
+Module suffix in \texttt{tests/} & Exact scope retained in this report\\\midrule
+\texttt{polar\_posterior\_test} & Count/slot equivalence, priors, Bayes loss, conditional polar interface and pair identifiability\\
+\texttt{polar\_exact\_inference\_test} & Residual/inside--outside counts, identity-preserving merging and exact decision certificates\\
+\texttt{polar\_alternative\_inference\_test} & Fourier, joint elimination and complete connected expansion\\
+\texttt{polar\_exact\_reductions\_test} & Sufficient states, completion bounds, exact spans and aliases\\
+\texttt{polar\_exact\_computation\_test} & Compatible schedules, mixed-state obstruction and certified search\\
+\texttt{polar\_exact\_reuse\_test} & Reused bounds, adverse prior masses, pair operators and rooted trees\\
+\texttt{polar\_three\_user\_test} & Full K3 counts, joint parity quotients and the cycle/clique boundary\\
+\texttt{polar\_synthesis\_test} & Exact recentering, alias conditionals, symmetry and reweighting identities\\\bottomrule
+\end{tabularx}
+\end{center}
+Some preserved modules also contain checks of the removed approximation formulations. Those checks do not
+extend this report's scope. Commands, finite fixtures and structural audit records live in
+\path{docs/EXPERIMENT_BANK.md}. Floating checks are not outward-rounded machine certificates.
+
+\textbf{The broad exact-derivation phase is complete.} Available constructions expose substantial exact
+structure but no established tractable full-system decoder. This is not a universal impossibility theorem.
+Further exact work is useful when it resolves a specific bottleneck encountered in algebraic approximation
+design. A general K4 expansion or another open-ended exact survey is not a prerequisite.
+
+\textbf{Separate approximation study.} Report 9, \path{09_polar_bayesian_approximations.tex/pdf}, owns
+assumptions, their algebraic motivation, computational benefit and associated error control. The Bayes
+count-tail objective remains fixed. No approximation family is selected here. Unknown $K$, fading and
+changes to the source or loss require explicit extensions of the present contract.
+
+\clearpage
+\section*{Sources, provenance and implementation boundary}
+This report replaces \texttt{07\_polar\_d2\_inference.tex/pdf} rather than extending its D2-first organization.
+The first shared discussion motivated the common-posterior starting point:
+\href{https://chatgpt.com/share/6acb8c8b-7708-83eb-a1de-175361ec21a9}{Polar decoder derivation comparison}.
+The later \href{https://chatgpt.com/share/6acc145d-52dc-83eb-bc9e-bd31e185960c}{exact-inference discussion}
+motivated continuing the residual recursion before choosing approximations. Its expected-count readout applies to
+the old membership loss; this extension instead derives the count distributions needed by the corrected loss.
+These links record discussion provenance, not authority for the mathematical claims. Equations here were derived for the
+repository's encoder and sampling/metric conventions and checked as described above.
+
+Report 8 supplies the balancing construction. The current model was checked against
+\path{baselines/polar.py}, \path{baselines/odma_polar.py},
+\path{framework/polar_mapping.py} and \path{benchmarks/polar_energy_geometry.py}.
+The retained D2 comparison was checked against \path{framework/learned_decoders.py}.
+The working reasoning and corrections are in \path{docs/POLAR_DECODING_RESEARCH_LOG.md}.
+The finite certificate modules are historical implementation evidence. The 16 October revision separates
+approximation design from this exact record; no encoder, decoder, training, HPC or test code is changed.
+
+\begin{thebibliography}{9}
+\setlength{\itemsep}{0.6em}
+\bibitem{arikan} E. Ar{\i}kan, \emph{Channel Polarization: A Method for Constructing Capacity-Achieving Codes for
+Symmetric Binary-Input Memoryless Channels}, IEEE Transactions on Information Theory, 2009.
+\href{https://arxiv.org/abs/0807.3917}{arXiv:0807.3917}.
+\bibitem{tal} I. Tal and A. Vardy, \emph{List Decoding of Polar Codes}, IEEE Transactions on Information Theory,
+2015; preprint 2012. \href{https://arxiv.org/abs/1206.0050}{arXiv:1206.0050}.
+\bibitem{wainwright} M. J. Wainwright and M. I. Jordan, \emph{Graphical Models, Exponential Families, and
+Variational Inference}, 2008, especially Sec.~2.5 on exact elimination and junction trees.
+\href{https://people.eecs.berkeley.edu/~jordan/sail/readings/wainwright-jordan-fnt.pdf}{Authors' manuscript}.
+\bibitem{pulvirenti} E. Pulvirenti and D. Tsagkarogiannis, \emph{Cluster expansion in the canonical ensemble},
+2011 preprint. \href{https://arxiv.org/abs/1105.1022}{arXiv:1105.1022}.
+Cited for the classical connected-expansion context; its convergence theorem is not applied to this decoder.
+\end{thebibliography}
+\end{document}

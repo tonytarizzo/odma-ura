@@ -24,6 +24,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .metrics import PUPE_VERSION
+
 
 def _canonical(obj: Any) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), default=_default)
@@ -69,7 +71,10 @@ def load_cache(path: str | Path) -> dict[str, dict]:
 
 def lookup(cache: dict[str, dict], scenario_cfg: dict, decoder: str,
            decoder_params: dict, seed: int) -> dict | None:
-    return cache.get(hash_key(scenario_cfg, decoder, decoder_params, seed))
+    row = cache.get(hash_key(scenario_cfg, decoder, decoder_params, seed))
+    if row is not None and row.get("metrics", {}).get("pupe_metric_version", 1) != PUPE_VERSION:
+        return None
+    return row
 
 
 def make_row(scenario_cfg: dict, decoder: str, decoder_params: dict,

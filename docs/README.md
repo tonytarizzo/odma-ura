@@ -1,46 +1,55 @@
-# Research Documentation
+# Research documentation
 
-Start with [CURRENT_STATE.md](CURRENT_STATE.md) for the research question, evidence and open decisions.
-Use [EXPERIMENT_BANK.md](EXPERIMENT_BANK.md) for dated job status and links to exact contracts. The handoff is the live
-research summary; the ledger is the experiment index, not a second roadmap.
+There are five working documents for the current polar decoder study:
 
-## Meeting summary
+| Document | Owns |
+|---|---|
+| [Current state](CURRENT_STATE.md) | Fixed Bayes problem, completed foundations, decoder catalogue and all thirteen common-harness implementations. |
+| [Experiment bank](EXPERIMENT_BANK.md) | Each script's question, corresponding algebra, setup, controls, results and reproduction command. |
+| [Exact research log](POLAR_DECODING_RESEARCH_LOG.md) | Deductions, corrections, computational accounting and the decision to close the broad exact investigation. |
+| [Approximation research log](POLAR_APPROXIMATION_LOG.md) | Derivations, limitations and completion audit for the approximation study; no empirical branch rankings. |
+| [Decoder design log](POLAR_DECODER_DESIGN_LOG.md) | Composition questions, closure proofs, decoder families and the implementation/verification record. |
 
-[7 October 2026: evidence and next steps](reports/2026-10-07_supervisor_meeting/report.pdf) is the concise supervisor
-report covering matched published-codebook comparisons, both bounds, generated encoders and the decoder ladder.
-Its [folder](reports/2026-10-07_supervisor_meeting/README.md) contains LaTeX, curated figures and a reproducible snapshot.
-It freezes the 6 October evidence; subsequent research decisions belong in the current handoff.
+The decoder study has three separate reports:
 
-## Technical history
+| Report | Owns |
+|---|---|
+| [7. Exact Bayesian decoding](reports/07_polar_decoding_from_posterior.pdf) ([source](reports/07_polar_decoding_from_posterior.tex)) | Exact posterior/decision, representations, identities, reductions, obstructions and certified decisions. The broad exact phase is complete for the fixed known-K contract. |
+| [9. Bayesian approximation algebra](reports/09_polar_bayesian_approximations.pdf) ([source](reports/09_polar_bayesian_approximations.tex)) | Approximation derivations and completion audit for A–T: certified polar inner queries and a convergent residual hierarchy, field geometry/integration, variational references, signed contractions, robust guided branches and a low-order moment obstruction. Preserves the earlier contraction, sampling and decision-query paths with explicit combination errors and costs. Ready for implementation specification; no receiver implementation or empirical ranking. |
+| [10. Complete decoder options](reports/10_polar_decoder_designs.pdf) ([source](reports/10_polar_decoder_designs.tex)) | One exact reference family and thirteen decoder families, with high-level explanations, complete discovery/inference/count decisions, variations and coverage of Reports 7/9. Adds product-law top-word discovery, exact auxiliary-field joint correction and finite prefix/tempered particle-batch guarantees. The report records the design-stage mathematics; subsequent implementations and measurements are recorded separately below. |
 
-Read these for the derivation or the reason for a past decision. They are chronological records, not competing
-current plans. Dates, local checks and proposed experiments describe their stage; Reports 5/6 predate the completed
-031–033 analysis. Report 7 develops the current polar/D2 question. Consult the ledger for subsequent outcomes.
+[Report 8](reports/08_polar_energy_geometry.pdf) defines and analyzes the frozen balanced encoder.
+The Bayes count-tail objective stays fixed across all three decoder reports.
+The [035 shared harness](../jobs/035_polar_decoders/README.md) implements REF, all thirteen DEC families
+and D2/ODMA controls, with paired frames, PUPE/runtime plots and a complete 90-job CPU array capped
+at four simultaneous two-CPU jobs. Each family has one declared finite variant; this does not claim every Report-10 variation is implemented.
+The reports retain their design-stage claims; new measurements belong to the log and experiment bank.
+Old approximation catalogues and empirical rankings are no longer active documents.
+
+The [PUPE metric record](PUPE_METRIC.md) separately owns the 11 October correction, output-budget conventions
+and historical-result migration. It is not another roadmap. Tests remain in tests/; the experiment bank is
+the primary index for polar research, while [tests/README.md](../tests/README.md) covers the wider repository.
+
+## Earlier technical history
 
 | Report | Scope |
 |---|---|
-| [1. Initial ODMA decoding](reports/01_initial_odma_decoding.pdf) | Signal model, BP/EP equations, early variants and transition to global recovery. |
-| [2. Support-recovery bottleneck](reports/02_support_recovery_bottleneck.pdf) | Global count posterior, classical decoder algebra, dense/ODMA comparisons and oracle-support controls. |
-| [3. Factorised encoder framework](reports/03_factorised_encoder_framework.pdf) | Explicit M=2^B model, implicit operators, gradients and jobs 018–022. |
-| [4. Sectioned framework](reports/04_scalable_sectioned_framework.pdf) | Outer code, exact energy, local inference, association and the failures in jobs 023–026. |
-| [5. Generated sparse codebooks](reports/05_hash_skeleton_generator.pdf) | Hash-support algebra, coordinate amplitudes, initialization and the original 031 test design. |
-| [6. Decoder ladder](reports/06_decoder_ladder.pdf) | D0–D4 algebra, approximations, complexity and the candidate-search boundary. |
-| [7. Polar structure and D2 inference](reports/07_polar_d2_inference.pdf) | D2 derivation, exact polar matrix identities, soft decoding, related multiuser work and the two Job 034 encoder tests. |
+| [1. Initial ODMA decoding](reports/01_initial_odma_decoding.pdf) | Signal model, BP/EP and the transition to global recovery. |
+| [2. Support-recovery bottleneck](reports/02_support_recovery_bottleneck.pdf) | Global posterior, classical decoders and dense/ODMA oracle-support evidence. |
+| [3. Factorised encoder framework](reports/03_factorised_encoder_framework.pdf) | Explicit M=2^B algebra, implicit operators, gradients and jobs 018–022. |
+| [4. Sectioned framework](reports/04_scalable_sectioned_framework.pdf) | Outer code, energy, local inference, association and jobs 023–026 failures. |
+| [5. Generated sparse codebooks](reports/05_hash_skeleton_generator.pdf) | Hash supports, coordinate amplitudes and the original 031 design. |
+| [6. Decoder ladder](reports/06_decoder_ladder.pdf) | D0–D4, uncertainty approximations and the candidate-search boundary. |
 
-Each report has adjacent .tex source; report_style.tex is the shared preamble. The September revision restored
-derivations from retained implementations, ledgers and recovered passages, not byte-for-byte original documents.
-Keep historical failures and oracle assumptions visible rather than rewriting history around a new direction.
+Reports 1–6 retain their historical assumptions and proposed experiments. Report 7 replaced the old D2-first
+report on 11 October; Report 8 followed Job 034. The September restoration recovered derivations from retained
+code/ledgers/passages, not byte-for-byte original documents. Each PDF has adjacent source and shares report_style.tex.
 
-## Detailed evidence and operation
+Detailed evidence remains in [Results 03](../results/03_results.md) (jobs 001–017),
+[Results 04](../results/04_results.md) (framework/sectioned/hash studies), individual job READMEs/manifests and
+the local [HPC notes](../jobs/README.md). The [conditioned-inference brief](archive/conditioned_inference_brief.md)
+is a historical proposal. Older research is retained for reproduction, without competing current plans.
 
-- [Results 03](../results/03_results.md): jobs 001–017, dense/ODMA sweeps and oracle-support evidence.
-- [Results 04](../results/04_results.md): jobs 018–031, derivations, local checks and historical artifact audits.
-  Later 031–033 outcomes are indexed in the [experiment ledger](EXPERIMENT_BANK.md).
-- Individual job READMEs: exact manifests, training/evaluation contracts, submission and merge commands.
-- [HPC notes](../jobs/README.md): private cluster workflow; intentionally not versioned.
-- [Tests](../tests/README.md): implementation checks and executable analysis tools.
-- [Archived conditioned-inference brief](archive/conditioned_inference_brief.md): theory proposal, not an active paper plan.
-
-Distinguish exact algebra/regression equivalence, measured results, interpretations and untested hypotheses.
-Compact generation, isolated-message injectivity and scalable multiuser decoding are separate claims. Raw outputs
-stay in jobs/ and results/; curated report figures are the explicitly retained presentation exception.
+The 15–16 October cleanup consolidated overlapping companions, separated exact and approximate reports,
+and reset the approximation study to algebra. Historical scripts, codebooks and existing outputs are unchanged;
+pre-reset approximation drivers have a short parked index in the experiment bank.

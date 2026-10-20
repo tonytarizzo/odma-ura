@@ -13,6 +13,25 @@ from scipy.stats import t as student_t
 
 from .ura_bounds import reference_curves
 from .ura_comparison import DEFAULTS
+from src.metrics import LEGACY_PUPE_DEFINITION, PUPE_DEFINITION
+
+
+def pupe_definition(results):
+    """Keep historical summaries readable, but never pool them with corrected scores."""
+    definitions = set()
+    for result in results:
+        for cell in result["evaluation"]:
+            version = cell["means"].get("pupe_metric_version", 1)
+            if version not in (1, 2):
+                raise ValueError(f"Unknown PUPE metric version: {version}")
+            inferred = PUPE_DEFINITION if version == 2 else LEGACY_PUPE_DEFINITION
+            declared = cell.get("pupe_definition", result.get("pupe_definition", inferred))
+            if declared != inferred:
+                raise ValueError("Inconsistent PUPE definition and metric version")
+            definitions.add(declared)
+    if len(definitions) != 1:
+        raise ValueError("Cannot combine different PUPE definitions; re-evaluate legacy results separately")
+    return definitions.pop()
 
 
 def family_label(config):
@@ -48,6 +67,7 @@ def load_results(manifest, root, allow_incomplete=False):
     if missing and not allow_incomplete:
         raise ValueError(f"Missing {len(missing)}/{len(rows)} rows: {', '.join(missing[:12])}")
     if not results: raise ValueError("No completed results")
+    definition = pupe_definition(results)
     # Different source code or sample budgets should not quietly become one comparison.
     fingerprints = {json.dumps(result["source_sha256"], sort_keys=True) for result in results}
     if len(fingerprints) > 1: raise ValueError("Results use different source versions; audit them before merging")
@@ -69,10 +89,12 @@ def load_results(manifest, root, allow_incomplete=False):
     if any(len(hashes) != 1 for hashes in matrices.values()):
         raise ValueError("Fixed/joint or decoder variants do not share the same initial encoder")
     return results, {"expected": len(rows), "completed": len(results), "missing": missing,
+                     "pupe_definition": definition,
                      "status": "partial" if missing else "complete"}
 
 
 def select_profiles(results, audit):
+    definition = pupe_definition(results)
     if audit["missing"]: raise ValueError("Do not select profiles from an unfinished tuning pilot")
     grouped = defaultdict(list)
     for result in results:
@@ -87,12 +109,13 @@ def select_profiles(results, audit):
         choices[key] = {"baseline_params": config["baseline_params"], "pilot_name": config["name"],
                         "selection_mean_pupe": score, "selection_seed": config["seed"],
                         "runner_up_mean_pupe": values[1][0] if len(values)>1 else None,
-                        "criterion": "mean duplicate-tolerant PUPE across predeclared pilot cells",
+                        "criterion": f"mean {definition} PUPE across predeclared pilot cells",
                         "all_profiles": [{"name": c["name"], "mean_pupe": s, "params": c["baseline_params"]} for s, c in values]}
     return {**audit, "profiles": choices, "warning": "Small-B tuning, not published-curve verification"}
 
 
 def aggregate(results):
+    definition = pupe_definition(results)
     grouped = defaultdict(list)
     for result in results:
         c = result["config"]
@@ -104,7 +127,7 @@ def aggregate(results):
         if len({seed for seed, _ in values}) != len(values): raise ValueError("Duplicate seed for an aggregate cell")
         point = dict(zip(("B", "n", "sampling", "family", "mode", "decoder", "K", "ebn0_db"), key))
         means = np.array([cell["means"]["pupe"] for _, cell in values])
-        point.update(pupe=float(means.mean()), seeds=[seed for seed, _ in values],
+        point.update(pupe=float(means.mean()), pupe_definition=definition, seeds=[seed for seed, _ in values],
                      seed_values=means.tolist(), frames=sum(cell["frames"] for _, cell in values),
                      mean_seconds=float(np.mean([cell["decoder_seconds_per_frame"] for _, cell in values])))
         if len(means) > 1:
@@ -122,6 +145,9 @@ def plot_panel(points, curves, title, out_path, bounds, metric="pupe"):
     chosen = [p for p in points if (p["family"], p["mode"], p["decoder"]) in curves]
     loads = sorted({p["K"] for p in chosen})
     if not loads: return
+    definitions = {p.get("pupe_definition", LEGACY_PUPE_DEFINITION) for p in chosen}
+    if len(definitions) != 1: raise ValueError("Cannot plot mixed PUPE definitions")
+    pupe_label = "Multiset PUPE" if definitions == {PUPE_DEFINITION} else "Legacy membership PUPE"
     fig, axes = plt.subplots((len(loads)+1)//2, min(2, len(loads)), figsize=(11, 3.7*((len(loads)+1)//2)), squeeze=False)
     colors = plt.get_cmap("tab10")
     for ax, k in zip(axes.flat, loads):
@@ -140,7 +166,7 @@ def plot_panel(points, curves, title, out_path, bounds, metric="pupe"):
             ref = reference_curves(b, n, k, xs, distinct=sampling == "distinct")
             ax.plot(xs, ref["polyanskiy_achievability"], "k--", linewidth=1, label=ref["achievability_label"])
         ax.set(title=f"K={k}", xlabel="Physical Eb/N0 (dB)",
-               ylabel="PUPE" if metric == "pupe" else "True-message candidate recall", ylim=(-.02, 1.02))
+               ylabel=pupe_label if metric == "pupe" else "True-message candidate recall", ylim=(-.02, 1.02))
         ax.grid(alpha=.2)
     for ax in list(axes.flat)[len(loads):]: ax.set_visible(False)
     handles, labels = axes.flat[0].get_legend_handles_labels()

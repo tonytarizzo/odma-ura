@@ -20,6 +20,8 @@ def main():
     args = parser.parse_args()
     rows = [json.loads(line) for line in Path(__file__).with_name("manifest.jsonl").read_text().splitlines()]
     if not 1 <= args.index <= len(rows): parser.error(f"index must be in 1..{len(rows)}")
+    if rows[args.index - 1]["family"] == "polar_mixer":
+        parser.error("Mixer training is retired. Historical rows 7-12 remain auditable; replay at revision 9d51cd8.")
     if not args.selected.is_file(): parser.error(f"Missing original pilot selection: {args.selected}")
     resolve = runpy.run_path(str(ROOT / "jobs/033_matched_d2/run_row.py"))["resolve_config"]
     config = resolve(rows[args.index - 1], json.loads(args.selected.read_text()))

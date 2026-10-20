@@ -60,8 +60,11 @@ class MatchedD2Tests(unittest.TestCase):
         module = runpy.run_path("jobs/033_matched_d2/merge.py")
         changes, audit = module["AUDITED_CHANGES"], module["audit_source_change"]
         old = {path: pair[0] for path, pair in changes.items()}
-        new = {path: hashlib.sha256(Path(path).read_bytes()).hexdigest() for path in changes}
+        new = {path: pair[1] for path, pair in changes.items()}
         self.assertEqual(audit(old, new), changes)
+        current = {path: hashlib.sha256(Path(path).read_bytes()).hexdigest() for path in changes}
+        # The PUPE correction must not be admitted by the historical no-metric-change audit.
+        with self.assertRaises(ValueError): audit(old, current)
         self.assertEqual(audit(old, old), {})
         with self.assertRaises(ValueError): audit(old, {**new, "unreviewed.py": "new"})
         with self.assertRaises(ValueError): audit(old, {**new, "benchmarks/ura_comparison.py": "unreviewed"})

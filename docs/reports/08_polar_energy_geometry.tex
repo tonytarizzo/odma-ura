@@ -1,0 +1,284 @@
+\documentclass[10pt,a4paper]{article}
+\newcommand{\ReportShortTitle}{Why polar energy shaping helps}
+\input{report_style.tex}
+\newcommand{\E}{\mathbb E}
+\newcommand{\tr}{\operatorname{tr}}
+\newcommand{\GF}{\operatorname{GF}}
+\begin{document}
+{\LARGE\bfseries Why polar energy shaping helps}\par
+{\large From a learned correction to a testable geometric explanation}\par
+{\color{muted}10 October 2026 --- Job 034 follow-up; companion to Report 7}
+
+\textbf{Result to explain.} With unchanged full-alphabet D2, learned symbol energies bring ODMA--polar close to
+fixed dense codebooks. Full-grid mean PUPE at $B=12/14$ is $0.17116/0.28776$, versus fixed polar
+$0.18346/0.29620$ and dense $0.17290/0.28526$. These are three-seed, distinct-message means, not an equivalence proof.
+We derive the balancing correction, identify the structure it cannot remove, and distinguish a geometric certificate
+from a decoding claim. No new receiver or production training is introduced here.
+
+\section{The encoder and its exact second moment}
+Split $w=(p,v)$ into $B_p$ placement bits and $B_c$ coded-payload bits. Put $P=2^{B_p}$, $V=2^{B_c}$ and $M=PV$.
+The linear CRC/polar generator $L\in\GF(2)^{N_c\times B_c}$ produces the sign vector
+\begin{equation}
+ b_i(v)=(-1)^{\ell_i^T v},\qquad
+ \phi(p,v)=S_pD_pb(v),\qquad D_p=\diag(\sqrt{e_p}),\quad \sum_i e_{p,i}=1.
+ \label{eq:encoder}
+\end{equation}
+Here $\ell_i^T$ is row $i$ of $L$; $S_p\in\R^{n\times N_c}$ inserts symbols at distinct positions $r(p,i)$.
+Thus $S_p^TS_p=I$, and every waveform has energy one. The learnable bank $e$ has shape $P\times N_c$,
+not $N_c\times M$. The current implementation uses $e_p=\operatorname{softmax}(\theta_p)$, so energies are positive.
+Polar bits and placements remain fixed. The explicit reference is
+\begin{equation}
+ \Phi=[S_1D_1B_{\rm pol}\ \cdots\ S_PD_PB_{\rm pol}]\in\R^{n\times M},\qquad
+ B_{\rm pol}=[b(v)]_v\in\R^{N_c\times V},\qquad y=\Phi a^\star+z.
+\end{equation}
+The count vector $a^\star$ sums to the known activity $K$; the real noise is $z\sim\mathcal N(0,\sigma^2I)$.
+
+For a uniform payload, a nonzero binary linear function is zero or one equally often. Consequently,
+\begin{equation}
+ Q_{ij}:=\E_v[b_i(v)b_j(v)]
+ =\E_v[(-1)^{(\ell_i\oplus\ell_j)^Tv}]
+ =\begin{cases}1,&\ell_i=\ell_j,\\0,&\ell_i\ne\ell_j.\end{cases}
+ \label{eq:Q}
+\end{equation}
+So repeated generator rows mean \emph{identical symbol functions}, not merely correlated samples. We can compute
+the whole codebook's normalized frame operator without enumerating payloads:
+\begin{equation}
+ \boxed{C:=\frac1M\Phi\Phi^T=\frac1P\sum_p S_pD_pQD_pS_p^T},\qquad \tr C=1.
+ \label{eq:C}
+\end{equation}
+$C$ is an uncentered second moment, not generally a covariance. Its diagonal is particularly simple:
+\begin{equation}
+ C_{rr}=\frac{q_r}{P},\qquad q_r=\sum_{p,i:\,r(p,i)=r}e_{p,i}.
+ \label{eq:rows}
+\end{equation}
+Unit energy fixes each \emph{column} of $\Phi$; balanced $q_r$ fixes total energy across its \emph{rows}.
+They are different conditions. Current sizes are $n=256,N_c=32,B_c=6$, with $P=64/256$ at $B=12/14$.
+
+\textbf{Computation and checks.} After forming $L,Q$, moments cost $O(PN_c^2+n^2)$ with no $2^{B_c}$ table;
+balancing costs $O(PN_c+n)$ per iteration. The pattern bank still scales as $2^{B_p}$, so keep $B_p$ bounded when
+discussing large $B$. Encoding costs $O(N_c\log N_c+n)$ with dense waveform output; D2 still keeps $2^B$ states.
+\texttt{benchmarks/polar\_energy\_geometry.py} computes the diagnostics. Regression tests verify explicit-matrix
+agreement, the analytic gradient, balancing constraints and the known-$K$ covariance identity below.
+
+\clearpage
+\section{Why balancing is relevant to D2}
+Let $G=\Phi^T\Phi$. For unit columns, D2's scalar statistic has the exact decomposition
+\begin{equation}
+ t_j=\phi_j^T(y-\Phi\widehat a)+\widehat a_j
+ =a_j^\star+\sum_{k\ne j}G_{jk}(a_k^\star-\widehat a_k)+\phi_j^Tz.
+\end{equation}
+If the other errors were zero-mean, uncorrelated and of common variance $\nu$, the interference variance would be
+$\nu\sum_{k\ne j}G_{jk}^2$. D2 approximates this with the mean posterior variance; learned scaling and damping then
+adjust it. Exact-$K$ dependence, unequal uncertainties and observation reuse prevent this from being exact inference.
+
+Nevertheless, its average geometric interference factor has an exact identity:
+\begin{align}
+ \frac1M\sum_j\sum_{k\ne j}G_{jk}^2
+ &=\frac{\|\Phi^T\Phi\|_F^2-M}{M}=M\tr(C^2)-1\\
+ &=\frac Mn-1+M\left\|C-\frac{I}{n}\right\|_F^2.
+ \label{eq:risk}
+\end{align}
+Since $\tr C=1$, the lower bound is $M/n-1$, attained exactly when $C=I/n$. This is the unit-norm tight-frame
+criterion underlying the classical frame potential~\cite{frame}. It is an optimum of \emph{average squared
+correlation}, not of PUPE. All remaining questions depend on that distinction.
+
+For interpretation, use the dimensionless defect
+\begin{equation}
+ \boxed{\Delta:=n\left\|C-\frac{I}{n}\right\|_F^2
+ =\underbrace{n\sum_r(C_{rr}-1/n)^2}_{\Delta_{\rm row}}
+ +\underbrace{n\sum_{r\ne s}C_{rs}^2}_{\Delta_{\rm off}}.}
+ \label{eq:split}
+\end{equation}
+The first term is exactly the squared coefficient of variation of row energies. The second records correlations
+between physical coordinates. Balancing removes the first term; it does not automatically remove the second.
+The participation measure used in the result review is $1/\tr(C^2)=n/(1+\Delta)$, not the literal matrix rank.
+
+\textbf{A precise conditional equivalence.} If every row of $L$ is distinct, then $Q=I$ and $C$ is diagonal.
+If the support admits balanced positive energies, setting $q_r=P/n$ therefore gives $C=I/n$ exactly.
+The structured encoder then attains the unrestricted tight-frame minimum in \eqref{eq:risk}. This is a useful
+formal statement, but it neither makes its Gram matrix equal to a dense codebook's nor makes decoding equivalent.
+
+\textbf{Our current code does not satisfy that premise.} The effective $32\times6$ generator has 29 distinct
+rows, including one zero row. For $r\ne s$, \eqref{eq:C} gives
+\begin{equation}
+ C_{rs}=\frac1P\sum_{p,i\ne j:\,r(p,i)=r,\,r(p,j)=s}
+     \sqrt{e_{p,i}e_{p,j}}\,\mathbf1\{\ell_i=\ell_j\}\ \geq 0.
+ \label{eq:duplicates}
+\end{equation}
+With strictly positive energies, a repeated row creates a positive off-diagonal contribution which other patterns
+cannot cancel in this family. Thus exact $C=I/n$ is impossible here at finite logits. Allowing some energies to vanish
+can remove individual contributions but changes the effective code and may damage distances; it is not a free fix.
+This is a statement about the selected small-payload construction, not about all polar codes or large $B$.
+
+\clearpage
+\section{Deriving the deterministic correction}
+Treat each allowed placement $(p,i)$ as an edge joining pattern $p$ to resource $r(p,i)$. We want
+\begin{equation}
+ e_{p,i}\geq0,\qquad \sum_i e_{p,i}=1,\qquad
+ \sum_{p,i:\,r(p,i)=r}e_{p,i}=\frac Pn.
+ \label{eq:marginals}
+\end{equation}
+These are linear constraints: unit mass per pattern and equal total mass per channel coordinate. Among all feasible
+allocations, choose the one nearest the original uniform profile $e^0_{p,i}=1/N_c$ in generalized KL divergence:
+\begin{equation}
+ \min_{e\text{ satisfying }\eqref{eq:marginals}}
+ \sum_{p,i}\left[e_{p,i}\log\frac{e_{p,i}}{e^0_{p,i}}-e_{p,i}+e^0_{p,i}\right].
+ \label{eq:KL}
+\end{equation}
+This is a strictly convex problem on a convex feasible set, so its energy solution is unique when feasible.
+For an interior solution the Lagrangian derivative is
+\begin{equation}
+ \log(e_{p,i}/e^0_{p,i})+\alpha_p+\beta_{r(p,i)}=0,
+ \qquad e_{p,i}=e^0_{p,i}\,u_pv_{r(p,i)},
+ \label{eq:scale}
+\end{equation}
+with positive scaling factors $u,v$. This motivates alternating two exact marginal corrections:
+\begin{equation}
+ e_{p,i}\ \leftarrow\ e_{p,i}\frac{P/n}{q_{r(p,i)}},
+ \qquad
+ e_{p,i}\ \leftarrow\ \frac{e_{p,i}}{\sum_j e_{p,j}}.
+ \label{eq:ipf}
+\end{equation}
+This is iterative proportional fitting, or matrix scaling on the allowed edges~\cite{csiszar}.
+Starting at $e^0$, it preserves the multiplicative form \eqref{eq:scale}. A positive converged solution satisfies
+both the constraints and the stationarity equations, hence solves \eqref{eq:KL}. With a strictly positive feasible
+allocation, the standard alternating-projection result applies. Boundary solutions need separate care.
+
+\textbf{Feasibility is not automatic.} Every resource must be covered, but coverage is insufficient.
+For nonnegative allocations, a necessary and sufficient transport condition is
+\begin{equation}
+ |\mathcal P|\leq\frac Pn\,|N(\mathcal P)|\quad\text{for every subset of patterns }\mathcal P,
+\end{equation}
+where $N(\mathcal P)$ is their set of reachable resources. It follows from the source-pattern-resource-sink
+max-flow cut condition. Strict positivity on every allowed edge is an additional requirement.
+Our implementation stops only after checking both marginals and reports nonconvergence rather than silently
+labelling an allocation balanced. All six current banks converge to positive solutions.
+
+\subsection{Going beyond balancing without guessing another encoder family}
+The natural next analytic objective is the full defect $\mathcal J=\|C-I/n\|_F^2$, not only its diagonal part.
+For $a_p=\sqrt{e_p}$ and $H_p=S_p^T(C-I/n)S_p$, direct differentiation of \eqref{eq:C} gives
+\begin{equation}
+ \frac{\partial\mathcal J}{\partial e_{p,i}}
+ =\frac{2}{P\sqrt{e_{p,i}}}\sum_j(H_p)_{ij}Q_{ij}\sqrt{e_{p,j}},\qquad
+ \frac{\partial\mathcal J}{\partial\theta_{p,i}}
+ =e_{p,i}\left(g_{p,i}-\sum_j e_{p,j}g_{p,j}\right),
+ \label{eq:gradient}
+\end{equation}
+where $g=\partial\mathcal J/\partial e$. The gradient has been checked against automatic differentiation.
+It gives a decoder-independent diagnostic or candidate initialization/loss. Unlike \eqref{eq:KL}, this general
+objective is not claimed convex, nor is minimizing it claimed to minimize PUPE. No new training arm is implemented.
+
+\clearpage
+\section{What remains after balancing: measured and unmeasured}
+The following moments are evaluated exactly from the six returned energy checkpoints and original codebooks,
+using \eqref{eq:C}; each entry averages three seeds. The balanced construction uses no received data or trained energies.
+These are new geometry diagnostics, not new decoding experiments.
+
+\begin{center}
+\begin{tabular}{llrrr}
+\toprule
+$B$ & Construction & $\Delta_{\rm row}$ & $\Delta_{\rm off}$ & $\Delta$\\
+\midrule
+12 & Original uniform & 0.102865 & 0.024089 & 0.126953\\
+   & Deterministic balance & 0 & 0.023249 & 0.023249\\
+   & Learned energies & 0.003583 & 0.014004 & 0.017586\\
+   & Fixed dense & 0.000526 & 0.061400 & 0.061926\\
+\midrule
+14 & Original uniform & 0.026324 & 0.006607 & 0.032931\\
+   & Deterministic balance & 0 & 0.006567 & 0.006567\\
+   & Learned energies & 0.002477 & 0.005926 & 0.008402\\
+   & Fixed dense & 0.000134 & 0.015481 & 0.015615\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+At $B=12$, learning both nearly balances rows and reduces the off-diagonal term by about 40\% relative to balancing
+alone. This identifies a correction beyond inverse resource degree: energy is moved away from harmful repeated-symbol
+interactions. It establishes what changed, not how much of the PUPE gain each term caused.
+At $B=14$, learning reduces the off-diagonal term by about 10\%, but its residual row imbalance makes total
+$\Delta$ larger than deterministic balancing's. Thus the learned objective is not simply minimizing frame potential.
+More decisively, at $B=14$ both balanced and learned polar have smaller defect than the \emph{actual fixed dense}
+reference, despite dense's lower measured PUPE. Reducing average interference cannot by itself explain or guarantee
+closing that remaining gap. The earlier small-grid receiver swaps support an encoder benefit, but are not a
+full-grid causal decomposition.
+
+\subsection{Three reasons that a residual performance gap can survive}
+\textbf{1. The codeword mean and activity law.}
+Let $m_i=\mathbf1\{\ell_i=0\}$. Then
+\begin{equation}
+ \mu=\E_w\phi(w)=\frac1P\sum_p S_pD_pm,\qquad
+ \Sigma=C-\mu\mu^T.
+\end{equation}
+For IID uniform messages the noiseless sum has covariance $K\Sigma$; for $K$ uniformly selected distinct messages it is
+$K(M-K)/(M-1)\,\Sigma$. These identities are exact. A nonzero $\mu$ is not random information; its common contribution
+$K\mu$ can be subtracted when $K$ is known. That does not recover its spent transmission energy. Iterative D2 error
+covariance is different again, so neither $C$ nor $\Sigma$ alone gives its true conditional uncertainty.
+
+\textbf{2. Rare correlations and competing message sets.}
+Frame potential averages squared correlations; it can hide a damaging tail. For two allowed count vectors $a,a'$, the
+actual separation is
+\begin{equation}
+ d^2(a,a')=\|\Phi(a-a')\|^2=(a-a')^TG(a-a').
+\end{equation}
+Under AWGN, the binary equal-prior comparison error is $\mathcal Q(d/(2\sigma))$. Here $\mathcal Q$ is the Gaussian
+tail, unrelated to the symbol matrix $Q$. The multiplicity of close competing sets matters too. Multiuser aliases,
+within-pattern weighted distances and rare cross-pattern correlations are therefore separate diagnostics.
+
+\textbf{3. The receiver and its optimization.}
+D2 replaces correlated, non-Gaussian uncertainty by calibrated scalar channels. Its loss and early stopping do not
+optimize PUPE directly. A remaining gap can be waveform geometry, decoder approximation or training; it cannot be
+assigned to the encoder solely from the displayed defect. Frozen-calibration swaps are informative but not optimal decoding.
+
+\clearpage
+\section{Equivalence and next decisions}
+\textbf{Geometric optimality is achievable as a theorem.} Equation \eqref{eq:risk} proves an average-interference
+minimum; distinct symbol functions plus feasible balancing attain it. For the current repeated-symbol code, quantify
+the constrained residual instead. These are precise statements worth pursuing, even if no PUPE theorem follows.
+
+\textbf{Tightness alone cannot prove equal recovery.} Consider two unit-column $2\times4$ matrices:
+\begin{equation}
+ \Phi_1=[e_1,e_1,e_2,e_2],\qquad
+ \Phi_2=[e_1,e_2,(e_1+e_2)/\sqrt2,(e_1-e_2)/\sqrt2].
+\end{equation}
+Both satisfy $\Phi\Phi^T=2I$. Yet $\Phi_1$ aliases messages even with one noiseless user, while $\Phi_2$ has four
+distinct columns. Matching frame operators is much weaker than matching communication systems.
+
+\textbf{A sufficient exact system equivalence.} If $\Phi_2=O\Phi_1\Pi$ for an orthogonal channel rotation $O$ and
+a message permutation $\Pi$, white noise and exchangeable message priors give the same statistical problem after
+rotating observations and relabelling messages. Equivalently, matching full Gram matrices up to that permutation is
+sufficient for such an isometry on the spans. Bayes performance then agrees; D2 with matched parameters is also
+equivariant to these transformations. No such relationship to the dense reference has been demonstrated.
+
+\textbf{An empirical equivalence claim needs its own design.} Predefine an acceptable absolute PUPE margin and
+operating region, then use independent seeds and paired trials to bound the performance difference. A mean close to
+dense, or an interval containing zero, is not an equivalence test. Receiver inference and approximation remain fixed
+in that claim; it is not global encoder optimality.
+
+\subsection{Two active research directions}
+\begin{enumerate}
+\item \textbf{Encoder geometry.} Compare uniform, deterministic-balanced and learned energies with matched receivers.
+      Diagnose the residual before adding a geometry loss or encoder freedom. A simple deterministic construction
+      matching learned PUPE would be a positive result.
+\item \textbf{Tractable polar-aware inference.} Use Report 7 to replace exponential message state, measuring loss
+      against full D2 on identical waveforms. Unknown activity, pattern association, same-pattern collisions and joint
+      interference remain open. Keep known-$K$ and unknown-$K$ results separate.
+\end{enumerate}
+The shared mixer is retired. Hash/coordinate-amplitude and sectioned-tree routes are parked as historical evidence,
+not declared mathematically inferior. Polar energy has the stronger current performance/structure case, but no
+completed scalable multiuser decoder yet. Broad new encoder families are unnecessary unless a diagnosed residual
+points to a specific missing freedom.
+
+\textbf{Scope of a possible conclusion.} ``Simple structured encoding plus geometric optimization matches the dense
+reference under the tested receiver and conditions'' would be well supported by a successful controlled test.
+``No subtle code structure can outperform well-behaved dense encoding'' is much stronger and does not follow from
+second moments, D2 comparisons or these finite experiments. Dense is a useful reference, not a proven optimum.
+
+\begin{thebibliography}{2}
+\bibitem{frame} D. G. Mixon, T. Needham, C. Shonkwiler and S. Villar,
+\emph{Three proofs of the Benedetto--Fickus theorem}, 2021/2023.
+\href{https://arxiv.org/abs/2112.02916}{arXiv:2112.02916}. Background for the frame-potential criterion, not a URA theorem.
+\bibitem{csiszar} I. Csisz\'ar, \emph{I-divergence geometry of probability distributions and minimization problems},
+Annals of Probability 3(1), 146--158, 1975.
+\href{https://web.mit.edu/6.291/www/handouts/csiszar_Idiv.pdf}{Author paper}. Background for KL projection and iterative fitting.
+\end{thebibliography}
+\end{document}

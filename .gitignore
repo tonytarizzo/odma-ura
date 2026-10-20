@@ -34,6 +34,10 @@ docs/*
 !docs/README.md
 !docs/CURRENT_STATE.md
 !docs/EXPERIMENT_BANK.md
+!docs/POLAR_DECODING_RESEARCH_LOG.md
+!docs/POLAR_APPROXIMATION_LOG.md
+!docs/POLAR_DECODER_DESIGN_LOG.md
+!docs/PUPE_METRIC.md
 !docs/archive/
 docs/archive/*
 !docs/archive/conditioned_inference_brief.md

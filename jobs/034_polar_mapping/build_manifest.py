@@ -1,4 +1,4 @@
-"""Two encoder investigations; reuse fixed ODMA-polar and dense controls from 032/033."""
+"""Reproduce the frozen 034 manifest, including retired mixer rows for historical audits."""
 
 import json
 from pathlib import Path

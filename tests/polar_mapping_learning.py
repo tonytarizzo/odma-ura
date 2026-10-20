@@ -23,7 +23,7 @@ def main():
               "baseline_params": {"prefix_bits": 8 if args.production_shape else b // 2,
                                   "code_length": 32, "crc_bits": 8, "list_size": 8}}
     checks = []
-    for family in ("odma_polar", "polar_energy", "polar_mixer"):
+    for family in ("odma_polar", "polar_energy"):
         config = {**shared, "family": family, "mode": "fixed" if family == "odma_polar" else "joint", "name": family}
         result = run_experiment(config, args.out_dir / family)
         training = result["training"]
