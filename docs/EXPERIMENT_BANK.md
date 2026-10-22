@@ -1,11 +1,11 @@
 # Experiment bank
 
-Updated **20 October 2026**. This document maps research questions and algebra to executable scripts,
+Updated **22 October 2026**. This document maps research questions and algebra to executable scripts,
 fixture contracts and retained results. [CURRENT_STATE.md](CURRENT_STATE.md) owns priorities; the
 [exact](POLAR_DECODING_RESEARCH_LOG.md) and [approximation](POLAR_APPROXIMATION_LOG.md) logs own reasoning.
 Job READMEs/manifests own HPC row definitions. Historical exact audits and matched performance evidence below retain their original scope. Approximation
 preparation is complete for the retained paths. All thirteen families now have shared-harness implementations;
-pre-reset prototype scripts remain parked. No new HPC job has been submitted.
+pre-reset prototype scripts remain parked. The user submitted Job035; Job036 is prepared but not submitted by the agent.
 
 ## Reading the evidence
 
@@ -29,7 +29,28 @@ Generated JSON stays outside git. Prior temporary outputs may no longer exist; c
 Coverage alone does not establish balance feasibility: the prescribed solver must converge. No silent
 support repair, fallback energies or decoder-dependent bank selection is permitted.
 
-## Active decoder implementation harness: 035
+## Active combination campaign: 036
+
+[Commands, decoder matrix and posterior accounting](../jobs/036_polar_combinations/README.md);
+[combination implementation](../framework/polar_decoder_combinations.py);
+[numerical checks](../tests/polar_decoder_combinations_test.py);
+[job/reuse checks](../tests/polar_combination_jobs_test.py).
+
+DEC-14–24 cover multiset beam search, guide/product/beam proposal mixtures, terminal single-message
+Gibbs and guided pair Metropolis, and a two-proposal-by-three-refinement SMC grid. All are nonlearned,
+IID-only and explicit-alphabet. Budgets and physical correction are recorded in the common harness.
+The fixed balanced B12/14 setup, seeds 3201–3203, K/SNR grids and 256 paired frames/cell match Job035.
+There are 81 rows after splitting heavy B14 IS loads, 540,672 new evaluations, and a four-job concurrency
+cap at two CPUs/16 GB each. No D2/ODMA or old-control reruns are scheduled. The historical controls are
+joined only after pinned source, model, configuration, matrix, observation and seed-coverage checks;
+original per-run provenance remains in the aggregate. This is exploratory reuse, not a fresh-seed test.
+
+Verification: 77 regression tests, 8,064 tiny paired smoke evaluations including REF, and production-size
+CPU timing probes. The tiny smoke decreases with SNR for every new variant; none is claimed to improve
+research-scale PUPE before the HPC results. Generated outputs live under
+`jobs/036_polar_combinations/results_local_*`; generated reports/plots are not versioned.
+
+## Original decoder implementation harness: 035
 
 [Commands and contract](../jobs/035_polar_decoders/README.md);
 [driver](../tests/polar_decoder_benchmark.py); [implementation](../benchmarks/polar_decoders.py);

@@ -14,7 +14,8 @@ from framework.polar_decoders import REGISTRY
 def manifest(profile="research", mappings=("balanced", "uniform"), sampling="iid"):
     rows = []
     bits, seeds = ([12, 14], [3201, 3202, 3203]) if profile == "research" else ([4], [3217])
-    names = [name for name, spec in REGISTRY.items() if sampling in spec.sources and (profile == "smoke" or name != "REF")]
+    names = [name for name in ["REF", *[f"DEC-{i:02}" for i in range(1, 14)], "D2", "ODMA"]
+             if sampling in REGISTRY[name].sources and (profile == "smoke" or name != "REF")]
     for b in bits:
         for seed in seeds:
             for name in names:

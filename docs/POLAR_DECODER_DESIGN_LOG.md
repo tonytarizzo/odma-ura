@@ -556,3 +556,73 @@ Verification: **62 regression tests pass**. Two actual bundled CLI jobs complete
 merged both mapping panels, and safely skipped both completed children on retry. Python compilation,
 PBS shell syntax and whitespace checks pass. The submission command is now
 `qsub -J '1-90%4' jobs/035_polar_decoders/035_polar_decoders.sh`; the script embeds the same cap.
+
+## 22 October 2026: retain a broader combination round, DEC-14–24 / Job036
+
+The user approved narrowing the first broad family survey, but rejected jumping immediately to only
+two new decoders. Implemented eleven combinations that isolate discovery and refinement choices; the
+[036 README](../jobs/036_polar_combinations/README.md) owns the full matrix, parameters and derivation.
+The immediate goal is a strong nonlearned decoder that substantially beats D2. Unknown K/other latent
+parameters and learned approximations to expensive internal calculations follow after that foundation.
+
+The retained ingredients are Gaussian residual guidance, the optimized product law, beam configuration
+discovery, corrected independent importance sampling, SMC and posterior-preserving moves. Standalone
+low-recall contractions, prefix readout, connected truncations, Fourier and auxiliary-field variants
+are not developed further in this round. This prioritizes work from the finite results without claiming
+the corresponding exact ideas are mathematically invalid.
+
+DEC-14 merges permutation-equivalent prefixes into unique multisets. At depth t its stored prior is
+t!/(prod c_w!) M^(-t), independent of how many permutation paths survived beam pruning. Final states
+are weighted by that prior and the exact physical likelihood. This is a posterior restricted to the
+retained multisets, with no useful omitted-mass certificate. It never represents a multiset simply as
+one equally likely ordered sequence.
+
+DEC-15/16/17 compare guide+product, guide+beam and guide+product+beam IS against historical guide-only
+05. Beam proposals draw a multiset, then uniformly permute its messages; ordered proposal probability
+is multiset probability divided by its orbit size. Evaluate the complete overlapping mixture density
+for every draw, with a positive whole-tuple prior component. Physical likelihood × prior / proposal
+corrects the guidance. DEC-18/19 add eight terminal single-site Gibbs or guided pair Metropolis moves.
+The conditional pair proposal sees all outside-user effects and uses both forward/reverse densities.
+Weights are retained when moving atoms through a posterior-invariant kernel; re-evaluating old proposal
+weights at moved states would be wrong. Evidence is recorded before the moves.
+
+DEC-20–24 complete the SMC grid: Gaussian-only or product-mixed step proposals, crossed with no moves,
+single-message Gibbs or guided-pair Metropolis. Existing 07 supplies Gaussian/no-move. Gaussian
+continuation potentials have floor -1000 before the terminal step; the terminal likelihood remains
+physical and unclipped. Pool unnormalized evidence and count marks across independent batches before
+normalization. Terminal particles are dependent, not independent confidence samples. Every readout
+uses count tails and allocates K copies. All new finite physical risk bounds are conservatively 1.
+
+The user subsequently clarified that unchanged D2 and ODMA should not be rerun. The new campaign
+therefore retains the original seeds/encoder/grid/256 frames and reuses all matching old controls.
+This supersedes the initially proposed fresh-seed campaign. A pinned Job035 source contract checks
+unchanged shared model/evaluation definitions and dependencies; narrow validation, registration,
+merge and plotting changes are explicit. New and historical per-run source provenance is preserved,
+not rewritten to a fictitious common revision. Generic merges remain strict unless explicitly given
+an audited source set. Missing controls or unequal seed coverage cause errors rather than silent pooling.
+Retaining explored seeds is not held-out validation; winners need fresh-seed evaluation later.
+
+Job036 queues only DEC-14–24 on the balanced encoder: B12/B14 × three seeds × eleven variants = 66
+full sweeps. Splitting each heavy B14 DEC-15–19 sweep into K7/15 and K22/26 adds 15 rows: **81 jobs**,
+**540,672 frame-decoder evaluations**, two CPU cores/16 GB/72 hours per job, at most four concurrent.
+It needs no GPU. The array has not been submitted by the agent. Use a separate HPC worktree while
+Job035 is running to avoid invalidating its source-stability checks.
+
+Validation: 77 regression tests pass. They include exact multiset exhaustion and duplicate priors;
+mixture-density normalization, correction identities and sampled frequencies; conditional block
+Metropolis detailed balance; actual-kernel posterior stationarity; finite-sample tail/evidence checks;
+reduction to historical SMC; legality/reproducibility; manifest coverage; split pairing; safe retry;
+and explicit cross-source provenance/rejection. A common-harness B4 smoke checks 8,064 evaluations,
+including 6,336 across the eleven new variants, against REF. Every new variant's average PUPE falls
+from -4 to 4 to 12 dB, with zero observed high-SNR errors. These are mechanics checks, not performance
+claims at B12/B14. A K26/4 dB laptop timing probe gives roughly .075–4.9 s/frame at B12 and .31–20.5 at
+B14; the heaviest pair-refined IS is load-sharded. Hardware/SNR variation means these are not runtime
+bounds. Generated evidence stays in ignored Job036 results directories.
+
+The release suite includes the legacy metric/mapping/bounds checks: **77 tests pass**. A B14/K26
+endpoint smoke adds 44 legal evaluations across all eleven variants at -4/10 dB (two frames each).
+Every variant improves across these endpoints; this establishes no research ranking. The local/HPC
+encoder reconstruction differs at 5.6e-17, so local endpoint results are not presented as bitwise-paired
+production comparisons. Reuse retains exact hash requirements and the original two-thread HPC settings.
+An actual two-row CLI pilot exercised completion, retry, merge and grouped plotting. Python compilation,
+shell syntax and diff checks pass.

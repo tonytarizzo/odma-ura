@@ -1,6 +1,6 @@
 """Report-10 receiver bank. Every entry returns (hard full-message counts, metadata).
 
-All thirteen execution families have an explicit-alphabet implementation.
+The thirteen original families and Job-036 combinations use an explicit alphabet.
 Variants and budgets are recorded; statistical exactness is not inferred from a family name.
 """
 
@@ -225,6 +225,7 @@ class DecoderSpec:
 from framework.polar_decoder_queries import fields, fourier, gaussian_counts, prefix
 from framework.polar_decoder_search import chains, configuration, particles
 from framework.polar_decoder_contractions import connected, quantized, regions, signed_rank
+from framework.polar_decoder_combinations import combined_importance, combined_particles, multiset_beam
 
 REGISTRY = {
     "REF": DecoderSpec("REF: exact count Bayes", reference),
@@ -251,6 +252,31 @@ REGISTRY = {
     "D2": DecoderSpec("D2: trained, fixed encoder", d2),
     "ODMA": DecoderSpec("ODMA: CRC-SCL/SIC", odma),
 }
+
+
+REGISTRY["DEC-14"] = DecoderSpec("DEC-14: multiset beam", multiset_beam, ("iid",), (("width", 32),))
+_IS_COMBINATION = {"samples": 1024, "defensive": .1, "product_weight": .2, "beam_weight": .2, "width": 32,
+                   "max_iterations": 100, "batch_size": 128, "moves": 0, "block_size": 1}
+for number, label, overrides in [
+    (15, "guide + product IS", {"product_weight": .3, "beam_weight": 0.}),
+    (16, "guide + beam IS", {"product_weight": 0., "beam_weight": .3}),
+    (17, "guide + product + beam IS", {}),
+    (18, "mixture IS + Gibbs", {"moves": 8}),
+    (19, "mixture IS + guided pair MH", {"moves": 8, "block_size": 2}),
+]:
+    REGISTRY[f"DEC-{number:02}"] = DecoderSpec(f"DEC-{number:02}: {label}", combined_importance, ("iid",),
+                                             tuple({**_IS_COMBINATION, **overrides}.items()), True)
+_SMC_COMBINATION = {"batches": 4, "particles": 64, "defensive": .1, "product_weight": .25, "max_iterations": 100,
+                    "guide_log_floor": -1000., "moves": 0, "block_size": 1, "batch_size": 128}
+for number, label, overrides in [
+    (20, "product-guided SMC", {}),
+    (21, "Gaussian SMC + Gibbs", {"product_weight": 0., "moves": 8}),
+    (22, "product SMC + guided pair MH", {"moves": 8, "block_size": 2}),
+    (23, "product SMC + Gibbs", {"moves": 8}),
+    (24, "Gaussian SMC + guided pair MH", {"product_weight": 0., "moves": 8, "block_size": 2}),
+]:
+    REGISTRY[f"DEC-{number:02}"] = DecoderSpec(f"DEC-{number:02}: {label}", combined_particles, ("iid",),
+                                             tuple({**_SMC_COMBINATION, **overrides}.items()), True)
 
 
 def run(name, scenario, **params):

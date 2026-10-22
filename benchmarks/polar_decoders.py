@@ -85,7 +85,7 @@ def normalized_config(config):
             raise ValueError(f"Unknown decoder parameters for {name}")
         for key, value in params.items():
             default = dict(REGISTRY[name].defaults)[key]
-            if isinstance(default, int) and (not isinstance(value, int) or value < (0 if key == "field_rank" else 1)):
+            if isinstance(default, int) and (not isinstance(value, int) or value < (0 if key in ("field_rank", "moves") else 1)):
                 raise ValueError(f"Invalid integer budget {name}.{key}")
             if isinstance(default, float) and not np.isfinite(value):
                 raise ValueError(f"Nonfinite parameter {name}.{key}")
@@ -378,7 +378,8 @@ def save_tables(result, out):
 
 def plots(result, out):
     c, cells = result["config"], result["evaluation"]
-    colors = {name: plt.get_cmap("tab20")(i) for i, name in enumerate(REGISTRY)}
+    palette = [*plt.get_cmap("tab20").colors, *plt.get_cmap("tab20b").colors]
+    colors = {name: palette[i % len(palette)] for i, name in enumerate(REGISTRY)}
     colors.update(dict(zip(("REF", "DEC-02", "DEC-05", "D2", "ODMA"),
                            ("#222222", "#b64a00", "#007c91", "#6b4ba1", "#277c38"))))
     for source in sorted({r["sampling"] for r in cells}):
@@ -485,7 +486,7 @@ def plots(result, out):
         fig.tight_layout(); fig.savefig(out / "reference_diagnostics.png", dpi=170); plt.close(fig)
 
 
-def merge_runs(paths, out_dir):
+def merge_runs(paths, out_dir, *, compatible_sources=None):
     if not paths:
         raise ValueError("Provide at least one original run directory")
     results = [json.loads((Path(p) / "summary.json" if Path(p).is_dir() else Path(p)).read_text()) for p in paths]
@@ -501,8 +502,11 @@ def merge_runs(paths, out_dir):
             raise ValueError("Only complete results with the current metric may be merged")
         if contract != {k: v for k, v in result["config"].items() if k not in ignored}:
             raise ValueError("Incompatible experiment/training contracts")
-        if result["source_sha256"] != first["source_sha256"]:
-            raise ValueError("Source hashes differ; do not silently mix implementations")
+        if compatible_sources is None:
+            if result["source_sha256"] != first["source_sha256"]:
+                raise ValueError("Source hashes differ; do not silently mix implementations")
+        elif not any(result["source_sha256"] == approved for approved in compatible_sources):
+            raise ValueError("Run source hashes are outside the explicitly audited compatibility set")
         seed = result["config"]["seed"]
         if matrices.setdefault(seed, result["matrix_sha256"]) != result["matrix_sha256"]:
             raise ValueError("Unmatched codebooks for the same seed")
@@ -560,6 +564,12 @@ def merge_runs(paths, out_dir):
                                 "query_geometry_seconds": r.get("query_geometry_seconds", 0.),
                                 "bound_seconds": r["bound_seconds"]}
                                for r in results]}
+    result["source_provenance_by_run"] = [{"path": str(p), "revision": r["revision"], "source_sha256": r["source_sha256"]}
+                                          for p, r in zip(paths, results)]
+    if any(r["source_sha256"] != first["source_sha256"] for r in results):
+        result["source_sha256"] = None
+        result["revision"] = None
+        result["source_compatibility"] = "explicitly audited cross-revision comparison; see source_provenance_by_run"
     (out / "frames.jsonl").write_text("".join(json.dumps(r, allow_nan=False) + "\n" for r in records))
     write_json(out / "summary.json", result); save_tables(result, out); plots(result, out)
     return result

@@ -1,0 +1,122 @@
+{
+  "origin": "Job035 source snapshot; shared model/evaluation functions must remain unchanged for reuse",
+  "revision": "e9cd4fb86fc8920bffbd8fc9a363765e928223f8",
+  "source_sha256": {
+    "baselines/__init__.py": "671cb9d48a0ec33a0ddbb25b5da863dcf417f3625f98963fe011d35609a464b7",
+    "baselines/ccs_amp.py": "8e1e92e0fbb320ec59b055b31302c5b1a915744e9b20f9d4b3a8068fe09b716c",
+    "baselines/dynamic_cs.py": "9e382278300b6b533e97edc5ee8617e77dc722bcf3082ffa1ab4b63e5c68f166",
+    "baselines/odma_polar.py": "a7c9d16b9fe58cd50e3ddae4c5800d7504e39a4f49d7ca7faf5e873b3dd822bd",
+    "baselines/polar.py": "5833591bea240d0892086d44719f7e12b05e8852a2ff4d1258cb66fbe8f518f5",
+    "benchmarks/__init__.py": "115dad90950f2c69e59008cd7d9383a9e8da0423a7cdad7bab37ba9f0e2044b9",
+    "benchmarks/polar_decoders.py": "8a3c93b8a008d657972be4da1e04b87bce84c3e95e03a185b11dd73ebe51f34e",
+    "benchmarks/polar_energy_geometry.py": "e99ab0568ae7260124aaea3b7fbd9a1bcdd2bcd8fd140fef9a9fed37c7341aa4",
+    "benchmarks/polar_mapping.py": "9f4faec48b7fb49a555baefc9169aa64b9a0e1c773b6354aa429e0bbd637399f",
+    "benchmarks/ura_bound_analysis.py": "b62640841c57d7159eadb889b255aa7186d55c618c7306b80c1e9b2148d9f0f6",
+    "benchmarks/ura_bounds.py": "708f3a8771375a30ae79bd7865d87264d52e5b9f3f6d99ca28e5fa547fa79263",
+    "benchmarks/ura_comparison.py": "2aea2b1c055bf7c92ea40a7314da1926340b928977ff8f3b0b7464ecb0c2ad7c",
+    "benchmarks/ura_merge.py": "d7fd78437782f8868b0d7cea5cde4e0ba4fb3f51bff82efe2a7bc76e438fd203",
+    "framework/__init__.py": "0f3b83ebe9e0970b1e911844c8d759de5bf5b8378479f718ff407f9931d45509",
+    "framework/analysis.py": "1e64ec5ec3e9342160a95b5fbe45abd5ec1ade508e9cac75506868acb0fcd953",
+    "framework/candidate_decoders.py": "06d3a85eb4fd3716edd5b00ae800ae166b0be86fd9ec54315e642fb9a8cc6058",
+    "framework/candidate_geometry.py": "567cc32b1128bef6deb5b9ea7ae4a5c9e0baccdac6fc22ea1c0526229b2b4023",
+    "framework/channel.py": "dde02cc2ed0911dd5748346bab60e080b44519376d8f028b65c16005ac010a29",
+    "framework/constraints.py": "2bc75df49a0155a043b8ee20c40a36e1f8246e87421f6bed786baa96e6e1296a",
+    "framework/coordinate_amplitudes.py": "d6a9730348a1f000cc77002cfa6018525a632d6db0e4c235744d82af6d397e6c",
+    "framework/core.py": "df964e9fa0665ade5fc53670d4698f9a8f4aae495aa9e35f81b5f87bfa4214a5",
+    "framework/datasets.py": "2150c5c3412afe5fd53626ed654390794b31e04207c4dda696e5c017b1be20ff",
+    "framework/decoders.py": "325c9d549dd9a548e677866c4621893f2d23157b9e1c45e85381bf84e95d9407",
+    "framework/early_stopping.py": "9f193faba73537c3e542b06a35c62944fedb6061d985bb0c5369e78e85c10122",
+    "framework/encoder.py": "e0af8355f72e4c633fb96009eb47c581713745808060f5a1ef670d968bb52e6f",
+    "framework/hash_skeleton.py": "99c3f698feed6fe48fcdfcba3cf3b4a9a812ab2ba3aa26e0b46f69fcda9da4ce",
+    "framework/initializers.py": "d6931804fbd66d17bcdb7aeca5eb21247041ec72e7c1176c2d146ccf226690c6",
+    "framework/learned_decoders.py": "16fcc663b9deff653d65885e241b40dd6da283483076b72b6198107049a9dfd4",
+    "framework/losses.py": "99df1a9151e918d45b968d299dcf78f3884a8c7aaf54665b1e851746e4ae9de0",
+    "framework/metrics.py": "0336f5947d07651ccb823596ac629176126c7813913d503dd67b028591539f8b",
+    "framework/operators.py": "97a7288f6526bcce70b0cf6fd6ddcd9acf4953130a6151c23a26d786afe43ac9",
+    "framework/outer_code.py": "c8f6348b5c5710a38e58a0ae67524abecc2a8b8e2560fb8c691882fce5816cfe",
+    "framework/outer_decoder.py": "067c34973c328f7eee36af683eb3841e8ae44517c32e21005753388996b1a7e8",
+    "framework/pipeline.py": "38d12fc881d9f5d05e932da3d446f79712899897586b13e82dae162f2360c05f",
+    "framework/plotting.py": "9fe5023c87d644062b944dd00e5bcfce6a411cfad7587d073040b466c2d9f330",
+    "framework/polar_decoder_contractions.py": "d57539a7a6826098882f039e7862e2aec93fff9cad89b9f29362a4987694a19c",
+    "framework/polar_decoder_core.py": "6c0b5f0ec4a570139f11845847ea695ca18cbb03e5d11b9d5a887e39e84c595b",
+    "framework/polar_decoder_queries.py": "d006936e11e63cb249eb2f2f16b6114f30c2f71b93be41c2cbfe177a5df6f588",
+    "framework/polar_decoder_search.py": "ba3e2ebec7d8b5019130ea35e943f7958c622d82078d21bbcd1b5a18e48df952",
+    "framework/polar_decoders.py": "9070b7a4550dd804ad093c1afe1eb28b2254f1a1b9bd697a9c3c51ebcf886a5e",
+    "framework/polar_mapping.py": "9953b9b023b6699f912346a26ca2c154f6234f89fcb7406b2603e91394c5785e",
+    "framework/prototype_amplitudes.py": "352522eb61079de332dc2c851a7f6f965e10d472978645ec598f641672a39621",
+    "framework/sectioned.py": "d0bc48ef01cae4e7a5e89f0025708185a20535de3cfdbc9d60edcb72a8b4c2b9",
+    "framework/training.py": "223ce0603edf36660c1fff3c36b5bc1f65d5d2025bb6036d4a98fb3bd8c7466c",
+    "src/metrics.py": "26a686396e86073d7a9188c1d742ae70d04ebd6996eb9d2c09144ca5d0e74326",
+    "src/ura_bound.py": "01c6a6b3932af76a063032fc99d75cabf9e897a580400a052e8d7290a32a0ae2",
+    "uv.lock": "e553651d9345aa5d3fb18a4c6d8f962bdac14bca3ea1ac7c1aefaa92be63d847"
+  },
+  "shared_definition_sha256": {
+    "benchmarks/polar_decoders.py": {
+      "source_hashes": "4200e3d5ec366ae24c23b474aa13145480eb57e91f6980d0bc058f2d23bfb441",
+      "write_json": "4053da8cb353268afbd2d7d22fa6bcd9147f6fe2d4ee86b5c421542f2303b479",
+      "build_encoder": "b70c87e0540ef89310fb410e20665d213472de3c5f1aed7150afef1ace0e9cbb",
+      "fixture": "578b73dfe5945b6ededf524d0fd3ec99ecbe0de9f5f9b6000e393b1e4064f6af",
+      "interval": "76d82e100bfb3da5fe738ceba91f7eb5055c6ecff0bd903baf96ebbba4481168",
+      "summarize": "9510b901ba1a3db8861dbe1d751b1e41829c7e6cbeb525de1f84686eb5c6e5ca",
+      "make_bounds": "e25843f57ec589efdd844af183cfeff3a5e15ca19ae5e330ff09c82fd879b3cc",
+      "run_experiment": "ba51284625a1651fdb9a1eb4a7e7b25171a234180ea4aeee36c355ce6e0728cc",
+      "save_tables": "7b02c1f9c359faa86599801c58f88551a4f12a06ae1a2757deddead587cea4bd",
+      "main": "15e2f0972ea592ee17b136c05fa2da24d267448e7a40a5f3473a326df35b0961"
+    },
+    "framework/polar_decoders.py": {
+      "hypothesis_count": "8586aa20565ada1481087d7abafff87d87bb846ac28fd9356ea9f723edfa1fd5",
+      "prepare_reference": "bf7cc17a6fa2e3c937fa86468440d6af7ce1114ce735a22796ed4924c6edd6b6",
+      "reference": "290bc311c5330551b0265338aec9acd303949f7b0e7268ba6ee265a7b5eeedb2",
+      "product": "ec9461d7f2575e4d3aaa5bf60164611a5e8f26a7975240bb62cb2963d35457e7",
+      "guided_log_density": "d5cb534caaf1c28d39ed92b2ae52b58ec7c7877d09a9fd1d000d69b107abdf4b",
+      "importance": "cd97a0c7ea752c566d3d5c3643cbc3ada65cb3088a5857e8a2bac1ee7b549b52",
+      "d2": "8f2af35d06b08cb381761ac8733ac8bb5cc71730f99a2cc76ab5c09eb3a8f420",
+      "odma": "88985e69a9dafeb22b555ba3ca1bc48f110ec1797a1348e9c1e35fd8694fa9f1",
+      "DecoderSpec": "99d9955f9e8a61cf78d938f89a7d2602cf32bbcaf27507e71358285f4930e70d",
+      "run": "0ba6790e123d32cb9d5279cd82f8972767a31cd203134d7f4e85613aa110969a"
+    }
+  },
+  "allowed_validation_and_merge_changes": [
+    "normalized_config",
+    "merge_runs"
+  ],
+  "new_modules": [
+    "framework/polar_decoder_combinations.py"
+  ],
+  "control_params": {
+    "D2": {},
+    "ODMA": {},
+    "DEC-02": {
+      "max_iterations": 100,
+      "tolerance": 1e-09
+    },
+    "DEC-04": {
+      "width": 32
+    },
+    "DEC-05": {
+      "samples": 1024,
+      "defensive": 0.1,
+      "batch_size": 256,
+      "failure_probability": 0.05
+    },
+    "DEC-06": {
+      "samples": 128,
+      "burn_in": 128,
+      "thinning": 1,
+      "chains": 4,
+      "global_probability": 0.1,
+      "defensive": 0.1,
+      "block_size": 1
+    },
+    "DEC-07": {
+      "batches": 4,
+      "particles": 64,
+      "defensive": 0.1,
+      "guide_log_floor": -1000.0,
+      "failure_probability": 0.05
+    }
+  },
+  "allowed_render_changes": [
+    "plots"
+  ]
+}

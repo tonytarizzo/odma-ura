@@ -1,6 +1,6 @@
 # Current state: polar multiuser decoding
 
-Updated **20 October 2026**. This page owns the current research direction. The
+Updated **22 October 2026**. This page owns the current research direction. The
 [experiment bank](EXPERIMENT_BANK.md) owns script/setup/result mappings; the
 [exact log](POLAR_DECODING_RESEARCH_LOG.md), [approximation log](POLAR_APPROXIMATION_LOG.md) and
 [decoder design log](POLAR_DECODER_DESIGN_LOG.md) own the reasoning and retained lessons.
@@ -13,8 +13,9 @@ owns the mathematical decoder catalogue; implementation evidence is recorded in 
 
 ## Problem and fixed contract
 
-Derive a nonlearned receiver for the fixed ODMA–polar/CRC construction, retaining strong message recovery
-while reducing the work required by explicit full-alphabet inference. The receiver knows the encoder,
+Develop the strongest practical nonlearned receiver for the fixed ODMA–polar/CRC construction, aiming
+for a substantial PUPE improvement over D2. Accuracy is the immediate priority; unknown K/other latent
+parameters and learned internal approximations for efficiency follow after establishing this foundation. The receiver knows the encoder,
 active-user count K and physical noise variance; messages and their placement patterns are unknown.
 
 \[
@@ -132,7 +133,7 @@ Jobs [033](../jobs/033_matched_d2/README.md) and [034](../jobs/034_polar_mapping
 66/66 and 12/12 rows in their recorded audits. In the B14/K26/10 dB distinct-message cell, native ODMA–polar
 PUPE was .55874, the same codebook with D2 gave .13712, learned polar energies/D2 gave .10617 and fixed
 dense/D2 gave .09831. These measured comparisons motivate receiver work; dense/D2 is a comparator, not an optimum.
-Deterministic balancing has smaller-grid diagnostic support, rather than a matched full-grid PUPE result.
+Job035 now adds matched balancing comparisons across receivers; its benefit depends on load, SNR and receiver.
 D2 remains an explicit-M effective-channel approximation, with no derived AMP/state-evolution guarantee.
 
 ## Agreed approach: algebra within the Bayes decoder route
@@ -150,11 +151,14 @@ D2 remains an explicit-M effective-channel approximation, with no derived AMP/st
 5. **Record the algebra clearly.** Decoder-composition questions and deductions enter the decoder design
    log; settled constructions enter Report 10. Report 9 and its log retain approximation algebra, while
    Report 7 keeps the exact foundations. Compare choices through their mathematics and computational
-   effect without selecting a branch from an empirical ranking.
+   effect, and distinguish empirical finite-budget prioritization from a theorem about an entire family.
 
-**Current authorization:** the user has requested implementations of all thirteen families, shared smoke
-comparisons and a complete CPU job array. This supersedes the earlier pause before implementation. Encoder learning
-remains outside scope; historical D2 is trained as a comparator, while the new receivers are nonlearned.
+**Current authorization:** after the first returned Job035 results, the user requested a broader round
+of combinations, smoke/correctness checks, Job036, and a push to main. DEC-14–24 now combine multiset
+beam discovery, product/Gaussian proposals, importance correction, SMC and terminal Gibbs/guided-pair
+Metropolis moves. Do not narrow immediately to only two architectures. The detailed comparison matrix
+and derivation are in the [036 README](../jobs/036_polar_combinations/README.md). Encoder learning remains
+outside scope. The user explicitly requested reuse of matching D2/ODMA results rather than retraining.
 
 **Active harness:** [tests/polar_decoder_benchmark.py](../tests/polar_decoder_benchmark.py) calls the
 [decoder bank](../framework/polar_decoders.py) through the shared count/metadata interface.
@@ -166,12 +170,21 @@ comparison limits and B12/B14 CPU estimates. Full frames and count outputs, post
 cases, PUPE uncertainty, setup/training/inference costs and both reference bounds are retained.
 Uniform ODMA is unchanged; its balanced-energy version is an explicitly labelled adaptation.
 
-**Next step:** run the prepared 90-job CPU comparison (B12/14, both mappings, three seeds, all thirteen
-families plus D2/ODMA), then assess PUPE, candidate coverage and concentration before tuning or combining
-paths. Each job runs both mappings and all K values sequentially; D2 is trained once per encoder/seed.
-Only four jobs run concurrently, at two CPUs each (eight total); grouping preserves the full workload.
-The array is not submitted. Exact enumeration is capped and excluded at research loads; tiny success is not
-evidence of B12/B14 recovery. Keep actual error, certificate tightness and computational cost separate.
+**Current evidence:** the 22 October local snapshot has 142/180 complete Job035 children. B12 guided
+sampling is promising, but rankings depend on load/SNR; B14 product and beam methods can outperform
+D2 while finite MCMC has a provisional deficit at K22. Some weak variants lose primarily at candidate
+or configuration discovery, not at their downstream contraction. This is finite-budget empirical
+selection, not a refutation of the underlying exact algebra. All reported physical excess-risk
+certificates remain vacuous. Keep product, beam, guided IS, SMC and invariant refinement active;
+deprioritize standalone Gaussian/prefix/quantized/regional/connected/Fourier/cut/field variants for now.
+
+**Next step:** queue the prepared **81-row Job036** array: eleven new combinations, B12/14, balanced
+encoder, three original seeds, four K values, eight SNRs, 256 frames/cell. Heavy B14 importance runs
+are split by load; total new work is 540,672 frame-decoder evaluations. Four concurrent two-CPU jobs
+reserve eight CPUs/64 GB per array. D2, ODMA and matching DEC-02/04/05/06/07 controls are reused from
+Job035 through a deliberately source-audited merge. Job036 is not submitted by the agent. Use a separate
+checkout while Job035 is active, so its source fingerprints remain stable. Retaining original seeds
+saves control computation but is not held-out validation; evaluate selected winners on fresh seeds later.
 
 ## Deferred scope
 
