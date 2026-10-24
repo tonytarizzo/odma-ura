@@ -34,11 +34,29 @@ def validate_reference_sources(contract):
     return current
 
 
+def control_path(row, baseline_results, retry_results, contract, current):
+    path = baseline_results/row['name']
+    expected_source = contract['source_sha256']
+    if retry_results is not None and (retry_results/row['name']).exists():
+        path = retry_results/row['name']
+        expected_source = current
+    if not (path/'summary.json').is_file():
+        raise ValueError(f'Missing completed control: {path}. Wait for it or select available --controls explicitly.')
+    result = json.loads((path/'summary.json').read_text())
+    if result['status'] != 'complete' or result['config'] != normalized_config(row) or result['source_sha256'] != expected_source:
+        raise ValueError(f'Control status/config/source differs from its audited Job035 reference or current retry: {path}')
+    decoder, = row['decoders']
+    if result['decoder_params'] != {decoder:contract['control_params'][decoder]}:
+        raise ValueError(f'Control parameters differ from pinned Job035: {path}')
+    return path
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--manifest', type=Path, default=Path(__file__).with_name('manifest.jsonl'))
     parser.add_argument('--results', type=Path, default=Path(__file__).with_name('results_combinations'))
     parser.add_argument('--baseline-results', type=Path, default=ROOT/'jobs/035_polar_decoders/results_all_decoders')
+    parser.add_argument('--retry-results', type=Path, help='Explicit control retry root, generated with the audited current source')
     parser.add_argument('--controls', nargs='*', choices=CONTROLS, default=CONTROLS)
     parser.add_argument('--out', type=Path)
     args = parser.parse_args()
@@ -61,21 +79,14 @@ def main():
             for decoder in args.controls:
                 matches = [r for r in old_rows if (r['B'],r['mapping'],r['seed'],r['decoders'])==(b,mapping,seed,[decoder])]
                 if len(matches)!=1:raise ValueError(f'No unique Job035 reference for {(b,mapping,seed,decoder)}')
-                row=matches[0];path=args.baseline_results/row['name']
-                if not (path/'summary.json').is_file():
-                    raise ValueError(f'Missing completed control: {path}. Wait for it or select available --controls explicitly.')
-                result=json.loads((path/'summary.json').read_text())
-                if result['config']!=normalized_config(row) or result['source_sha256']!=contract['source_sha256']:
-                    raise ValueError(f'Control config/source differs from pinned Job035: {path}')
-                if result['decoder_params']!={decoder:contract['control_params'][decoder]}:
-                    raise ValueError(f'Control parameters differ from pinned Job035: {path}')
-                paths.append(path)
+                paths.append(control_path(matches[0],args.baseline_results,args.retry_results,contract,current))
         out=(args.out or args.results/'analysis')/f'B{b}_{mapping}'
         merged=merge_runs(paths,out,compatible_sources=[current,contract['source_sha256']])
         plot_groups(merged,out/'groups')
         write_json(out/'reuse_audit.json',{'reference_contract':contract,'new_source_sha256':current,
                                          'reused_controls':args.controls,
-                                         'checks':'pinned old sources, unchanged shared definitions/dependencies, full configs, codebook hashes, paired observation hashes, equal seed sets',
+                                         'retry_results':str(args.retry_results) if args.retry_results is not None else None,
+                                         'checks':'pinned old sources or explicit current-source retries, unchanged shared definitions/dependencies, full configs, codebook hashes, paired observation hashes, equal seed sets',
                                          'scope':'same seeds as exploration; this is not held-out validation'})
         print(out)
 

@@ -212,6 +212,30 @@ qsub -J '1-90%4' -v POLAR_DECODER_MANIFEST=jobs/035_polar_decoders/manifest_bala
 Pass the matching `--manifest` to merge.py. Use `run_row.py --out-root` for different-budget campaigns
 and `merge.py --results` for that root. `merge.py --out` chooses a fresh analysis directory.
 
+### Retry the three missing balanced B14 DEC-05 controls
+
+The checked-in manifest's rows **50, 65 and 80** contain DEC-05 at B14 for seeds 3201, 3202 and 3203.
+Select those indices and the balanced child directly; no manifest edits or replacement checkout are needed:
+
+```bash
+qsub -J '50-80:15%3' -N ura035_is_retry \
+  -v POLAR_DECODER_MAPPING=balanced,POLAR_DECODER_OUT_ROOT=jobs/035_polar_decoders/results_balanced_is_retry \
+  jobs/035_polar_decoders/035_polar_decoders.sh
+```
+
+This queues three jobs, each with 8,192 evaluations, for **24,576 evaluations total**. The current
+Job036 source retains the original decoder/model definitions, checked by its reference contract.
+Use the existing prepared environment; this job-only update changes neither dependencies nor decoder
+source fingerprints. Do not change decoder/benchmark sources while any jobs use that checkout.
+The default script still runs both mappings. `POLAR_DECODER_MAPPING` accepts `all`, `balanced` or
+`uniform`; `POLAR_DECODER_OUT_ROOT` selects a separate output root. These also have direct runner
+options `--mapping` and `--out-root`.
+
+The fresh, Git-ignored output root preserves partial historical results and their source records. Ordinary
+Job035 merging still rejects mixed sources. Use Job036's audited merger with
+`--retry-results jobs/035_polar_decoders/results_balanced_is_retry` to incorporate these controls
+after retrieval. It requires complete selected new runs and equal seed sets as before.
+
 ## Verification
 
 ```bash

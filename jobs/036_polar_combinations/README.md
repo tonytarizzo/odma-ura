@@ -160,6 +160,14 @@ observation hashes, seed coverage and control budgets are checked. Original summ
 Mixed-source aggregate summaries retain per-run source hashes/revisions, rather than pretending all
 receivers ran from the same checkout. Ordinary harness merges still reject different sources by default.
 
+Missing Job035 controls may be rerun with the audited current source into a separate output root; see
+the [three-control retry command](../035_polar_decoders/README.md#retry-the-three-missing-balanced-b14-dec-05-controls).
+Add `--retry-results jobs/035_polar_decoders/results_balanced_is_retry` when merging. For each control,
+an existing retry directory takes precedence and must be complete, with current source hashes and the
+original config/parameters. An incomplete retry raises an error rather than falling back to an old run.
+Controls without a retry directory still come from `--baseline-results`, with pinned historical hashes.
+All source-compatibility and paired-input checks remain in force, and original files are not rewritten.
+
 Outputs retain frame counts/PUPE/diagnostics, summary JSON, cell tables, runtime and PUPE plots, the two
 reference bounds, and original per-run provenance. Focused `groups/` panels separate discovery, IS
 refinement and SMC refinement so the eighteen-curve aggregate is not the only view.

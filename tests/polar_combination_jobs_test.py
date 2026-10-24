@@ -8,7 +8,7 @@ from pathlib import Path
 import runpy
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from benchmarks.polar_decoders import merge_runs, normalized_config, run_experiment, source_hashes
 
@@ -54,6 +54,45 @@ class CombinationJobTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'Shared model'):validate(bad)
         bad=copy.deepcopy(contract);bad['new_modules']=[]
         with self.assertRaisesRegex(ValueError,'inventory'):validate(bad)
+
+    def test_035_retry_selects_only_balanced_b14_importance_controls(self):
+        execute=runpy.run_path('jobs/035_polar_decoders/run_row.py')['run_bundle']
+        rows=[json.loads(line) for line in Path('jobs/035_polar_decoders/manifest.jsonl').read_text().splitlines()]
+        run=Mock()
+        with tempfile.TemporaryDirectory() as folder, patch.dict(execute.__globals__,run_experiment=run):
+            with contextlib.redirect_stdout(io.StringIO()):
+                for index in range(50,81,15):execute(rows[index-1],folder,mapping='balanced')
+                selected=[call.args[0] for call in run.call_args_list]
+                self.assertEqual([(c['B'],c['mapping'],c['decoders'],c['seed']) for c in selected],
+                                 [(14,'balanced',['DEC-05'],seed) for seed in (3201,3202,3203)])
+                self.assertEqual(selected,[rows[index-1]['runs'][0] for index in (50,65,80)])
+                run.reset_mock();execute(rows[49],folder)
+                self.assertEqual([call.args[0] for call in run.call_args_list],rows[49]['runs'])
+                with self.assertRaisesRegex(ValueError,'No uniform runs'):
+                    execute({'name':'balanced_only','runs':selected},folder,mapping='uniform')
+
+    def test_control_retries_are_explicit_and_preserve_strict_validation(self):
+        module=runpy.run_path(str(JOB/'merge.py'));choose=module['control_path']
+        contract=json.loads((JOB/'reference_contract.json').read_text());current=module['validate_reference_sources'](contract)
+        row=json.loads(Path('jobs/035_polar_decoders/manifest.jsonl').read_text().splitlines()[49])['runs'][0]
+        saved={'status':'complete','config':normalized_config(row),'source_sha256':contract['source_sha256'],
+               'decoder_params':{'DEC-05':contract['control_params']['DEC-05']}}
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);baseline=root/'original';retry=root/'retry'
+            old=baseline/row['name'];old.mkdir(parents=True)
+            original=json.dumps(saved);(old/'summary.json').write_text(original)
+            self.assertEqual(choose(row,baseline,None,contract,current),old)
+            self.assertEqual(choose(row,baseline,retry,contract,current),old)
+            fresh=retry/row['name'];fresh.mkdir(parents=True)
+            with self.assertRaisesRegex(ValueError,'Missing completed control'):choose(row,baseline,retry,contract,current)
+            saved['source_sha256']=current;(fresh/'summary.json').write_text(json.dumps(saved))
+            self.assertEqual(choose(row,baseline,retry,contract,current),fresh)
+            self.assertEqual(choose(row,baseline,None,contract,current),old)
+            for key,bad in [('status','partial'),('config',{}),('source_sha256',contract['source_sha256']),('decoder_params',{})]:
+                (fresh/'summary.json').write_text(json.dumps({**saved,key:bad}))
+                with self.subTest(key=key),self.assertRaisesRegex(ValueError,'Control'):
+                    choose(row,baseline,retry,contract,current)
+            self.assertEqual((old/'summary.json').read_text(),original)
 
     def test_zero_moves_allowed_but_invalid_mixtures_rejected(self):
         c=normalized_config({'decoders':['DEC-17'],'decoder_params':{'DEC-17':{'moves':0}}})
