@@ -1,21 +1,24 @@
 # Current state: polar multiuser decoding
 
-Updated **22 October 2026**. This page owns the current research direction. The
-[experiment bank](EXPERIMENT_BANK.md) owns script/setup/result mappings; the
-[exact log](POLAR_DECODING_RESEARCH_LOG.md), [approximation log](POLAR_APPROXIMATION_LOG.md) and
-[decoder design log](POLAR_DECODER_DESIGN_LOG.md) own the reasoning and retained lessons.
+Updated **29 October 2026**. This page owns the current research direction. The
+[experiment bank](EXPERIMENT_BANK.md) owns script/setup/result mappings; the reports below own the
+derivations, computational accounting and retained lessons.
 [Report 7](reports/07_polar_decoding_from_posterior.pdf)
 contains the exact Bayesian foundations, with adjacent [source](reports/07_polar_decoding_from_posterior.tex).
 [Report 9](reports/09_polar_bayesian_approximations.pdf), with [source](reports/09_polar_bayesian_approximations.tex),
 separately owns algebraically motivated assumptions and their error bounds. Report 8 defines the fixed encoder.
 [Report 10](reports/10_polar_decoder_designs.pdf), with [source](reports/10_polar_decoder_designs.tex),
-owns the mathematical decoder catalogue; implementation evidence is recorded in the design log.
+owns the mathematical decoder catalogue; implementation evidence is indexed in the experiment bank.
+[Report 11](reports/11_tractable_polar_decoding.pdf), with [source](reports/11_tractable_polar_decoding.tex),
+owns the separate investigation of tractable approximations for the same encoder and loss.
+The [tractability log](POLAR_TRACTABILITY_LOG.md) records exploratory reasoning, checks and implementation decisions.
 
 ## Problem and fixed contract
 
 Develop the strongest practical nonlearned receiver for the fixed ODMA–polar/CRC construction, aiming
-for a substantial PUPE improvement over D2. Accuracy is the immediate priority; unknown K/other latent
-parameters and learned internal approximations for efficiency follow after establishing this foundation. The receiver knows the encoder,
+for a substantial PUPE improvement over D2. The current priority is to reduce payload-dependent computation
+while retaining useful accuracy, with any accuracy concessions explicit. Unknown K/other latent parameters
+and learned internal approximations remain later work. The receiver knows the encoder,
 active-user count K and physical noise variance; messages and their placement patterns are unknown.
 
 \[
@@ -45,7 +48,7 @@ comparisons retain their PUPE where the evaluated output support/budget is uncha
 
 **The broad exact-derivation phase is complete for this contract.** Report 7 derives a complete finite
 Bayes decoder and alternative exact evaluations, lossless state reductions, polar pair/three-user contractions,
-identifiability limits and decision certificates. The exact log records their computational accounting.
+identifiability limits and decision certificates, with their computational accounting.
 This is a sufficient foundation for approximation design; a general K4 expansion or another exact survey
 is not a prerequisite. Targeted exact work remains useful when a proposed approximation needs it.
 
@@ -148,12 +151,18 @@ D2 remains an explicit-M effective-channel approximation, with no derived AMP/st
 4. **Derive accuracy and full cost together.** Seek error bounds, exact error identities, limiting cases and
    counterexamples. State unproved conditions explicitly, including the cost of obtaining a certificate.
    Include construction, pattern discovery, all count/message association, memory and numerical precision.
-5. **Record the algebra clearly.** Decoder-composition questions and deductions enter the decoder design
-   log; settled constructions enter Report 10. Report 9 and its log retain approximation algebra, while
-   Report 7 keeps the exact foundations. Compare choices through their mathematics and computational
+5. **Record the algebra clearly.** Report 10 retains complete decoder constructions, Report 9 the
+   approximation algebra and Report 7 the exact foundations. Report 11 develops tractable approximations;
+   the experiment bank indexes checks and measured results. Compare choices through their mathematics and computational
    effect, and distinguish empirical finite-budget prioritization from a theorem about an entire family.
 
-**Current authorization:** after the first returned Job035 results, the user requested a broader round
+**Current authorization, 29 October:** continue algebra-first, nonlearned tractability research using
+sub-agents, seeking structural combinations of the exact and approximate observations. Retain a progress
+log plus the concise shared-style report. Implement the current tractable routes as new numbered decoders
+and run correctness/smoke checks. Do not create HPC job scripts yet. The author-owned paper outline is
+outside this task.
+
+**Implementation history:** after the first returned Job035 results, the user requested a broader round
 of combinations, smoke/correctness checks, Job036, and a push to main. DEC-14–24 now combine multiset
 beam discovery, product/Gaussian proposals, importance correction, SMC and terminal Gibbs/guided-pair
 Metropolis moves. Do not narrow immediately to only two architectures. The detailed comparison matrix
@@ -170,25 +179,149 @@ comparison limits and B12/B14 CPU estimates. Full frames and count outputs, post
 cases, PUPE uncertainty, setup/training/inference costs and both reference bounds are retained.
 Uniform ODMA is unchanged; its balanced-energy version is an explicitly labelled adaptation.
 
-**Current evidence:** the 22 October local snapshot has 142/180 complete Job035 children. B12 guided
-sampling is promising, but rankings depend on load/SNR; B14 product and beam methods can outperform
-D2 while finite MCMC has a provisional deficit at K22. Some weak variants lose primarily at candidate
-or configuration discovery, not at their downstream contraction. This is finite-budget empirical
-selection, not a refutation of the underlying exact algebra. All reported physical excess-risk
-certificates remain vacuous. Keep product, beam, guided IS, SMC and invariant refinement active;
-deprioritize standalone Gaussian/prefix/quantized/regional/connected/Fourier/cut/field variants for now.
+**Current evidence, 26 October:** **160/180 original Job035 children** remain certified complete, with
+unchanged hashes for their previously audited 1,310,720 records. Fourteen further children have full
+evaluations but failed the source-change guard; six are absent locally. The three targeted balanced B14
+DEC-05 retries contain 6,656/6,912/6,912 frames (83.3% of the total), all reproducing the old counts exactly;
+none has completed yet.
+Keep failed originals and fresh retries separate. `c19c377` enables current-main retries with unchanged
+experiment hashes: rows50/65/80, balanced filter, fresh output root, audited current-source control reuse.
 
-**Next step:** queue the prepared **81-row Job036** array: eleven new combinations, B12/14, balanced
-encoder, three original seeds, four K values, eight SNRs, 256 frames/cell. Heavy B14 importance runs
-are split by load; total new work is 540,672 frame-decoder evaluations. Four concurrent two-CPU jobs
-reserve eight CPUs/64 GB per array. D2, ODMA and matching DEC-02/04/05/06/07 controls are reused from
-Job035 through a deliberately source-audited merge. Job036 is not submitted by the agent. Use a separate
-checkout while Job035 is active, so its source fingerprints remain stable. Retaining original seeds
-saves control computation but is not held-out validation; evaluate selected winners on fresh seeds later.
+**Combination evidence:** **19 completed Job036 rows**, four partial. All eleven new variants have B12
+seed3201 results; DEC-14–17 also have seed3202, and DEC-14 has seed3203 plus B14 seed3201. The snapshot
+now also completes B14 DEC-15/16 seed3201 K7/15. It independently verifies 524,288 records and all selected
+input archives; all 177 previously complete runs retain their frame/summary hashes. Both Job036 revisions
+(`743e81c`, `c19c377`) share identical experiment hashes and pass the old/new shared-definition audit.
+
+DEC-14's B12 improvement replicates: K26/4 dB three-seed PUPE .003105 versus D2 .025190, old beam
+.069611, guided IS .006010 and SMC .014774. Recorded time is .211 s/frame versus D2 .022 and guided IS
+8.53. At B14/K26/4 dB, **one matched seed only**, DEC-14 gives .061298 versus D2 .403996 and SMC
+.268930, at .440 s/frame versus SMC 12.03. B14 beam replication is pending. The prior 16-frame replay
+showed one distinct multiset in the old 32-tuple beam versus 32 in the new beam; deduplication and
+multinomial prior restoration changed together, so this is not an isolated ablation.
+
+Mixtures add occasional corrections: on two B12 seeds at K26/4 dB, DEC-17 gives .002028 versus beam
+.003080, at about 43 times the recorded cost; at 6 dB it misses one copy versus thirteen. Two-seed
+rare-error rankings remain uncertain. Beam mixtures are worse at low SNR, so correction is not a uniform
+upgrade. DEC-15/product IS and DEC-20/product SMC do not yet justify default inclusion. Standalone product
+still beats beam at B14/K26/0 dB. DEC-24/pair-refined SMC gives .009165 versus original SMC .014724 at
+B12/K26/4 dB on seed3201; the paired frame interval includes zero. Keep pair refinement as a focused
+control, not a proven gain. Guided IS remains better than beam in the B12 high-SNR residual-error regime.
+The new, still-provisional B14/K26/4 dB DEC-16 cell gives .059645 versus beam .061298, at 35.75 versus
+.440 s/frame: eleven fewer missed copies, about 81 times the recorded cost. Its paired frame interval
+includes zero. DEC-15 gives .240835; DEC-17 has not reached K26. No B14 terminal-refinement result is
+returned. All finite physical excess-risk certificates remain vacuous.
+
+Current inventory, matched tables and decision boundaries:
+`jobs/036_polar_combinations/results_combinations/analysis_2026-10-26/observations.md`.
+The 25 October analysis retains the unchanged completed B12 tables and four plots.
+
+**Pending experiment decisions:** finish the informative parts of Job036 and the three DEC-05 retries. The original array
+has 81 rows/540,672 evaluations; the reduced plan discussed on 24 October retains 34 rows/237,568
+evaluations. Against that plan, 19 are complete, four partial and 11 not returned locally (not a live
+scheduler audit): 62.1% of planned evaluations are certified and 67.2% have returned. Prioritize B14 beam
+replication, certified guided-IS controls and hard-load refinement before selecting the final correction
+combination. There is enough evidence to begin a focused beam-width/compute study and design cheaper
+targeted correction while those results arrive; another broad sweep need not precede that work. Follow
+selection with fresh-seed validation. No new decoder or cancellation was made in this analysis.
+Keep runtime sources stable while jobs use them. Results reuse original seeds
+and assume known K/noise plus an explicit alphabet; no scalable large-payload claim follows.
+
+**Scalability clarification, 26 October:** the user identifies practical payload scaling as the next
+essential gate. DEC-01–24 still depend on the full M=2^B alphabet. Multiset beam's main scoring cost is
+O(K W n M); IS/SMC replace W by their sample/particle budgets. D2 already uses O(Nc M) factorized
+operators per layer, but retains global M-dimensional state. B12/B14 keep Bc=6 and Nc=32, so they do
+not test longer polar payloads. Preserve these receivers as small-B accuracy references; prioritize a
+polar-aware non-exhaustive proposer, procedural encoding and sparse count inference alongside the
+limited beam-budget study. Report 7's conditional LLRs permit polar candidate generation, but SCL
+lists are not exact conditional samples or partition functions. A practical design must bound the
+number of polar decoding calls and account for candidate misses and actual proposal densities.
+Full code-derived costs, paper comparison and proposed transition:
+`jobs/036_polar_combinations/results_combinations/analysis_2026-10-26/scaling.md`.
+
+**Tractability investigation, first installment:** Report 11 extends Report 9's character algebra with
+a normalized independent-parity proposal and a computable partition upper bound. It permits exact
+one-slot rejection correction without an exact polar partition oracle. A realizable dependent-parity
+triangle makes its acceptance exponentially small, so this is a conditional route with a concrete
+failure case, not an established practical receiver. Retaining small groups of dependent parity factors
+is one open repair; SCL-list proposals and bounded candidate inference remain alternatives.
+
+The report also separates discovery, interaction and output costs. Weighted configurations permit
+sparse count-tail storage bounded by their total transmitted-copy count, rather than M times K.
+Restricting only the output action has an expected-omitted-copy-fraction bound; conditioning the entire
+posterior on a candidate set requires a different error account. Existing revisable-sampling prototypes
+already demonstrate several proposal/correction interfaces on tiny cases; they do not establish useful
+mixing or large-payload performance. The experiment bank indexes tiny algebra checks and their limitations.
+Continue by resolving proposal coverage, correction acceptance and repeated residual-context costs
+before choosing an implementation. The runtime sources and HPC experiments are unchanged by this stage.
+
+**Second tractability pass, 27 October:** an explored-set repair replaces an envelope by exact physical
+weights on selected states and retains a normalized sampler for its complement. A product-coordinate
+exclusion trie avoids a hidden rejection cost when most reference mass is already explored. Reliable-basis
+flip search supplies one finite candidate rule; existing SCL lists can use the same repair. Correcting one
+cell repairs the earlier triangle's acceptance failure, although that cell contains only about one third
+of its target mass. This is a sampling improvement, not a claim that the explored list is sufficient.
+Repeated conflicts still defeat fixed global flip radius; exact component factorization repairs that
+particular control, but structural checks find no such small components automatically in the tested codes.
+
+Separately, score-variation bounds transfer conditional list coverage and envelope correction to nearby
+residuals, permitting reuse with an explicit deterioration bound. Repair and reuse can combine through the
+same pointwise envelope. Their total preparation, pattern-bank cost and global multiuser mixing remain
+unresolved. The report and three tiny algebra scripts now retain these constructions and counterexamples;
+there is no new end-to-end PUPE result or production decoder.
+
+**Editorial revision, 27 October:** Report 11 now has adjacent source and PDF directly in `docs/reports/`,
+uses the shared report style, and opens with the research aim. The concise rewrite retains the derivations
+and counterexamples. Its three algebra checks live in `tests/`; reproduction commands are in the experiment bank.
+
+**Third tractability pass, 27 October:** Report 11 now derives a bounded same-pattern pair proposer using
+the established four-symbol polar MAC construction, with explicit list, screening and repeated-context costs.
+An alternative XOR-first search exposes a code-consistency factor; a tiny counterexample reverses the
+uncorrected guide's preferred difference. Ordered-pair normalization and MH preserve the IID count target.
+The fourth algebra script checks these identities and finite balance, not joint SCL performance.
+Mixed-pattern discovery, useful list widths and complete-receiver cost remain open. Existing literature
+is now identified in the report; deriving an operation here is not itself a novelty claim. Small conditional
+benchmarks can proceed alongside further algebra, before selecting a complete scalable receiver.
+
+**Fourth tractability pass and initial implementation, 29 October:** conditioning selected overlap
+parities separates a fixed-pattern multiuser block into affine one-user laws. Shared rows across neighbours
+are charged once per slot; the sector count is 2^R for total conditioned rank R. A rank budget gives
+explicit omitted-interaction and conditional count-loss bounds, or the existing envelopes permit exact
+correction. A three-user physical control, a greedy-selection counterexample and a B12 pattern-pair census
+verify the algebra. Small useful ranks, inner acceptance and pattern discovery remain unproved; generic
+cutset conditioning is established prior art. This operation is not yet a production decoder.
+
+DEC-25–32 now implement SCL/basis multiset beams, independent/repaired/cached parity MH, joint/XOR pair
+MH and SCL-list MH. They accept a procedural PolarScenario and return sparse integer-ID counts without
+an M axis. The existing paired harness also accepts them through an explicit small-B adapter. Independent
+checks establish normalization, physical scores, detailed balance and exhaustive tiny REF endpoints;
+bounded B100 execution at K1/2 is not a multiuser performance claim. Smoke outcomes and commands belong
+to the experiment bank and tractability log. No HPC scripts were changed.
+
+**Whole-decoder bound and matched campaign, 29 October:** Report 11 now combines a common tilted parity
+product with an orbit-corrected multiset beam into DEC-33. Completing the Gaussian square gives a full
+configuration envelope. Independent weighted count tails then give an expected excess-PUPE bound;
+the common normalization cancels from the decision comparison. The single-user unit-energy factor
+tightens this bound. The current multiuser bound is still vacuous in the smoke: it is not a useful PUPE
+prediction or a certificate for finite MH chains. DEC-34 unions SCL and basis candidates before pruning.
+
+The bank now has ten procedural variants, DEC-25–34. 81 focused tests pass, including the historical
+job guards, new whole-tuple normalization/envelope checks and direct B100 K1/2 execution controls.
+Matched basis initialization and larger search budgets remove most of the earlier B12 smoke deficit:
+at K22/4dB, four frames, DEC25 misses one copy and the other nine tractable receivers miss none.
+The chain initializers already have zero PUPE and most chains do not move, so these outcomes establish
+neither an improvement from correction nor good mixing. Hard B14 discovery remains unresolved.
+
+[Job037](../jobs/037_polar_tractable/README.md) is configured locally: 60 CPU jobs, cap4, exactly the
+balanced Job-035/036 physical grid, with pinned historical D2/ODMA and selected explicit controls.
+Real historical B12/seed3201 controls have been merged successfully through the strict new audit.
+New HPC jobs have not been submitted. The experiment bank and tractability log retain commands,
+budget differences, timing extrapolations and next research gates. Report 11 remains in the flat report
+directory with shared styling; its source was compiled in the existing editor, without a separate PDF export.
 
 ## Deferred scope
 
 Further encoder learning/placement search, the retired shared mixer, hash/amplitude searches and sectioned
 association work are outside the current decoder study. Historical code, manifests and Reports 1–6 remain
 available. Unknown K, fading and false-alarm-aware output losses require new contracts. No current evidence
-establishes dense optimality, paper-scale reproduction or complete B100 decoding.
+establishes dense optimality, paper-scale reproduction or useful multiuser PUPE at B100.

@@ -37,10 +37,15 @@ docs/*
 !docs/POLAR_DECODING_RESEARCH_LOG.md
 !docs/POLAR_APPROXIMATION_LOG.md
 !docs/POLAR_DECODER_DESIGN_LOG.md
+!docs/POLAR_TRACTABILITY_LOG.md
 !docs/PUPE_METRIC.md
 !docs/archive/
 docs/archive/*
 !docs/archive/conditioned_inference_brief.md
+!docs/archive/paper_outline/
+docs/archive/paper_outline/*
+!docs/archive/paper_outline/main.tex
+!docs/archive/paper_outline/AGENTS.md
 !docs/reports/
 docs/reports/*
 !docs/reports/report_style.tex

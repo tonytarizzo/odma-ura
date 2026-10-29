@@ -18,6 +18,17 @@ CONTROLS = ['D2','ODMA','DEC-02','DEC-04','DEC-05','DEC-06','DEC-07']
 
 def validate_reference_sources(contract):
     current = source_hashes()
+    forward_path = ROOT/'jobs/037_polar_tractable/reference_contract.json'
+    if forward_path.is_file():
+        forward = json.loads(forward_path.read_text())
+        if current == forward['current_source_sha256']:
+            # Job037 explicitly re-audits the adapter/harness changes; keep the original contract pinned too.
+            for key, label in [('source_sha256', 'Shared dependency'),
+                               ('shared_definition_sha256', 'Shared model'), ('new_modules', 'Source inventory')]:
+                actual = hashlib.sha256(json.dumps(contract[key], sort_keys=True).encode()).hexdigest()
+                if actual != forward['job036_contract_digests'][key]:
+                    raise ValueError(f'{label} differs from the audited historical reuse contract')
+            return current
     old = contract['source_sha256']
     changed_modules = set(contract['shared_definition_sha256'])
     if set(current)-set(old) != set(contract['new_modules']) or set(old)-set(current):

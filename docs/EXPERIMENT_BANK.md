@@ -1,11 +1,11 @@
 # Experiment bank
 
-Updated **22 October 2026**. This document maps research questions and algebra to executable scripts,
-fixture contracts and retained results. [CURRENT_STATE.md](CURRENT_STATE.md) owns priorities; the
-[exact](POLAR_DECODING_RESEARCH_LOG.md) and [approximation](POLAR_APPROXIMATION_LOG.md) logs own reasoning.
+Updated **27 October 2026**. This document maps research questions and algebra to executable scripts,
+fixture contracts and retained results. [CURRENT_STATE.md](CURRENT_STATE.md) owns priorities;
+Reports 7, 9, 10 and 11 own the mathematical derivations and their limitations.
 Job READMEs/manifests own HPC row definitions. Historical exact audits and matched performance evidence below retain their original scope. Approximation
 preparation is complete for the retained paths. All thirteen families now have shared-harness implementations;
-pre-reset prototype scripts remain parked. The user submitted Job035; Job036 is prepared but not submitted by the agent.
+pre-reset prototype scripts remain parked. The user has submitted both Job035 and Job036; returned results remain incomplete.
 
 ## Reading the evidence
 
@@ -29,6 +29,94 @@ Generated JSON stays outside git. Prior temporary outputs may no longer exist; c
 Coverage alone does not establish balance feasibility: the prescribed solver must converge. No silent
 support repair, fallback energies or decoder-dependent bank selection is permitted.
 
+## Tractability algebra checks: Report 11
+
+[Report](reports/11_tractable_polar_decoding.tex) and
+[small independent checks](../tests/polar_tractability_checks.py). These are finite identity checks,
+not a new decoder benchmark. They verify independent-parity normalization/envelopes, rejection correction,
+mixture detailed balance, conditional list-mass bounds, SCL path-metric constants and sparse count decisions.
+A dependent-parity triangle in the actual Bc6/Nc32/CRC8 generator demonstrates exponentially poor acceptance
+for a realizable family of conditional scores; it does not estimate typical acceptance or PUPE.
+
+The [refinement checks](../tests/polar_tractability_refinement.py) verify explored-set
+envelope repair, direct complement sampling, reliable-basis flip tails and failure/repair controls.
+The [residual-reuse checks](../tests/polar_tractability_reuse.py) verify transferred conditional
+coverage and correction on 40 tiny balanced polar context pairs. These test algebra and conditional kernels,
+not practical discovery, mixing or payload scaling at fixed PUPE.
+
+The [pair checks](../tests/polar_tractability_pairs.py) verify the physical/XOR likelihood identity and
+its code-consistency factor on 20 tiny same-pattern fixtures, four-symbol local kernels and pair-MH
+detailed balance on 64 ordered states. A guide-ranking reversal shows why independent sign
+marginalization is only an approximation. Larger generator rank samples are structural controls,
+not exhaustive identifiability certificates or noisy recovery evidence. The separate implementation checks
+below now test a joint SCL decoder.
+
+The [structural checks](../tests/polar_tractability_structural_checks.py) cover mixed-pattern parity conditioning:
+12 three-user physical fixtures, four covers and 512 tuples per fixture, a same-pattern duplicate control,
+normalized envelope correction and a failed greedy rank-selection example. Maximum identity discrepancy is
+5.33e-15. A B12/seed3201 census over 2,016 distinct pattern pairs gives 31,941 one-sided sectors versus
+1,093,347 two-sided table entries. These count representations; sector construction and acceptance still cost work.
+
+```bash
+uv run python -m tests.polar_tractability_checks
+uv run python -m tests.polar_tractability_refinement
+uv run python -m tests.polar_tractability_reuse
+uv run python -m tests.polar_tractability_pairs
+uv run python -m tests.polar_tractability_structural_checks
+```
+
+## Procedural decoder implementations: DEC-25–34
+
+[Research log and declared variants](POLAR_TRACTABILITY_LOG.md),
+[procedural decoder code](../framework/polar_tractable.py),
+[joint/XOR pair proposals](../framework/polar_pair_proposals.py).
+DEC-25/26 are SCL/basis multiset beams; DEC-27/28/29 use independent/repaired/cached parity MH;
+DEC-30/31 add joint/XOR same-pattern pair moves; DEC-32 uses SCL-list MH.
+DEC-33 uses an exchangeable parity-product/beam importance proposal, with a global envelope and an
+expected excess-PUPE bound. DEC-34 unions SCL and basis candidates before beam pruning.
+All are IID-only and nonlearned. Their procedural interface returns sparse full-message count dictionaries;
+the shared benchmark uses a dense output adapter and still constructs its explicit small-B encoder.
+The new mixed-pattern parity-cover algebra is not yet one of these implementations.
+
+**Validation, 29 October:** 66 focused tests pass, including 25 new tests covering normalized proposals,
+exact repaired/complement draw laws, physical scores, single/cached/pair detailed balance, exhaustive tiny
+REF endpoints, count readout and procedural/dense agreement. B100/P4/b98/N128/CRC16/n256 execution checks
+run all eight variants at K1/2 without an alphabet array; this is not a multiuser B100 performance result.
+
+**Local smoke evidence:** `results/tractable_smoke_2026-10-29/` stores 3,456 paired B4 evaluations
+(32 frames/cell, K1/2/4, -4/4/10 dB), REF/D2/ODMA controls, both bound overlays and posterior-regret diagnostics.
+`results/tractable_combined_B12_2026-10-29/` merges the mini and stress runs: 240 evaluations, four frames/cell,
+K2/7/22, 4/10 dB, DEC14/ODMA controls. All records retain physical inputs, outputs, timings and hashes.
+At K22/4 dB DEC26 matches DEC14 at PUPE .01136, versus DEC25 .52273; the tiny budget and four-frame
+sample cannot establish a ranking. Empty CRC-valid discovery lists and weak SCL initialization are exposed
+by the diagnostics. The log records each budget, the full table and the needed matched-initializer control.
+The new algorithms improve with SNR in these checks; they are not uniformly competitive at the hard load.
+Those initial runs predate the matched-initializer study below.
+
+```bash
+uv run python -m unittest tests.polar_tractable_test tests.polar_tractable_execution_test tests.polar_tractable_harness_test tests.polar_pair_proposals_test tests.polar_tractable_importance_test tests.polar_tractable_jobs_test
+uv run python -m tests.polar_decoder_benchmark --profile smoke --decoders REF DEC-25 DEC-26 DEC-27 DEC-28 DEC-29 DEC-30 DEC-31 DEC-32 ODMA --loads 1 2 --frames 16 --ebn0 -4 4 --no-bounds --out-dir results/tractable_local_smoke
+```
+
+Use a fresh output directory. Saved `config.json` files reproduce the recorded budgets through `--config`;
+the procedural B100 fixture is in `tests/polar_tractable_execution_test.py` because the common explicit
+benchmark deliberately rejects B>20. Generated results and plots remain outside git.
+
+**Matched CPU campaign:** [Job037](../jobs/037_polar_tractable/README.md) queues DEC-25–34 in 60 capped
+jobs on exactly the balanced Job-035/036 physical grid, with audited historical D2/ODMA and selected
+explicit-decoder reuse. The chains share width-32 basis initialization. No new HPC jobs have been submitted.
+`results/tractable_matched_smoke_2026-10-29/` contains 1,872 paired B4 evaluations with REF/DEC14/ODMA,
+both coding bounds and exact conditional-risk diagnostics. `results/tractable_historical_reuse_2026-10-29/`
+verifies the real B12/seed3201 D2/ODMA/DEC14/DEC24 records merge with unchanged inputs and budgets.
+Cost probes at B12/B14, K26/4dB use the actual Job037 budgets; their single-frame timings are planning
+estimates, not PUPE evidence. Detailed commands, uncertainties and next gates are in the job README and log.
+The current suite passes **81 tests**. `results/tractable_matched_B12_2026-10-29/` contains 96 paired
+K22 evaluations at 4/10dB, four frames/cell and Job037 budgets. At 4dB DEC25 misses one copy; the other
+nine tractable variants and DEC14 miss none. The chains start at zero-error configurations and usually
+stay there, so this is not a correction/mixing success claim. `results/tractable_importance_bound_smoke_2026-10-29/`
+reruns REF/DEC33 after tightening the K1 bound; all 144 DEC33 decisions/input hashes are unchanged.
+Its K1 expected-regret bounds average about 0.48–0.50; all tested multiuser bounds remain 1 (vacuous).
+
 ## Active combination campaign: 036
 
 [Commands, decoder matrix and posterior accounting](../jobs/036_polar_combinations/README.md);
@@ -40,17 +128,45 @@ DEC-14–24 cover multiset beam search, guide/product/beam proposal mixtures, te
 Gibbs and guided pair Metropolis, and a two-proposal-by-three-refinement SMC grid. All are nonlearned,
 IID-only and explicit-alphabet. Budgets and physical correction are recorded in the common harness.
 The fixed balanced B12/14 setup, seeds 3201–3203, K/SNR grids and 256 paired frames/cell match Job035.
-There are 81 rows after splitting heavy B14 IS loads, 540,672 new evaluations, and a four-job concurrency
-cap at two CPUs/16 GB each. No D2/ODMA or old-control reruns are scheduled. The historical controls are
+The original manifest has 81 rows after splitting heavy B14 IS loads, 540,672 new evaluations, and a
+four-job concurrency cap at two CPUs/16 GB each. The reduced 24 October plan retains 34 rows/237,568
+evaluations. D2/ODMA are reused; three missing B14 DEC-05 controls are being retried separately. Controls are
 joined only after pinned source, model, configuration, matrix, observation and seed-coverage checks;
 original per-run provenance remains in the aggregate. This is exploratory reuse, not a fresh-seed test.
 
+26 October snapshot: **19 complete, four partial** Job036 rows, with 147,456 complete and 12,288
+provisional evaluations. All DEC-14–24 have B12 seed3201; DEC-14–17 also have seed3202, DEC-14 seed3203,
+and DEC-14 its first B14 seed3201. B14 DEC-15/16 seed3201 K7/15 also completed. The audit verifies
+524,288 input/count/PUPE records and
+unchanged historical hashes. No Job036 tracebacks or missing selected inputs. Current-source revisions
+743e81c/c19c377 have identical experiment hashes and pass the historical shared-definition audit.
+B12 beam K26/4 dB PUPE .003105 versus D2 .025190 on three seeds. B14 beam gives .061298 versus
+D2 .403996 and SMC .268930 on one seed. Two-seed B12 DEC-17 gives .002028 versus beam .003080,
+but costs about 43 times more; pair-refined SMC is promising on one seed, not yet a replicated gain.
+New partial B14/K26/4 dB DEC-16 gives .059645 versus beam .061298, at about 81 times the recorded cost;
+its paired frame interval includes zero. No B14 terminal-refinement result is returned. Full current
+paired tables, provenance inventory and decision boundaries:
+`jobs/036_polar_combinations/results_combinations/analysis_2026-10-26/observations.md`.
+The 25 October analysis retains the unchanged completed B12 comparisons and four plots.
+
 Verification: 77 regression tests, 8,064 tiny paired smoke evaluations including REF, and production-size
-CPU timing probes. The tiny smoke decreases with SNR for every new variant; none is claimed to improve
-research-scale PUPE before the HPC results. Generated outputs live under
+CPU timing probes. The tiny smoke decreases with SNR for every new variant; it validates mechanics,
+while returned HPC evidence establishes the measured comparisons above. Generated smoke outputs live under
 `jobs/036_polar_combinations/results_local_*`; generated reports/plots are not versioned.
 
 ## Original decoder implementation harness: 035
+
+26 October snapshot: **160/180 completed children, 76/90 complete bundles**. Their summary/frame hashes
+match the previously audited 1,310,720 records. Fourteen children finished evaluation but failed the final
+source-change guard (rows35,50,52,56,58,65,66,67,71,73,80,82,86,88); six are absent locally.
+Preserve failed-source data separately. Three targeted balanced B14 DEC-05 retries are partial, with
+6,656/6,912/6,912 frames and exact count/PUPE reproduction of the matching failed originals so far. No retry
+is yet certified complete. Current main supports mapping filtering and a fresh retry root; the audited
+Job036 merger accepts these only after completion with matching current source hashes.
+Balanced B14 SMC has all three seeds: K26/4 and 10 dB PUPE .26237/.01838 versus D2 .40400/.08569.
+B12 balanced guided IS also has all three seeds: K26/4 dB .00601 versus D2 .02519, and it retains the
+lowest observed high-SNR errors among those original controls. The 26 October audit/results are above;
+the preceding completed-run analysis remains in `jobs/035_polar_decoders/results_all_decoders/analysis_2026-10-22_update/`.
 
 [Commands and contract](../jobs/035_polar_decoders/README.md);
 [driver](../tests/polar_decoder_benchmark.py); [implementation](../benchmarks/polar_decoders.py);
@@ -80,7 +196,7 @@ D2 still trains once per encoder/seed. Four concurrent jobs at two CPUs each lim
 CPUs; the same 1,474,560 evaluation workload is preserved. Nothing is queued. All practical receivers
 completed local timing probes at B12/14 K7/26;
 the expensive independent-guide and field paths justify CPU HPC for the full grid. REF's combinatorial
-cap rejects research-load enumeration before allocation. The job README and design log own current
+cap rejects research-load enumeration before allocation. The job README and experiment records own current
 smoke evidence, timings, limitations and commands.
 
 ## Exact foundations
@@ -122,14 +238,14 @@ uv run python -m benchmarks.polar_energy_geometry
 The 14 October scaling audit additionally checked scalar-reverse count readout, cheaper Fourier markers,
 inverse connected assembly and shared C2/C3 extraction on a five-word fixture, both sources and K<=3.
 Those were one-off algebra cross-checks, not separate permanent experiment drivers or optimized implementations.
-Their cost consequences are retained in the exact log.
+Their cost consequences are retained in Report 7.
 
 ## Parked approximation scripts
 
 These pre-reset scripts are preserved for possible later systematic work. They are not active experiments,
 accepted assumptions or a validated approximation bank. The previous A1–A3 numerical comparisons and
 combined test-run narrative have been removed. Current assumptions/derivations belong to
-[Report 9](reports/09_polar_bayesian_approximations.pdf) and the [working log](POLAR_APPROXIMATION_LOG.md).
+[Report 9](reports/09_polar_bayesian_approximations.pdf).
 
 | Existing driver / checks | Historical setup and aim |
 |---|---|

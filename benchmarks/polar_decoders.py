@@ -47,6 +47,7 @@ EXTRA_DEFAULTS = {
     "bound_grid": 31, "bound_power_grid": 31, "bound_order": 96, "bounds": True, "d2_checkpoint": None,
 }
 ROOT = Path(__file__).resolve().parents[1]
+TRACTABLE_DECODERS = frozenset(f"DEC-{i:02}" for i in range(25, 35))
 
 
 def normalized_config(config):
@@ -85,7 +86,9 @@ def normalized_config(config):
             raise ValueError(f"Unknown decoder parameters for {name}")
         for key, value in params.items():
             default = dict(REGISTRY[name].defaults)[key]
-            if isinstance(default, int) and (not isinstance(value, int) or value < (0 if key in ("field_rank", "moves") else 1)):
+            allow_zero = key in ("field_rank", "moves") or (
+                name in TRACTABLE_DECODERS and key in ("flip_order", "burn_in", "cache_centers"))
+            if isinstance(default, int) and (not isinstance(value, int) or value < (0 if allow_zero else 1)):
                 raise ValueError(f"Invalid integer budget {name}.{key}")
             if isinstance(default, float) and not np.isfinite(value):
                 raise ValueError(f"Nonfinite parameter {name}.{key}")
@@ -93,6 +96,10 @@ def normalized_config(config):
                 raise ValueError(f"{name}.{key} must be in (0,1]")
             if key == "failure_probability" and not 0 < value < 1:
                 raise ValueError(f"{name}.{key} must be in (0,1)")
+            if key == "beam_weight" and not 0 <= value < 1:
+                raise ValueError(f"{name}.{key} must be in [0,1)")
+            if key == "init_method" and value not in ("scl", "basis", "union"):
+                raise ValueError(f"Invalid {name}.init_method")
             if key in ("block_size", "order") and value not in (1, 2, 3):
                 raise ValueError(f"{name}.{key} supports only 1, 2 or 3")
             if key in ("spacing", "tolerance") and value < 0 or key == "guide_log_floor" and value >= 0:
@@ -170,6 +177,20 @@ def interval(values, bounded=True):
             "frame_hoeffding95": [max(0., mean - h), min(1., mean + h)] if bounded else None}
 
 
+def sparse_tail_error(reference, tail_probabilities):
+    """Compare sparse inferred tails with REF, treating absent words/ranks as zero."""
+    reported = set()
+    error = 0.
+    for word, tails in tail_probabilities:
+        reported.add(word)
+        if tails:
+            error = max(error, float(np.max(np.abs(reference[word, :len(tails)] - np.asarray(tails)))))
+        if len(tails) < reference.shape[1]:
+            error = max(error, float(reference[word, len(tails)]))
+    omitted = max((reference[word, 0] for word in range(len(reference)) if word not in reported), default=0.)
+    return float(max(error, omitted))
+
+
 def summarize(records):
     cells = []
     keys = sorted({(r["decoder"], r["sampling"], r["K"], r["ebn0_db"]) for r in records})
@@ -188,7 +209,8 @@ def summarize(records):
                 "p95_seconds": float(np.quantile(times, .95))}
         for key in ("conditional_excess_risk", "tail_max_error", "effective_sample_size", "excess_risk_bound", "posterior_risk",
                     "candidate_recall", "true_configuration_in_candidates", "maximum_tail_interval_width",
-                    "positive_evidence_certified", "mixing_failure_bound", "support_omitted_mass_bound"):
+                    "positive_evidence_certified", "mixing_failure_bound", "support_omitted_mass_bound",
+                    "expected_excess_risk_bound", "log_density_ratio_bound", "initial_pupe"):
             values = [r["meta"][key] for r in rows if r["meta"].get(key) is not None]
             if values:
                 cell[key] = float(np.mean(values))
@@ -240,6 +262,15 @@ def run_experiment(config, out_dir):
         for name in ("DEC-01", "DEC-13"):
             prepared_global[name] = {"geometry_cache": cache}
     query_setup = time.perf_counter() - before
+    tractable_setup = 0.
+    if TRACTABLE_DECODERS.intersection(c["decoders"]):
+        from framework.polar_tractable import PolarModel
+
+        before = time.perf_counter()
+        model = PolarModel(base.polar, base.positions, encoder.codebook.amplitudes().detach().numpy(), base.n)
+        tractable_setup = time.perf_counter() - before
+        for name in TRACTABLE_DECODERS.intersection(c["decoders"]):
+            prepared_global[name] = {"model": model}
     if "D2" in c["decoders"]:
         torch.manual_seed(c["seed"] + 400_000)
         decoder = PolarD2(c["layers"]).double()
@@ -317,6 +348,8 @@ def run_experiment(config, out_dir):
                                 meta["conditional_excess_risk"] = max(0., excess)
                                 if tails is not None:
                                     meta["tail_max_error"] = float(np.max(np.abs(tails - ref_tails)))
+                                elif "tail_probabilities" in meta:
+                                    meta["tail_max_error"] = sparse_tail_error(ref_tails, meta["tail_probabilities"])
                                 if "elbo" in meta:
                                     meta["exact_evidence_variational_bound"] = min(
                                         1., 2 * math.sqrt(max(0., ref_log_z - meta["elbo"]) / 2))
@@ -326,6 +359,10 @@ def run_experiment(config, out_dir):
                             if "candidate_ids" in meta:
                                 meta["candidate_recall"] = float(np.isin(ids[frame], meta["candidate_ids"]).mean())
                                 meta["true_configuration_in_candidates"] = bool(np.isin(ids[frame], meta["candidate_ids"]).all())
+                            if "initial_counts" in meta:
+                                initial = np.array([w for w, count in meta["initial_counts"] for _ in range(count)])
+                                meta["initial_pupe"] = frame_metrics(message_bits(ids[frame], c["B"]),
+                                                                   message_bits(initial, c["B"]))["pupe"]
                             record = {"decoder": name, "sampling": source, "K": k, "ebn0_db": snr,
                                       "seed": c["seed"], "frame": frame, "seconds": elapsed, "metrics": metrics,
                                       "counts": [[int(w), int(counts[w])] for w in selected], "meta": meta,
@@ -350,6 +387,7 @@ def run_experiment(config, out_dir):
                           "seconds": encoder_seconds, "explicit_matrix_bytes": phi.nbytes},
               "training": training, "setup": setup, "D2_geometry_seconds": d2_setup, "bound_seconds": bound_seconds,
               "query_geometry_seconds": query_setup,
+              "tractable_model_seconds": tractable_setup,
               "evaluation": summarize(records), "bounds": bounds,
               "decoder_params": {name: {**dict(REGISTRY[name].defaults), **c["decoder_params"].get(name, {})} for name in c["decoders"]},
               "physical_noise_convention": "sigma²=1/(2 B 10^(Eb/N0/10)); unit-energy real AWGN",
@@ -428,7 +466,7 @@ def plots(result, out):
                          fontsize=12)
             unit = "seed" if any(len(r["seeds"]) > 1 for r in cells) else "frame"
             footer = (f"95% {unit} t intervals; zero observed errors do not prove zero PUPE. Bounds concern coding limits, REF the fixed bank."
-                      if metric == "pupe" else "Decode timing includes readout; encoder, REF preparation and D2 training costs are stored separately.")
+                      if metric == "pupe" else "Decode timing includes readout; encoder, model/reference preparation and D2 training costs are stored separately.")
             fig.text(.5, .015, footer, ha="center", fontsize=8)
             fig.tight_layout(rect=(0, max(.20, (.55 + .17 * legend_rows) / height), 1, .94))
             fig.savefig(out / f"{filename}_{source}.png", dpi=170)
@@ -557,11 +595,12 @@ def merge_runs(paths, out_dir, *, compatible_sources=None):
               "seeds": sorted(matrices), "matrix_sha256_by_seed": {str(seed): value for seed, value in matrices.items()},
               "matrix_sha256": first["matrix_sha256"] if len(matrices) == 1 else None,
               "encoder": first["encoder"] if len(matrices) == 1 else None,
-              "setup": [], "D2_geometry_seconds": None, "bound_seconds": None,
+              "setup": [], "D2_geometry_seconds": None, "bound_seconds": None, "tractable_model_seconds": None,
               "training": ({name: row for r in results for name, row in r["training"].items()} if len(matrices) == 1 else {}),
               "run_metadata": [{"seed": r["config"]["seed"], "matrix_sha256": r["matrix_sha256"], "encoder": r["encoder"],
                                 "training": r["training"], "setup": r["setup"], "D2_geometry_seconds": r["D2_geometry_seconds"],
                                 "query_geometry_seconds": r.get("query_geometry_seconds", 0.),
+                                "tractable_model_seconds": r.get("tractable_model_seconds", 0.),
                                 "bound_seconds": r["bound_seconds"]}
                                for r in results]}
     result["source_provenance_by_run"] = [{"path": str(p), "revision": r["revision"], "source_sha256": r["source_sha256"]}

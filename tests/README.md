@@ -17,6 +17,17 @@ The module tests.polar_decoder_families_test checks all thirteen algorithms agai
 exact endpoints, finite-state bounds and sampling controls; it does not assert every default is accurate.
 The module tests.polar_decoder_cost measures B12/B14 inference/training cost separately from PUPE evaluation.
 
+## Procedural tractability checks and decoders
+
+DEC-25–34 can be selected through the same benchmark CLI. These IID-only variants use procedural
+waveforms and sparse count decisions; the common small-B benchmark still constructs an explicit encoder.
+Run `uv run python -m unittest tests.polar_tractable_test tests.polar_tractable_execution_test tests.polar_tractable_harness_test tests.polar_pair_proposals_test tests.polar_tractable_importance_test tests.polar_tractable_jobs_test`.
+The tests cover proposal laws, exact tiny endpoints, pair recursion, adapter equivalence and bounded B100
+execution (not B100 performance). The [experiment bank](../docs/EXPERIMENT_BANK.md) records smoke commands,
+budgets and results; the [tractability log](../docs/POLAR_TRACTABILITY_LOG.md) records the research decisions.
+DEC-33 adds a whole-configuration importance envelope and expected decision-regret bound; DEC-34 combines
+candidate rules. [Job037](../jobs/037_polar_tractable/README.md) owns the matched CPU array and historical-control audit.
+
 ## Multiplicity-aware PUPE
 
 Run `uv run python -m unittest tests.pupe_metrics_test tests.polar_posterior_test` for cross-scorer agreement,

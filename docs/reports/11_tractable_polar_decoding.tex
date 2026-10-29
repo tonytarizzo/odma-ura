@@ -1,0 +1,935 @@
+\documentclass[10pt,a4paper]{article}
+\newcommand{\ReportShortTitle}{Tractable polar decoding}
+\input{report_style.tex}
+\newcommand{\E}{\mathbb E}
+\newcommand{\Prb}{\mathbb P}
+\newcommand{\ind}{\mathbf 1}
+\newcommand{\GF}{\mathrm{GF}}
+\newcommand{\TV}{\operatorname{TV}}
+\newcommand{\risk}{\mathcal R}
+\begin{document}
+{\LARGE\bfseries Polar Bayesian decoding: tractable approximations}\par
+{\large From effective finite-alphabet receivers to feasible computation}\par
+{\color{muted}29 October 2026 --- Report 11; continuing algebraic investigation}
+
+\textbf{Research aim.} The approximations developed so far improve decoding performance while limiting
+the search over possible transmissions. The resulting receivers nevertheless retain computations over the
+full message alphabet. The next objective is to make decoding feasible as message length and activity grow,
+allowing an explicit loss of accuracy where it buys useful computational savings. We pursue this through
+nonlearned, algebraically motivated approximations, using the exact observations in Report 7 and the
+approximation results in Report 9 as foundations. The fixed encoder and PUPE objective remain unchanged.
+
+\section{Keep the target; identify the computation to remove}
+Write $b=B_c$, $d=N_c$, $P=2^{B_p}$ and $M=P2^b=2^B$. With the balanced encoder of Report 8,
+\begin{equation}
+ \phi(p,v)=S_pD_p(-1)^{Lv},\qquad D_p=\diag(\sqrt{e_p}),\qquad
+ y=\sum_{k=1}^K\phi(w_k)+z,\quad z\sim\mathcal N(0,\sigma^2I_n).
+ \label{eq:model}
+\end{equation}
+The receiver knows the encoding rule, $K$ and $\sigma^2>0$. Messages and their patterns are unknown.
+Every waveform has unit energy. IID uniform messages give the count posterior
+\begin{equation}
+ \pi_y(a)=\frac1{Z_y}\frac{K!}{M^K\prod_w a_w!}
+  \exp\left[-\frac{\|y-\sum_w a_w\phi(w)\|^2}{2\sigma^2}\right],\qquad \sum_w a_w=K.
+ \label{eq:posterior}
+\end{equation}
+For an output count vector $c$ totaling $K$, the conditional PUPE is
+\begin{equation}
+ \risk_y(c)=1-\frac1K\sum_w\sum_{j=1}^{c_w}T_{w,j},\qquad
+ T_{w,j}=\Prb(a_w\geq j\mid y).
+ \label{eq:loss}
+\end{equation}
+The Bayes action repeatedly selects the largest available next tail. Approximations change how these
+tails are obtained; a likely configuration or a small signal residual alone is a different decision rule.
+Distinct-message sampling is a separate conditioned source, which still allows shared patterns.
+
+There are three costs to separate. Payload processing should avoid enumerating $2^b$ words. The fixed
+placement/energy bank already contains $Pd$ entries, so retaining it costs $\Theta(Pd)$. Finally, the
+number of candidate configurations, samples and residual searches can grow with $K$. Removing one
+exponential sum does not bound the others.
+
+Current multiset-beam scoring costs roughly $O(KWnM)$ for width $W$; sparse columns can replace $n$ by
+$d$ but leave $M$. The B12/B14 experiments retain $b=6,d=32,n=256$ and increase $P$ from 64 to 256.
+They therefore identify useful inference mechanisms without testing longer polar payloads. A payload
+scaling study must increase $b,d$ at a declared rate and also specify $P,n,K$ and noise/energy scaling.
+
+\section{Use the exact conditional polar problem}
+Given a hypothesized configuration of the other $K-1$ slots, form
+$r=y-\sum_{j\ne k}\phi(w_j)$. Unit candidate energy gives
+\begin{equation}
+ f_r(p,v)=e^{s_p(v)},\qquad
+ s_p(v)=\frac{r^T\phi(p,v)}{\sigma^2}
+       =\sum_{i=1}^d h_{p,i}(-1)^{\ell_i^Tv},\qquad
+ h_{p,i}=\frac{\sqrt{e_{p,i}}r_{r(p,i)}}{\sigma^2}.
+ \label{eq:score}
+\end{equation}
+Here $\ell_i^T$ is row $i$ of $L$. These are exact conditional weights, with polar LLRs $2h_{p,i}$.
+The outside messages are receiver hypotheses, not known true transmissions.
+
+\subsection{A polar list is a proposal, not a partition}
+SCL can return a bounded list without enumerating payloads. It does not supply
+$Z_p=\sum_v e^{s_p(v)}$ or an exact conditional sample. Its retained path metric is
+\[
+ m_p(v)=\sum_i\log(2\cosh h_{p,i})-s_p(v).
+\]
+The first term varies with the pattern. Cross-pattern comparisons must restore it or directly rescore
+the physical waveforms. An empty CRC-valid list does not establish pattern absence.
+
+For a deduplicated list $C(r)$ and declared guide scores $\widetilde s$, an available normalized proposal is
+\begin{equation}
+ q_C(w\mid r)=\frac{\ind\{w\in C(r)\}e^{\widetilde s(w)}}
+                    {\sum_{u\in C(r)}e^{\widetilde s(u)}},\qquad
+ q(w\mid r)=(1-\alpha)q_C(w\mid r)+\alpha/M,
+ \label{eq:listproposal}
+\end{equation}
+where $0<\alpha<1$; use the uniform law if the list is empty. Random message bits supply the uniform
+draw without an alphabet scan. A single-slot Metropolis--Hastings (MH) move accepts $u\to w$ with
+\begin{equation}
+ A(u,w\mid r)=\min\{1,e^{s_r(w)-s_r(u)}q(u\mid r)/q(w\mid r)\}.
+ \label{eq:mh}
+\end{equation}
+The outside residual is identical in both directions. A sequential pair proposal needs its actual
+reverse contexts as well. These constructions already exist in the earlier revisable-sampling prototype.
+Full support ensures a valid target, but a missed word may still require order $M/\alpha$ draws to discover.
+
+\subsection{Residual uncertainty changes the guide}
+When $h$ users remain, including the next proposed word, Report 9's Gaussian continuation replaces the
+unresolved sum by its mean and covariance. With one-message moments $\mu,\Sigma_x$, put
+\[
+ u=r-(h-1)\mu,\qquad \Sigma_h=\sigma^2I+(h-1)\Sigma_x,
+ \qquad \widetilde s(x)=u^T\Sigma_h^{-1}x-\tfrac12x^T\Sigma_h^{-1}x.
+\]
+This is an approximation to the remaining-user convolution, not a change in physical noise.
+For scalar $\Sigma_h$, the quadratic term is common and ordinary polar LLRs apply. A diagonal
+covariance adds a pattern-dependent constant. A dense covariance introduces additional parity terms:
+\begin{align}
+ \widetilde s_p(v)={}&\sum_i a_i(S_p^T\Sigma_h^{-1}u)_i\chi_{\ell_i}(v)\nonumber\\
+ &-\tfrac12\sum_{i,j}a_ia_j(S_p^T\Sigma_h^{-1}S_p)_{ij}\chi_{\ell_i+\ell_j}(v),
+ \label{eq:quadraticcharacters}
+\end{align}
+where $a_i=\sqrt{e_{p,i}}$ and $\chi_g(v)=(-1)^{g^Tv}$. Thus a dense guide is generally not an ordinary
+$d$-symbol SCL input. Dropping its extra terms is a further approximation. Exact physical weighting
+can correct a guide's target bias, but cannot guarantee useful sampling or fast mixing.
+
+\section{Build a normalized reference from independent parities}
+\label{sec:envelope}
+Report 9's character algebra gives another tractable inner operation. For a fixed pattern and affine
+payload restriction $v=v_0+Rz$, $z\in\GF(2)^q$, group identical restricted rows:
+\begin{equation}
+ s(z)=H_0+\sum_{g\in\mathcal G}H_g\chi_g(z),\qquad g\ne0.
+ \label{eq:characters}
+\end{equation}
+Grouping is exact. The physical conditional has at most $d$ groups; the dense Gaussian guide may have
+$O(d^2)$. Choose an independent row set $F$, of rank $r_F$, and split the score into
+\begin{align}
+ s_F(z)&=H_0+\sum_{g\in F}H_g\chi_g(z),&
+ D_F(z)&=\sum_{g\notin F}H_g\chi_g(z),\nonumber\\
+ R_F&=\sum_{g\notin F}|H_g|,&
+ Z_F&=2^{q-r_F}e^{H_0}\prod_{g\in F}2\cosh H_g.
+ \label{eq:basis}
+\end{align}
+Independent parity assignments have equal multiplicity $2^{q-r_F}$. Consequently
+$q_F(z)=e^{s_F(z)}/Z_F$ is normalized. Sample each retained parity independently with
+$\Prb(g^Tz=0)=e^{H_g}/(2\cosh H_g)$, then solve the binary system and choose its free bits uniformly.
+No payload enumeration or unknown normalizer is required.
+
+Used alone, $q_F$ ignores the dependent terms. Alternatively it is a reference for exact correction.
+Since $|D_F|\leq R_F$,
+\begin{equation}
+ L_F:=e^{-R_F}Z_F\leq Z:=\sum_z e^{s(z)}\leq U_F:=e^{R_F}Z_F,
+ \qquad e^{s(z)}\leq U_Fq_F(z).
+ \label{eq:partition}
+\end{equation}
+We call the last pointwise upper bound an \emph{envelope}. It bounds both a partition and the weight
+of each possible word.
+
+\subsection{Choose the basis and combine unknown patterns}
+Greedy selection in decreasing $|H_g|$, keeping a row only if independent, minimizes $R_F$.
+It also minimizes $U_F$ within this family: retaining a row reduces the log upper bound by
+$|H_g|-\log\cosh H_g$, which increases with $|H_g|$. The independent-set exchange property gives
+the same greedy ordering for either weight. This is optimality of this bound construction, not of the decoder.
+
+For unconditioned patterns set $q=b$ and $U_{\rm all}=\sum_pU_{F,p}$. Propose a pattern and payload by
+\begin{equation}
+ Q(p,z)=\frac{U_{F,p}}{U_{\rm all}}q_{F,p}(z),\qquad
+ a(p,z)=e^{D_{F,p}(z)-R_{F,p}}.
+ \label{eq:rejection}
+\end{equation}
+Then $Qa=e^{s_p(z)}/U_{\rm all}$. Rejection sampling therefore returns an exact one-slot conditional,
+with acceptance $Z_{\rm all}/U_{\rm all}$ and mean attempts $U_{\rm all}/Z_{\rm all}$.
+The unknown partition controls runtime even though it is unnecessary to execute a draw.
+
+The same bound certifies a list's conditional omitted mass. If its exact weight is $Z_C$, then
+\begin{equation}
+ \Prb(w\notin C\mid r)\leq1-Z_C/U_{\rm all}.
+ \label{eq:listmass}
+\end{equation}
+This concerns one specified outside configuration. It does not certify that a multiuser search has found
+the right configurations. For a distinct-message source, reject prohibited full words and use the allowed partition.
+
+\subsection{A finite update need not wait for rejection to succeed}
+Cap rejection at $L_a$ attempts and keep the current word on failure. For a fixed outside context this gives
+\[
+ \beta(r)\pi_r+(1-\beta(r))I,\qquad
+ \beta(r)=1-(1-Z_{\rm all}/U_{\rm all})^{L_a},
+\]
+where $\pi_r$ is the exact conditional. This kernel is invariant because its success probability does not
+depend on the current slot value. Using $Q$ in Eq.~\eqref{eq:mh} is another bounded-cost update.
+Neither result establishes rapid movement of the full $K$-user chain.
+
+\subsection{Dependent parities can make the envelope poor}
+Suppose the score contains $g,h,g+h$ with coefficients $(a,a,-a)$, $a>0$. Writing
+$x=\chi_g$, $u=\chi_h$ gives $s=a(x+u-xu)$: three assignments score $a$ and one scores $-3a$.
+Any two-character reference has acceptance
+\begin{equation}
+ \mathcal A(a)=\frac{3e^a+e^{-3a}}{e^a(2\cosh a)^2}\sim3e^{-2a}.
+ \label{eq:conflict}
+\end{equation}
+The preferred signs conflict, so separate factor bounds cannot be attained together. The selected
+$b=6,d=32$, CRC8 generator contains this triangle among its 28 distinct nonzero rows. Positive amplitudes
+and distinct occupied resources allow a residual to realize these coefficients and zero others.
+This is a realizable conditional obstruction, not a measurement of typical residuals.
+
+\section{Refine selected states without discarding the rest}
+\label{sec:repair}
+A loose envelope need not be replaced everywhere. Suppose $E(w)=UQ(w)\geq f(w)>0$, with an available
+normalized proposal $Q$. Evaluate exact weights on a finite set $A$ and define
+\begin{equation}
+ Z_A=\sum_{w\in A}f(w),\quad \tau_A=Q(A^c),\quad
+ E_A(w)=\begin{cases}f(w),&w\in A,\\E(w),&w\notin A,\end{cases}
+ \quad U_A=Z_A+U\tau_A.
+ \label{eq:repaired-envelope}
+\end{equation}
+Then $f\leq E_A\leq E$ and $Z\leq U_A\leq U$. Exploring $w$ reduces the upper bound by
+$E(w)-f(w)$. A useful state to refine is therefore one whose weight the reference overestimates;
+it need not be a particularly likely transmitted message.
+
+The unknown outside mass is at most $U\tau_A$, giving
+\begin{equation}
+ \Prb(w\notin A\mid r,p)\leq\frac{U\tau_A}{Z_A+U\tau_A}.
+ \label{eq:repaired-miss}
+\end{equation}
+If a lower envelope $LQ\leq f$ is also available, the partition interval becomes
+$Z_A+L\tau_A\leq Z\leq Z_A+U\tau_A$.
+
+\subsection{The refined envelope is an explicit full-space proposal}
+With probability $Z_A/U_A$, draw an explored word proportionally to its exact weight and accept.
+Otherwise draw from $Q$ conditioned on $A^c$ and accept with probability $f(w)/E(w)$.
+The proposal is $E_A/U_A$, its accepted density is $f/U_A$, and its acceptance is $Z/U_A$.
+Mean attempts decrease after refinement, but the work of constructing $A$ must still be recovered.
+Across patterns, select $p$ proportionally to its refined $U_{A,p}$.
+
+The same proposal can be used without rejection for importance sampling. With $\pi=f/Z$,
+\begin{equation}
+ \sup_w\frac{\pi(w)}{E_A(w)/U_A}\leq\frac{U_A}{Z},\qquad
+ 1+\chi^2(\pi\|E_A/U_A)\leq\frac{U_A}{Z}.
+ \label{eq:secondmoment}
+\end{equation}
+The second inequality follows by bounding one factor of the squared density ratio and averaging the
+other. Refinement improves this variance bound; it does not prove that its preparation is worthwhile.
+
+\subsection{Sample outside an arbitrary list directly}
+Repeatedly drawing $Q$ until it leaves $A$ would cost $1/\tau_A$ attempts. The parity reference avoids
+this problem. An invertible binary coordinate change gives independent retained parities followed by
+uniform free coordinates. Transform the explored words into these coordinates and build a prefix tree.
+
+Let $m(\alpha)$ be the conditional probability of avoiding explored leaves below prefix $\alpha$.
+Use $m=1$ where no explored descendant exists, $m=0$ at an explored leaf, and otherwise
+\begin{equation}
+ m(\alpha)=(1-p_i)m(\alpha0)+p_i m(\alpha1).
+ \label{eq:complement}
+\end{equation}
+Here $p_i$ is the product law's probability of bit one. Choose the next bit $c$ with probability
+$\Prb(X_i=c)m(\alpha c)/m(\alpha)$. The factors telescope to $Q(w)/\tau_A$ outside the list.
+This is a direct conditional draw, including when the list holds almost all reference mass.
+
+For $q$ free bits, the tree takes $O(|A|q)$ preparation and storage after coordinate conversion;
+conversion can cost $O(|A|q^2)$. Traversal costs $O(q)$ plus the inverse map. The positive recursion
+also avoids subtracting nearly equal masses. Very small probabilities still require stable arithmetic.
+
+\section{Generate states by testing reliable parity coordinates}
+\label{sec:flips}
+The independent reference suggests a search rule as well as a sampler. Let $F$ span every nonzero
+score character. Each retained parity disagrees with its favored sign with probability
+\[
+ p_j=\frac1{1+e^{2|H_j|}}.
+\]
+Enumerate assignments with at most $t$ disagreements, then evaluate their complete physical scores.
+This is related to ordered-statistics decoding's reliable-basis reprocessing\cite{fossorier}.
+The number of tested assignments is
+\begin{equation}
+ N_t=\sum_{j=0}^{\min(t,r_F)}\binom{r_F}{j}=O(r_F^t)\quad\text{for fixed }t.
+ \label{eq:flips}
+\end{equation}
+It supplies a finite alternative to SCL discovery. Increasing the radius changes the polynomial degree.
+
+If $r_F=q$, an assignment identifies one payload. Otherwise it identifies $2^{q-r_F}$ equally weighted
+payloads, since all score characters lie in the span. Use that multiplicity in its mass and sample the
+free bits uniformly. A parity cell cannot be treated as one full message in the outer count decoder.
+
+The reference flip count is a sum of independent Bernoulli variables. A suffix dynamic program capped
+at $t+1$ computes $\tau_t=\Prb_Q(\text{more than }t\text{ flips})$ in $O(r_F(t+1))$ work and storage.
+The same tables sample exactly conditional on exceeding $t$. Thus the refined envelope
+$U_t=Z_{A_t}+U\tau_t$ has both a computable total and an accessible complement sampler.
+An SCL list can instead supply $A$, or be combined with this search after deduplication.
+
+\subsection{One explored cell repairs the triangle}
+For $s=a(x+u-xu)$, retain reference $ax+au$ and explore only its favored cell $(x,u)=(1,1)$.
+Replacing that cell's envelope weight $e^{3a}$ by its exact weight $e^a$ gives
+\begin{equation}
+ U_0=3e^a+e^{-a},\qquad Z=3e^a+e^{-3a},\qquad Z/U_0\longrightarrow1.
+ \label{eq:triangle-repair}
+\end{equation}
+The single-flip cells already attain their envelope weights, so exploring them does not improve this bound.
+At $a=8$, acceptance changes from $3.38\times10^{-7}$ to $.999999962$.
+
+The explored cell nevertheless holds only asymptotic target mass $1/3$. Its omitted-mass bound tends
+to $2/3$. Restricting inference to that cell would be poor; the refined full-space proposal succeeds
+because its direct complement sampler also visits the other modes. Improving a proposal and retaining
+enough states for list-only inference are different objectives.
+
+\subsection{Repeated conflicts require a different representation}
+For $m$ independent triangles, target flip count tends to $\operatorname{Binomial}(m,2/3)$ as $a$ grows.
+A fixed-radius list loses target mass as $m$ increases. More sharply, for fixed $m$ and $t<m-1$,
+\[
+ \tau_t\sim\binom{2m}{t+1}e^{-2a(t+1)},\qquad U\asymp e^{3ma},\qquad Z\asymp3^me^{ma},
+\]
+so refined acceptance still decays proportionally to $e^{-2a(m-t-1)}$. At $a=4$, radius-zero acceptance
+is $.999888$ for one triangle but $3.82\times10^{-10}$ for four. Radius one only raises the latter to
+$3.25\times10^{-7}$. A growing search radius can therefore recover exponential work.
+
+These independent triangles have a cheaper exact solution: evaluate each four-state component separately.
+In general, express characters in the retained basis and connect coordinates appearing in a common factor.
+If component ranks are $r_i$, partitions and samples factor exactly, with enumeration costing roughly
+$\sum_iD_i2^{r_i}$ after constructing the coordinate maps. Small joint groups can also replace parts of
+a reference, while omitted factors retain explicit envelope bounds. More general elimination costs depend
+on joint separator width, not the rank of each individual factor.
+
+This is an exact control for the counterexample, not evidence of small components in the selected code.
+With every nonzero generator character present, the checked $(b,d)=(6,32),(32,128),(88,512)$ constructions
+(CRC8, CRC16 and CRC16 respectively) each have a single component of rank $b$.
+Residual-specific zero coefficients, conditioning or an explicitly
+bounded factor approximation may simplify them; useful small decompositions remain to be established.
+
+\section{Reuse calculations across nearby residuals}
+\label{sec:reuse}
+Repeated proposal construction may dominate inference. For the same encoder, noise and allowed words,
+compare residuals $r_0$ and $r=r_0+\Delta r$. Their exact score difference is
+\[
+ \Delta s(w)=\Delta r^T\phi(w)/\sigma^2.
+\]
+Choose bounds $l\leq\Delta s(w)\leq u$ and write $\Omega=u-l$. Unit energy gives the interval
+$[-\|\Delta r\|/\sigma^2,\|\Delta r\|/\sigma^2]$ without searching words. Grouping the difference
+score by pattern gives a possible refinement:
+\[
+ l=\min_p\left(c_{p,0}-\sum_{g\ne0}|c_{p,g}|\right),\qquad
+ u=\max_p\left(c_{p,0}+\sum_{g\ne0}|c_{p,g}|\right).
+\]
+Intersect the two intervals. With cached row groups, the second calculation costs $O(Pd)$.
+
+\subsection{Transfer conditional accuracy bounds}
+Since $\pi_r\propto\pi_{r_0}e^{\Delta s}$,
+\begin{equation}
+ \TV(\pi_r,\pi_{r_0})\leq\tanh(\Omega/4).
+ \label{eq:reuse-tv}
+\end{equation}
+For $\Omega=0$ the laws agree. Otherwise, let $X=e^{\Delta s}\in[a_-,a_+]$ and $m=\E X$. Convexity bounds the variation by
+$(a_+-m)(m-a_-)/[(a_+-a_-)m]$. Maximizing at $m=\sqrt{a_-a_+}$ gives the displayed bound.
+A cached approximate law with error $\eta_0$ has reused error at most
+$\min\{1,\eta_0+\tanh(\Omega/4)\}$.
+
+If a list has certified omitted mass at most $\varepsilon_0$ at $r_0$, then
+\begin{equation}
+ \pi_r(C^c)\leq\frac{e^\Omega\varepsilon_0}{1-\varepsilon_0+e^\Omega\varepsilon_0}.
+ \label{eq:reuse-odds}
+\end{equation}
+Outside weights increase by at most $e^u$ while inside weights decrease by at most $e^l$; comparing
+their odds proves the result. A desired tolerance $\varepsilon_\star>\varepsilon_0>0$ permits reuse if
+\[
+ \Omega\leq\log\frac{\varepsilon_\star(1-\varepsilon_0)}{\varepsilon_0(1-\varepsilon_\star)}.
+\]
+This can avoid another polar search. It certifies one conditional list, not complete multiuser coverage.
+
+\subsection{Reuse a proposal with exact correction}
+If a cached proposal satisfies $e^{s_{r_0}(w)}\leq U_0q_0(w)$, then
+$e^{s_r(w)}\leq e^uU_0q_0(w)$. Draw from $q_0$ and accept with
+$e^{s_r(w)}/(e^uU_0q_0(w))$. The new conditional is exact, and an available lower bound
+$Z_0^-\leq Z_{r_0}$ gives
+\begin{equation}
+ \mathcal A_r=Z_r/(e^uU_0)\geq e^{-\Omega}Z_0^-/U_0.
+ \label{eq:reuse-acceptance}
+\end{equation}
+Thus the explored-state refinement and residual reuse combine through the same pointwise envelope.
+Rejection can again be capped with a hold on failure, or $q_0$ can be used in MH.
+
+For a fixed context, $C_0=U_0/Z_0^-$ gives $\pi_r/q_0\leq e^\Omega C_0$. The independence-MH transition
+therefore dominates $e^{-\Omega}\pi_r/C_0$, giving contraction at most
+$(1-e^{-\Omega}/C_0)^t$ after $t$ moves. Indeed its off-diagonal mass is
+$\min\{q_0(w),\pi_r(w)q_0(v)/\pi_r(v)\}$ and each term has this lower bound.
+The bound does not establish mixing of the joint chain whose outside users keep changing.
+
+\subsection{Account for the cache itself}
+A fixed bank of centers can be prepared from $y$. Select a center using the outside residual, so a
+single-slot move uses the same proposal forward and backward. Pair moves require the corresponding
+reverse choices. History-dependent adaptation needs a separate validity argument.
+
+With $J_0$ centers and $J$ queries, charge $J_0$ constructions plus selection, comparison and physical
+rescoring for all $J$ queries. Naive center selection costs $O(J_0n)$ per query; grouped comparison
+adds $O(Pd)$. Low noise magnifies residual differences by $1/\sigma^2$, potentially requiring many centers.
+These bounds identify when reuse is safe, not whether useful residuals admit a small cache.
+
+\section{Discover a correlated pair without scanning payload pairs}
+Single-slot proposals can miss configurations that require two simultaneous replacements. A bounded
+pair search is therefore worth testing. Fix the other $K-2$ hypothesized slots and let $r$ be their
+subtracted residual. First consider the hypothesis that both proposed messages use pattern $p$.
+Report 7 already gives full-alphabet pair contractions and a noiseless same-pattern identifiability
+criterion. The question here is different: can a finite noisy search propose useful pairs without
+enumerating $2^{2b}$ payload pairs?
+
+\subsection{Use a four-symbol polar channel}
+Put $a_i=\sqrt{e_{p,i}}$ and $r_i=r_{r(p,i)}$. For coded bits $x,z\in\GF(2)$, the local channel weight is
+\begin{equation}
+ W_{p,i}(x,z)=\exp\!\left[-\frac{(r_i-a_i[(-1)^x+(-1)^z])^2}{2\sigma^2}\right].
+ \label{eq:pairchannel}
+\end{equation}
+This is exact for the fixed outside context and same-pattern hypothesis. Because both users employ
+the same binary polar transform, their paired input symbols form an additive $\GF(2)^2$ transform.
+For two four-entry channel arrays $A,B$, its kernel $(u,v)\mapsto(u\oplus v,v)$ gives
+\begin{equation}
+ W^-(u)=\tfrac14\sum_{v\in\GF(2)^2}A(u\oplus v)B(v),\qquad
+ W^+(v;u)\ \propto\ A(u\oplus v)B(v).
+ \label{eq:pairkernel}
+\end{equation}
+Joint polar decoding on multiple-access channels is established; see
+\href{https://arxiv.org/abs/1006.4255}{\c{S}a\c{s}o\u{g}lu, Telatar and Yeh} and
+\href{https://arxiv.org/abs/1311.3123}{Nasser and Telatar}.
+The proposed use here keeps the existing encoder, frozen positions and two CRC constraints.
+
+A deterministic list search extends a path by four symbols at an information position and by $(0,0)$ at a jointly
+frozen position, retains at most $L_2$ paths, and checks both CRCs. Its principal arithmetic can be
+$O(16L_2d\log d)$, with $O(4L_2d)$ working memory using a standard shared-path implementation;
+sorting all extensions adds $O(4L_2d\log(4L_2))$. Re-encode and physically rescore surviving pairs.
+This last step also restores the unoccupied-coordinate likelihood terms needed to compare patterns.
+
+The local kernel identities are exact; a finite SCL list is an approximation. Its usual recursion
+marginalizes free future symbols, without fully imposing future frozen/CRC constraints, and pruning
+can discard the useful pair. It yields neither the constrained pair partition nor an exact posterior
+draw. The existing frozen schedule was not designed here as a new two-user MAC code, so the cited
+coding theorems do not establish its finite-list performance.
+
+\subsection{A cheaper XOR guide has a missing code factor}
+There is also a route through two ordinary binary polar searches. Write the ordered payload pair as
+$(v,v\oplus\delta)$, and define
+\[
+ m_i(\delta)=\ind\{(L\delta)_i=0\},\qquad
+ \theta_i=2a_ir_i/\sigma^2,\qquad \kappa_i=2a_i^2/\sigma^2.
+\]
+The signals cancel where $m_i=0$ and add where $m_i=1$. After removing the common factor
+$e^{-\|r\|^2/(2\sigma^2)}$, the exact pair weight is
+\begin{equation}
+ f_p(v,\delta)=\exp\!\left[\sum_i m_i(\delta)
+              \{\theta_i\chi_{\ell_i}(v)-\kappa_i\}\right].
+ \label{eq:pairxorweight}
+\end{equation}
+For fixed $\delta$, this is an ordinary polar likelihood in $v$, with LLRs $2m_i(\delta)\theta_i$.
+Under the IID uniform source conditioned on $p$, $v$ and $\delta$ are independent uniform payloads;
+$\delta=0$ correctly represents repeated messages.
+
+Marginalizing each sign independently suggests XOR-code LLRs
+$\gamma_i=\log\cosh\theta_i-\kappa_i$. But the resulting weight $G_p$ omits code consistency:
+\begin{align}
+ G_p(\delta)&=\exp\!\left[\sum_i m_i(\delta)\gamma_i\right],\qquad
+ \sum_v f_p(v,\delta)=2^bG_p(\delta)\mathcal C_p(\delta),\label{eq:xorcorrection}\\
+ \mathcal C_p(\delta)&=2^{-b}\sum_v\prod_{i:m_i(\delta)=1}
+       \frac{e^{\theta_i\chi_{\ell_i}(v)}}{\cosh\theta_i}.\nonumber
+\end{align}
+$\mathcal C_p=1$ when all active rows are distinct, nonzero and linearly independent. Constant, repeated or
+dependent rows generally prevent that simplification. $\mathcal C_p$ is a likelihood correction, not a
+probability. On one tiny $b=2,d=8$, CRC4 fixture, the normalized guide probabilities for
+$\delta=00,01,10,11$ are $(.508,.399,.058,.035)$, whereas the exact probabilities are
+$(.203,.765,.014,.019)$: the preferred difference reverses.
+
+One bounded candidate procedure decodes a list of $L_\delta$ differences using $\gamma$, then a
+conditional list of $L_v$ payloads for each difference, and physically rescores the resulting pairs.
+Ignoring list sorting, its per-pattern search cost is
+$O((L_\delta+L_\delta L_v)d\log d)$. The first list can lose a useful difference before the exact
+score is evaluated. The earlier character envelopes can instead bound the masked partition in
+\eqref{eq:xorcorrection}, but constructing that bound costs an inner operation for each tested
+difference. Neither route is selected as the winner. Report 7's existing rank condition for
+noiseless unordered-pair identification does not resolve this noisy discovery problem.
+
+\subsection{Normalize the finite proposal and retain the count target}
+For a fixed residual, pool and deduplicate the proposed \emph{ordered} full-message pairs in $C(r)$. With
+$g_r(u_1,u_2)=\exp[-\|r-\phi(u_1)-\phi(u_2)\|^2/(2\sigma^2)]$, define
+\begin{equation}
+ q_C(\mathbf u\mid r)=\frac{\ind\{\mathbf u\in C(r)\}g_r(\mathbf u)}
+                              {\sum_{\mathbf z\in C(r)}g_r(\mathbf z)},\qquad
+ q(\mathbf u\mid r)=(1-\alpha)q_C(\mathbf u\mid r)+\alpha/M^2.
+ \label{eq:pairproposal}
+\end{equation}
+Use the uniform pair law if the list is empty. Its draw requires only random message bits, and its
+normalization requires only the finite list. With fixed or uniformly selected slot indices, the IID
+ordered-slot prior cancels, and the block MH acceptance is
+\begin{equation}
+ \min\!\left\{1,\frac{g_r(\mathbf u)}{g_r(\mathbf w)}
+                  \frac{q(\mathbf w\mid r)}{q(\mathbf u\mid r)}\right\}.
+ \label{eq:pairmh}
+\end{equation}
+The outside residual is identical in both directions. A stochastic factorized same-pattern proposal
+instead has density $q_P(p\mid r)q_\delta(v\oplus u\mid p,r)q_v(v\mid v\oplus u,p,r)$ for
+the ordered pair $((p,v),(p,u))$; its actual forward and reverse densities must be evaluated.
+
+If an unordered pair list is used, divide each pair's proposal mass equally among its two orderings,
+or its single ordering for a repeated message. There is no additional factorial factor in the
+ordered-slot update: projecting all $K$ slots to counts already produces the IID count prior.
+Choosing slot pairs according to their current messages requires the corresponding reverse selection
+probability. Distinct-message sampling requires its own exclusions and proposal normalization.
+
+For $J_2$ residual contexts and $R_p$ tested patterns per context, charge the pair-search cost
+$J_2R_p$ times, physical rescoring, and any $O(Pd)$ pattern screening in every context. The bank still
+costs $\Theta(Pd)$ memory; a retained pool contains up to $R_pL_2$ ordered pairs in addition to the
+per-pattern working memory. A naive scan of possible slot pairs adds $O(K^2)$ choices.
+For an IID prior pair, the probability of a common pattern is only $1/P$. With different patterns,
+overlaps can couple different polar symbol indices, so \eqref{eq:pairkernel} is generally no longer
+an aligned memoryless channel. This proposal therefore addresses a restricted correlated move;
+full support alone gives no useful discovery or mixing bound for the remaining configurations.
+Count-tail estimation and the PUPE readout are still required after these moves.
+
+\textbf{Finite verification and next boundary.} A separate identity script checks all 16 payload pairs
+in each of 20 tiny residual fixtures, the four-symbol kernel, and full-support pair MH detailed balance
+on 64 ordered states. It implements no joint SCL decoder and supplies no performance result.
+A useful next experiment is a bounded conditional comparison of joint four-symbol and XOR-first
+candidate recall, cost, and CRC-valid list size at growing $b,d$, followed by tests in estimated
+multiuser residuals. Those measurements would decide whether this operation merits an end-to-end bridge.
+
+\section{Keep the final count calculation sparse}
+For $H$ weighted legal configurations $a^{(h)}$ with normalized weights $\rho_h$, their measure has tails
+\[
+ \widehat T_{w,j}=\sum_h\rho_h\ind\{a_w^{(h)}\geq j\}.
+\]
+Accumulate a histogram of positive counts for each observed word and take reverse cumulative sums.
+Since $\sum_w\max_h a_w^{(h)}\leq\sum_{h,w}a_w^{(h)}=HK$, storage for nonzero tail levels is $O(HK)$,
+not $O(MK)$. A heap of next tails allocates the output in $O(C_s+K\log C_s)$ work, where $C_s\leq HK$
+is the number of observed words. Labels, waveform storage and inference remain separate costs.
+
+For a retained multiset beam, weights are proportional to the physical likelihood divided by
+$\prod_w a_w!$, normalized over unique retained multisets. This is the posterior conditioned on the beam.
+Ordered-slot samples instead use prior $M^{-K}$; adding another factorial factor would count the source twice.
+
+\subsection{Restricting outputs differs from restricting explanations}
+For a candidate set $C$, define
+\[
+ \mu_{\rm out}=\frac1K\E\sum_{w\notin C}a_w,\qquad
+ \varepsilon_C=\Prb\left(\sum_{w\notin C}a_w>0\mid y\right),
+\]
+where the expectation is under the full posterior. Every $C$-supported action has risk at least
+$\mu_{\rm out}$. If its tails are still computed under the full posterior, the best such action has
+\emph{excess} risk at most $\mu_{\rm out}$: remove outside entries from a global optimal action and refill
+inside. Uniform retained-tail error $\eta$ adds at most $2\eta$. Refilling requires nonempty $C$ for IID
+counts, or $|C|\geq K$ for distinct counts.
+
+Conditioning the entire posterior on all words belonging to $C$ gives a different bound. Its Bayes action
+has excess risk at most $\varepsilon_C$, because the full law is a mixture of the conditional law and
+its complement. Conditional inference regret $\delta_C$ gives
+$(1-\varepsilon_C)\delta_C+\varepsilon_C$.
+
+For example, assign probability $1/4$ to $a^4$ and $3/4$ to $b^3c$, with $C=\{a,b\}$.
+The outside-copy fraction is $3/16$, but conditioning selects $a^4$, with excess risk $1/2$.
+The full-posterior constrained action is $b^3a$. Their risks are $.75$ and $.375$, versus Bayes risk $.25$.
+This decision-law example shows why candidate recall alone cannot justify conditioning the posterior.
+
+\subsection{Representation can be small even when obtaining it is hard}
+If $H$ independent exact posterior samples were available, Bernoulli concentration and a union bound give
+\begin{equation}
+ \Prb\left(\max_{w,j}|\widehat T_{w,j}-T_{w,j}|>\eta\right)\leq2MK e^{-2H\eta^2}.
+ \label{eq:uniformtails}
+\end{equation}
+Thus $H\geq[B\log2+\log(2K/\delta)]/(2\eta^2)$ suffices for excess risk at most $2\eta$ with probability
+$1-\delta$. Unseen words have empirical tail zero, so sparse readout suffices despite the all-word bound.
+Only $\log M$ enters this sample count. Producing the independent samples is the unresolved step;
+correlated chain states or weighted importance draws do not satisfy this premise automatically.
+
+\section{Use overlap parities to separate a mixed-pattern block}
+\label{sec:parity-cover}
+The same-pattern channel does not handle general mixed-pattern overlaps. Report 7 supplies their
+exact parity factorization, but its pair operator still groups and copies all $2^b$ payload weights.
+Combining those parities with affine one-user envelopes gives another finite operation. Its cost is
+exponential in a chosen interaction rank; a small rank is a condition to test, not an assumption.
+
+\subsection{Condition one endpoint of every retained interaction}
+Fix $m$ slot indices, their hypothesized ordered patterns $p_1,\ldots,p_m$, and the residual $r$ after
+subtracting the other slots. Removing the common residual norm and $m$ unit self-energies leaves
+\begin{equation}
+ S(v_1,\ldots,v_m)=\sum_k s_k(v_k)
+ -\sum_{k<l}\sum_{g,h}J_{kl}(g,h)\chi_g(v_k)\chi_h(v_l),\qquad
+ s_k(v)=r^T\phi(p_k,v)/\sigma^2,
+ \label{eq:cover-score}
+\end{equation}
+where $J_{kl}(g,h)$ sums $\sqrt{e_{p_k,i}e_{p_l,j}}/\sigma^2$ over shared resources whose local
+generator rows are $g,h$. Terms with a zero row are constants or unaries; absorb them first.
+This can reduce the interaction rank without approximation.
+
+For slot $k$, choose a character subspace $W_k$ with independent row basis $H_k$, rank $r_k$.
+Call a remaining factor \emph{covered} when $g\in W_k$ or $h\in W_l$. Condition
+$\alpha_k=H_kv_k$. For $g\in W_k$, its sign is now a known function of $\alpha_k$.
+A covered factor therefore becomes a constant if both endpoints are fixed, or shifts the unary
+coefficient at its unfixed endpoint. Keeping all covered factors gives exactly
+\begin{align}
+ S_W&=c(\alpha)+\sum_k t_{k,\alpha}(v_k),\qquad H_kv_k=\alpha_k,\nonumber\\
+ Z_W&=\sum_\alpha e^{c(\alpha)}\prod_{k=1}^m Z_{k,\alpha},\qquad
+ Z_{k,\alpha}=\sum_{v:H_kv=\alpha_k}e^{t_{k,\alpha}(v)}.
+ \label{eq:cover-partition}
+\end{align}
+There are $2^R$ sectors, $R=\sum_kr_k$. Every payload tuple belongs to exactly one, so no extra
+$2^{-R}$ factor appears. Write each affine support as $v=v_0+Nz$ and use the restricted character
+algebra. It retains all polar and CRC constraints; ordinary unconstrained SCL does not automatically
+enforce these additional parity conditions.
+
+For a pair, let $W_p$ span all nonconstant left overlap rows and set $W_q=\{0\}$. Conditional on the
+left overlap signs, the right law is an ordinary polar likelihood with shifted LLRs; the left law
+is affine-restricted. This needs $2^{r_p}$ sectors, versus $2^{r_p+r_q}$ entries in the two-sided
+overlap table, and avoids its full-payload grouping stage. Reversing the orientation gives another
+choice. Neither sector's polar partition is free.
+
+For several users, form each slot's \emph{joint} row span across its assigned interactions.
+Rows shared by different neighbours are charged once. A three-user star control below has two
+rank-two edge interfaces at the center but only rank two jointly, hence four sectors. Independent
+edge summaries would fail to enforce that they came from the same central payload.
+
+\subsection{Limit rank, bound the omitted factors, or correct exactly}
+With a rank budget, some factors may remain uncovered. Set
+\[
+ D=S-S_W,\qquad T(W)=\sum_{\text{uncovered }(k,l,g,h)}|J_{kl}(g,h)|.
+\]
+Then $|D|\leq T$, giving
+\begin{equation}
+ e^{-T}Z_W\leq Z\leq e^TZ_W,\qquad
+ \TV(\pi,\pi_W)\leq\tanh(T/2).
+ \label{eq:cover-error}
+\end{equation}
+The variation bound uses log-weight oscillation at most $2T$. It bounds every conditional count-tail
+error. For this fixed outside configuration and pattern tuple, a Bayes action under $\pi_W$ has
+conditional PUPE regret at most $2(m/K)\tanh(T/2)$: only $m$ true copies can change, so each action's
+loss varies by at most $m/K$. This does not bound the stationary error of approximate block updates
+whose contexts keep changing.
+
+Exact correction need not evaluate the inner partitions. For every sector, construct available
+pointwise envelopes $e^{t_{k,\alpha}}\leq U_{k,\alpha}q_{k,\alpha}$ and lower partition bounds
+$L_{k,\alpha}$ using Section~\ref{sec:envelope} or its refinements. Define
+\begin{equation}
+ U_W=\sum_\alpha e^{c(\alpha)}\prod_kU_{k,\alpha},\quad
+ L_W=\sum_\alpha e^{c(\alpha)}\prod_kL_{k,\alpha},\quad
+ Q(\mathbf v)=\frac{e^{c(\alpha)}\prod_kU_{k,\alpha}}{U_W}
+                         \prod_kq_{k,\alpha}(v_k).
+ \label{eq:cover-proposal}
+\end{equation}
+Sample a sector with the displayed finite weights, then sample its independent affine payload laws.
+The sector is determined by the resulting tuple, so its density is evaluable. The full physical
+weight satisfies $e^S\leq e^TU_WQ$. Accept with $e^S/(e^TU_WQ)$ to obtain an exact fixed-pattern
+block draw, with
+\begin{equation}
+ \mathcal A=Z/(e^TU_W)\geq e^{-2T}L_W/U_W.
+ \label{eq:cover-accept}
+\end{equation}
+Alternatively use this full-support proposal in a valid block MH update. The IID prior is uniform
+on ordered slots, including repeated messages; count factorials must not be added again. Distinct
+sampling introduces further exclusion factors requiring separate treatment.
+
+\subsection{Choose and pay for the representation}
+An executable rank-limited heuristic starts with empty spans, adds an endpoint row that captures the
+largest total uncovered coefficient magnitude after taking its span, and stops at budget $R$.
+It is not the earlier optimal independent-basis selection. Even one-sided selection can fail:
+give keys $e_1,e_2,e_1+e_2$ weight 9 each and keys $e_3,e_4$ weight 10 each. With rank budget two,
+greedy captures 20; the first two coordinates capture 27. General cover selection includes graph
+vertex-cover choices when every slot has one bit. Small families of declared candidate covers can
+therefore be compared without claiming a globally optimal choice.
+Naively testing all endpoint rows and rescanning factors after each addition costs
+$O(RE^2b^2)$ binary/scalar work for $E$ factors; the complete one-sided pair cover avoids that search.
+
+Let $E$ count grouped cross-factors and $C_{k,\alpha}$ be the cost of constructing a restricted unary
+envelope. After geometry and binary-linear preprocessing, setup costs
+\[
+ O\!\left(2^R\left[E+\sum_kC_{k,\alpha}\right]\right)
+\]
+with the worst sector cost understood. Independent-basis envelopes have polynomial construction
+cost in $d,b$, but their acceptance can be exponentially small. Store $2^R$ sector weights and
+rebuild the selected sector, or cache its inner proposals at additional memory cost. Rebuilding pays
+the selected inner construction cost on every attempt. Charge physical
+rescoring and all repeated attempts; the certified mean-attempt bound is $e^{2T}U_W/L_W$.
+A larger cover can simplify inner laws enough to compensate for its extra sectors, so minimum rank
+alone is not the runtime objective.
+
+For $J$ contexts and $H$ tested pattern tuples per context, pay these costs $JH$ times unless a
+specific reuse bound applies. Exhaustive pattern search costs $P^m$ tuples; conditioning on one
+tuple does not discover it. Geometry may be cached, but residual-dependent unary coefficients change.
+The pattern bank still costs $\Theta(Pd)$, and complete inference still needs count-tail readout.
+For independent uniform $d$-subsets of $n$ resources, expected pair overlap is $d^2/n$; increasing
+payload length does not ensure small overlap rank. Rank $b$ still gives $2^b$ sectors in this
+one-sided procedure. Low noise also amplifies $T$ by $1/\sigma^2$.
+
+\subsection{Evidence and relationship to earlier work}
+Conditioning variables to simplify inference is established; see
+\href{https://arxiv.org/abs/1110.2740}{Bidyuk and Dechter, \emph{Cutset Sampling for Bayesian Networks}}.
+Report 10's DEC-09 already admits conditioned feature cutsets. The concrete extension here combines
+Report 7's physical overlap characters, Report 9's affine inner algebra and Report 11's pointwise
+envelopes to avoid an explicit payload table in a fixed-pattern block operation. This targeted
+comparison does not establish research novelty.
+
+The independent script \path{tests/polar_tractability_structural_checks.py} checks all 512 payload
+tuples in each of 12 tiny three-user fixtures, four cover choices, a same-pattern duplicate control,
+partition bounds, normalized proposal correction and the greedy counterexample. Maximum discrepancy
+is $5.33\times10^{-15}$. In the first fixture the exact rank-two cover uses four sectors; its
+envelope acceptance is $.350$, illustrating that exact separation still leaves inner sampling cost.
+
+A placement/generator census for $B=12,b=6,d=32,n=256$, seed 3201, gives 31,941 one-sided sectors
+over all 2,016 distinct unordered pattern pairs, versus 1,093,347 two-sided nonconstant table entries.
+Constant-row interactions were absorbed into unaries in both counts. These are representation counts,
+not a runtime or large-payload result: sectors require inner calculations. A measured rank/acceptance/
+construction-cost comparison on actual residuals is the next useful boundary.
+
+\section{Turn proposal bounds into expected decoder loss}
+\label{sec:expected-decoder}
+The preceding guarantees have different scopes. Envelope slack bounds conditional rejection cost and
+importance variance. Omitted mass, residual oscillation and omitted interactions bound changes in a
+specified posterior or conditional decision. None alone controls a finite joint chain's distance from
+the full posterior. A high acceptance rate, or an empirical importance ESS, is not such a guarantee.
+We now combine the parity envelope, multiset search and independent sampling to obtain a complete
+decoder with an expected-loss bound.
+
+\subsection{Bound the whole configuration with one shared word law}
+For any fixed $t\in\mathbb R^n$, construct the earlier normalized parity proposal so that
+\[
+ e^{t^\top\phi(w)}\leq U_tq_t(w)\qquad\text{for every message }w.
+\]
+For ordered $W=(w_1,\ldots,w_K)$, let $S(W)=\sum_k\phi(w_k)$ and
+$f_y(W)=M^{-K}e^{-\|y-S(W)\|^2/(2\sigma^2)}$. Completing the square gives
+\begin{align}
+ -\frac{\|y-S\|^2}{2\sigma^2}-t^\top S
+ &=-t^\top y+\frac{\sigma^2\|t\|^2}{2}
+   -\frac{\|S-(y-\sigma^2t)\|^2}{2\sigma^2},\nonumber\\
+ f_y(W)&\leq C_tQ_t(W),\qquad Q_t(W)=\prod_{k=1}^Kq_t(w_k),\label{eq:tuple-envelope}\\
+ C_t&=\left(\frac{U_t}{M}\right)^K
+       \exp\left[-t^\top y+\frac{\sigma^2\|t\|^2}{2}\right].\nonumber
+\end{align}
+The product is a proposal, not an independence assumption about the posterior. The final negative
+square accounts for every user interaction. The bound is valid for any fixed $t$; the present
+isotropic choice $t=y/[\sigma^2+(K-1)/n]$ is only a guide, not an optimized tilt.
+For $K=1$ this choice gives $y-\sigma^2t=0$ and $\|S\|^2=1$. Retaining that known square
+tightens $C_t$ by the factor $e^{-1/(2\sigma^2)}$; the implementation uses this specialization.
+
+Let $A$ be a finite beam of complete multisets. Its exact unnormalized count weights are
+$f_\#(a)=o(a)f_y(W_a)$, where $o(a)=K!/\prod_w a_w!$.
+Then $Z_A=\sum_{a\in A}f_\#(a)\leq Z_y$. Drawing a multiset with probability $f_\#(a)/Z_A$ and
+uniformly shuffling its slots defines an ordered proposal $q_A(W)=f_\#(a)/(Z_Ao(a))$ on that beam.
+Use the full-support mixture
+\begin{equation}
+ Q_\lambda(W)=(1-\lambda)Q_t(W)+\lambda q_A(W),\qquad 0\leq\lambda<1.
+ \label{eq:exchangeable-mixture}
+\end{equation}
+Both components are exchangeable. A tuple's density needs only its product probability and multiset
+orbit factor; no enumeration of $K!$ orderings is required. Arbitrary slot-specific products would
+lose this simplification when symmetrized.
+
+Freeze the beam, tilt and proposal before drawing $H$ independent tuples. Their physical importance
+weights and normalized density ratios obey
+\begin{equation}
+ \omega(W)=\frac{f_y(W)}{Q_\lambda(W)}
+ \leq C=\frac{C_t}{1-\lambda},\qquad
+ r(W)=\frac{\omega(W)}{Z_y}\leq \bar\kappa=\frac{C}{Z_A},\qquad
+ \E_{Q_\lambda}r=1.
+ \label{eq:global-ratio}
+\end{equation}
+This supplies a computable bound without evaluating the full partition. A common product can still
+assign negligible mass to useful multiuser configurations, and the envelope can be loose. The beam
+component helps represent correlated explanations, but neither useful variance nor a useful
+$\bar\kappa$ is automatic.
+
+\subsection{Compare decisions before normalizing their tails}
+For a count-tail indicator $I_{w,j}(W)=\ind\{a_w(W)\geq j\}$, define
+$\widetilde T_{w,j}=H^{-1}\sum_h r(W_h)I_{w,j}(W_h)$.
+It is unbiased for $T_{w,j}$. Its empirical normalized version divides every tail by the same
+positive number $H^{-1}\sum_h r(W_h)$, so both versions select the same count action $\widehat c$.
+If $c^*$ is the exact Bayes action, direct comparison of their total tail rewards gives
+\[
+ 0\leq \risk_y(\widehat c)-\risk_y(c^*)
+ \leq 2\max_{w,j}|\widetilde T_{w,j}-T_{w,j}|.
+\]
+There is therefore no additional denominator-error term for this decision comparison.
+
+Each $rI_{w,j}$ lies in $[0,\bar\kappa]$ and has variance at most $\bar\kappa$.
+The Bernstein exponential-moment inequality for both signs, followed by a maximum over the $MK$ tails,
+gives, with $\ell=\log(2MK)=B\log2+\log(2K)$,
+\begin{equation}
+ \boxed{\quad
+ \E\!\left[\risk_y(\widehat c)-\risk_y(c^*)\mid y,A,t\right]
+ \leq \min\left\{1,\;
+ 2\sqrt{\frac{2\bar\kappa\ell}{H}}+\frac{2\bar\kappa\ell}{3H}\right\}.
+ \quad}
+ \label{eq:expected-regret}
+\end{equation}
+Specifically, the centered sample means have exponential-moment bound
+$\log\E e^{s(\widetilde T-T)}
+\leq (\bar\kappa/H)s^2/[2(1-\bar\kappa s/(3H))]$.
+Applying this to the $2MK$ signed errors and optimizing $s$ bounds their expected maximum by
+$\sqrt{2\bar\kappa\ell/H}+\bar\kappa\ell/(3H)$.
+The expectation is over independent proposal draws conditional on the frozen construction.
+It is not a guarantee for every realized output, and correlated MH samples cannot be substituted for $H$.
+Unvisited words have empirical tail zero, so the calculation remains sparse despite the all-word proof.
+
+\subsection{What can be predicted, and what still requires measurements?}
+Averaging \eqref{eq:expected-regret} over observations and any independent pilot randomness gives an
+ensemble excess-PUPE bound. Absolute expected PUPE is the Bayes risk plus that excess:
+\[
+ \E[\mathrm{PUPE}]=\E_Y[\risk_Y(c_Y^*)]
+                  +\E_{Y,\mathrm{draws}}[\risk_Y(\widehat c)-\risk_Y(c_Y^*)].
+\]
+Thus even a useful approximation-error bound does not determine the fixed encoder's irreducible error.
+Evaluating the Bayes term, or obtaining tight typical envelope ratios, may itself be difficult.
+The bound in \eqref{eq:expected-regret} may simply equal one.
+This occurs throughout the current multiuser smoke, despite much smaller measured conditional regret.
+It is therefore a valid diagnostic but not yet a useful numerical multiuser performance prediction.
+
+Bounds are useful for rejecting unsafe simplifications, transferring a conditional guarantee,
+and exposing which quantity must improve. Repair monotonically improves a fixed envelope bound;
+it need not improve runtime at a fixed budget. A smaller upper bound also does not prove that one
+decoder outperforms another. Compare matched PUPE and cost empirically, while retaining these
+diagnostics to explain failures. The coding bounds plotted in the benchmark concern different codes
+or ensembles; their gap is not an estimate of this encoder's recoverable decoder loss.
+
+\section{Combine the operations and charge the complete cost}
+Let $J$ count residual contexts, $R_p$ patterns decoded per context, $L_s$ the SCL width, $C$ pooled words,
+$W$ beam width and $H$ complete proposals. An efficient SCL implementation costs $O(L_sd\log d)$ time
+and $O(L_sd)$ space\cite{tal}; prototype copying, sorting and CRC work require their own accounting.
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{.25\textwidth}YY@{}}\toprule
+Operation & Principal work & Remaining question\\\midrule
+Polar lists then multiset beam & $J[Pd+P\log P+R_pL_sd\log d]$; then $KWCd$ plus bookkeeping & Do the lists and retained configurations cover useful explanations?\\
+Parity reference & Per pattern/context: $Dq^2+q^3+D\log D$; draw: $q^2+Dq$ & Is its envelope tight enough to justify construction?\\
+Radius-$t$ refinement & $N_tDr_F$ scores and $r_F(t+1)$ suffix tables & Is a small radius effective on the residuals encountered?\\
+Arbitrary-list refinement & Coordinate conversion, exact scores and $|A|q$ tree work & Does reduced envelope slack repay the preparation cost?\\
+Residual reuse & Center selection, comparison and new physical scores & Can enough contexts share a small bank?\\
+Joint same-pattern list & $16J_2R_pL_2d\log d$ plus sorting, screening and scores & Is joint discovery useful often enough to repay its cost?\\\bottomrule
+\end{tabularx}
+\end{center}
+
+Here $D$ is the number of grouped characters. Bounds use elementary arithmetic; binary packing and cached
+maps can improve implementation costs. All-pattern preparation multiplies by $P$. Persistent encoder storage
+is $O(Pd+dq)$, cached basis maps can add $O(Pq^2)$, and dense residual storage costs $O(n)$ per retained context.
+Dense Gaussian guidance additionally requires covariance work, up to $O(n^3)$ factorization and $O(n^2)$ memory.
+
+Fresh discovery at every beam parent gives $J$ of order $KW$; sequential importance sampling can give $J=HK$.
+Sampling $H$ ordered tuples from their actual proposal $q(W\mid y)$ uses weights
+\[
+ \omega(W)=\frac{M^{-K}\exp[-\|y-\sum_k\phi(w_k)\|^2/(2\sigma^2)]}{q(W\mid y)}.
+\]
+A whole-tuple prior mixture bounds these unnormalized weights by $1/\alpha$; separate stagewise mixtures
+only give $\alpha^{-K}$. Neither controls evidence-relative variance by itself. Similarly, good one-slot
+rejection acceptance does not guarantee global mixing. Shared lists, small exact factor groups, selective
+refinement and residual reuse can combine, but their joint construction and discovery costs must be counted.
+The shared product in \eqref{eq:exchangeable-mixture} instead prepares one all-pattern reference,
+then uses $HK$ word draws/density evaluations and $H$ physical scores. It avoids $HK$ fresh reference
+builds, at the cost of a less conditional guide. Beam setup, orbit bookkeeping and waveform caching
+remain additional costs. Mixture importance sampling is established methodology\cite{owen}; the
+encoder-specific envelope and count-decision bound are the constructions examined here.
+
+\section{Finite decoder implementations}
+The following IID-source variants now use procedural waveforms and sparse count tails. All know $K$
+and the physical noise variance. They are complete finite-budget receivers, not exact posterior solvers.
+Their numbering continues Report 10's bank and the DEC-14--24 combination study.
+
+\begin{center}\small
+\begin{tabularx}{\textwidth}{@{}lYY@{}}\toprule
+ID & Discovery or proposal & Inference and count decision\\\midrule
+DEC-25 & Screen patterns; ordinary polar SCL lists & Bounded multiset beam; exact posterior restricted to retained states\\
+DEC-26 & Screen patterns; reliable-basis flip candidates & Same multiset beam and restricted count tails\\
+DEC-27 & Independent-parity envelope across all patterns & Physically corrected single-slot MH; empirical count tails\\
+DEC-28 & Replace selected envelope weights by exact weights & Same MH kernel with direct complement sampling\\
+DEC-29 & Freeze a small bank of repaired proposals & Select by outside residual; exact physical MH correction\\
+DEC-30 & Four-symbol same-pattern joint polar lists & Alternate pair-list MH and single-slot SCL-list MH\\
+DEC-31 & XOR-first same-pattern pair lists & Same alternating kernels; exact retained-pair scoring\\
+DEC-32 & Single-slot polar list mixed with the uniform prior & Corrected single-slot MH; empirical count tails\\
+DEC-33 & Common tilted parity product mixed with a multiset beam & Independent physical importance weights; expected-loss bound \eqref{eq:expected-regret}\\
+DEC-34 & Union of SCL and reliable-basis candidates & Multiset beam; candidate containment at a fixed context only\\\bottomrule
+\end{tabularx}
+\end{center}
+
+The beams merge identical partial multisets. Their continuation score uses the isotropic residual guide;
+at the final depth, each retained multiset has weight proportional to
+$[K!/\prod_w a_w!]\exp[-\|y-\Phi a\|^2/(2\sigma^2)]$.
+The chains start from a declared bounded beam, update ordered slots, and add no further factorial term.
+Their default remains SCL; the matched Job037 comparison uses the same width-32 basis initializer for
+all correction variants. Its top configuration need not equal the beam's count-tail Bayes output.
+Pair moves have full support through their uniform ordered-pair mixture; ordinary single-slot moves also
+change patterns. Same-pattern list proposals therefore do not impose a same-pattern posterior restriction.
+Each finite chain has initialization and sampling error; invariant kernels alone do not bound that error.
+DEC-33 freezes its proposal before independent draws and records the expectation bound separately from
+per-output certificates. DEC-34's candidate union need not give nested final beams: pruning changes
+later residual contexts, so adding candidates does not guarantee lower PUPE.
+
+Refinement explores a capped set of actual payloads; the exclusion tree retains every other payload.
+A cache is fixed after initialization, and its selected proposal depends only on the outside residual,
+which is identical forward and reverse for that block. Each proposal's actual normalized density enters
+MH. No stale likelihood or uncorrected adaptive chain is substituted. An empty CRC-valid discovery list
+remains empty: list proposals then use the prior, while a beam parent receives one declared prior draw.
+The latter prevents an empty output but supplies no candidate-coverage guarantee.
+
+The procedural interface stores integer message IDs, on-demand waveforms, retained configurations and
+only visited-word tail entries. It has no $M$-length array. The implementation currently caches a
+dense $n$-vector per generated waveform, costing $O(nC_{\rm generated})$ within a call; budgets still
+control this cost. Parity proposals rebuild all $P$ pattern envelopes unless cached. Pair recursion uses
+explicit array copies, so an optimized SCL complexity claim would be premature.
+The common small-$B$ harness retains its explicit encoder and converts sparse hard counts to its legacy
+array format. That harness is not itself a large-$B$ execution path.
+
+Independent tests recover REF tails from exhaustive tiny beams, verify repaired draw laws and
+single/pair MH balance, and match procedural outputs to the legacy adapter. A separate bounded
+$B=100$ test uses $P=4,b=98,d=128,n=256$, CRC16 and integer IDs beyond 64 bits. All variants execute
+for $K=1,2$ without an alphabet table; the noiseless single-user observation is recovered at declared
+positive variance. This is an execution/control test, not evidence of useful multiuser PUPE at $B=100$.
+The new mixed-pattern parity-cover operation in Section~\ref{sec:parity-cover} remains a checked algebraic
+construction; it is not silently included in DEC-25--34. Further tiny exhaustive checks verify
+DEC-33's ordered mixture, repeated-word orbit factors, global envelope and beam evidence lower bound.
+
+\section{Established results and remaining questions}
+Normalized proposals, finite-set repair, residual reuse and sparse count decisions avoid payload
+enumeration in declared operations. Overlap conditioning extends these to mixed patterns, but interaction
+rank and inner acceptance can still be costly. The counterexamples rule out automatic sufficiency of
+independent factors, fixed flip radii or small lists.
+
+Next, compare corrections from matched initial configurations and increase payload length at declared
+$P,n,d,K$ scaling. Measure parity-cover rank, setup and acceptance on actual residuals. The present
+identities and smoke checks establish no fixed-PUPE large-payload scaling result.
+
+\textbf{Relation to existing methods.} Reliable-basis reprocessing and polar list decoding are
+established\cite{fossorier,tal}, as are combinations of search, bounding and importance sampling, and
+partition refinement for rejection sampling\cite{lou,kuck}. Approximate codebook probability has also
+been used for polar reliability and soft outputs\cite{yuan}. The present operations specialize these
+principles to the balanced ODMA posterior and count decision. A research contribution must identify a
+specific new construction or guarantee, or a useful measured improvement in complete-receiver cost and PUPE.
+
+\textbf{Verification.} The four earlier algebra scripts check 40 character fixtures, 30 refinement
+fixtures, 40 balanced residual pairs and 20 same-pattern pair fixtures, including the stated failure
+controls, with discrepancies below $10^{-11}$. The mixed-pattern checks and independent implementation
+tests are described above. Commands, finite budgets and local smoke outcomes are indexed in the experiment
+bank and research log. These double-precision checks are not interval certificates or evidence of global mixing.
+
+\begin{thebibliography}{9}
+\bibitem{tal} I. Tal and A. Vardy, ``List decoding of polar codes,''
+\href{https://arxiv.org/abs/1206.0050}{arXiv:1206.0050}.
+\bibitem{fossorier} M. P. C. Fossorier and S. Lin, ``Soft-decision decoding of linear block codes based on
+ordered statistics,'' \emph{IEEE Transactions on Information Theory}, vol. 41, no. 5, pp. 1379--1396, 1995.
+\href{https://doi.org/10.1109/18.412683}{doi:10.1109/18.412683}.
+\bibitem{lou} Q. Lou, R. Dechter and A. Ihler, ``Dynamic importance sampling for anytime bounds of the
+partition function,'' \emph{NeurIPS}, 2017.
+\href{https://proceedings.neurips.cc/paper_files/paper/2017/file/1f1baa5b8edac74eb4eaa329f14a0361-Paper.pdf}{Paper}.
+\bibitem{kuck} J. Kuck, T. Dao, H. Rezatofighi, A. Sabharwal and S. Ermon,
+``Approximating the permanent by sampling from adaptive partitions,'' \emph{NeurIPS}, 2019.
+\href{https://proceedings.neurips.cc/paper_files/paper/2019/file/d914a6c6d93c8df063b9099a076a488c-Paper.pdf}{Paper}.
+\bibitem{yuan} P. Yuan, K. R. Duffy and M. M\'edard, ``Near-optimal generalized decoding of polar-like
+codes,'' 2024. \href{https://arxiv.org/abs/2402.05004}{arXiv:2402.05004}.
+\bibitem{owen} A. Owen and Y. Zhou, \emph{Safe and effective importance sampling},
+Journal of the American Statistical Association, vol. 95, no. 449, pp. 135--143, 2000.
+\href{https://doi.org/10.1080/01621459.2000.10473909}{doi:10.1080/01621459.2000.10473909}.
+\end{thebibliography}
+\end{document}

@@ -1,7 +1,8 @@
-"""Report-10 receiver bank. Every entry returns (hard full-message counts, metadata).
+"""Receiver bank. Every entry returns (hard full-message counts, metadata).
 
 The thirteen original families and Job-036 combinations use an explicit alphabet.
 Variants and budgets are recorded; statistical exactness is not inferred from a family name.
+Report-11 entries also accept a procedural PolarScenario and return sparse count dictionaries.
 """
 
 from dataclasses import dataclass
@@ -226,6 +227,7 @@ from framework.polar_decoder_queries import fields, fourier, gaussian_counts, pr
 from framework.polar_decoder_search import chains, configuration, particles
 from framework.polar_decoder_contractions import connected, quantized, regions, signed_rank
 from framework.polar_decoder_combinations import combined_importance, combined_particles, multiset_beam
+from framework.polar_tractable import PolarScenario, tractable_beam, tractable_chain, tractable_importance
 
 REGISTRY = {
     "REF": DecoderSpec("REF: exact count Bayes", reference),
@@ -279,13 +281,50 @@ for number, label, overrides in [
                                              tuple({**_SMC_COMBINATION, **overrides}.items()), True)
 
 
+_TRACTABLE_BEAM = {"width": 16, "patterns": 8, "list_size": 16, "flip_order": 1, "max_refine": 32}
+for number, label, method in [(25, "SCL multiset beam", "scl"), (26, "basis-flip multiset beam", "basis")]:
+    REGISTRY[f"DEC-{number}"] = DecoderSpec(f"DEC-{number}: {label}", tractable_beam, ("iid",),
+                                          tuple({**_TRACTABLE_BEAM, "candidate_method": method}.items()), True)
+_TRACTABLE_CHAIN = {"samples": 64, "burn_in": 64, "thinning": 1, "patterns": 8, "list_size": 16,
+                    "init_width": 4, "defensive": .1, "flip_order": 1, "max_refine": 32, "cache_centers": 4,
+                    "init_method": "scl"}
+for number, label, method in [
+    (27, "independent-parity MH", "parity"), (28, "repaired-parity MH", "refined"),
+    (29, "cached repaired-parity MH", "cached"), (30, "joint-pair polar MH", "joint"),
+    (31, "XOR-pair polar MH", "xor"), (32, "SCL-list MH", "scl"),
+]:
+    REGISTRY[f"DEC-{number}"] = DecoderSpec(f"DEC-{number}: {label}", tractable_chain, ("iid",),
+                                          tuple({**_TRACTABLE_CHAIN, "proposal_method": method}.items()), True)
+
+REGISTRY["DEC-33"] = DecoderSpec("DEC-33: exchangeable parity + beam IS", tractable_importance, ("iid",),
+                                (("samples", 256), ("width", 32), ("patterns", 8), ("list_size", 16),
+                                 ("flip_order", 1), ("max_refine", 32), ("beam_weight", .5)), True)
+REGISTRY["DEC-34"] = DecoderSpec("DEC-34: union-discovery multiset beam", tractable_beam, ("iid",),
+                                tuple({**_TRACTABLE_BEAM, "candidate_method": "union"}.items()), True)
+
+
 def run(name, scenario, **params):
     spec = REGISTRY[name]
     if spec.run is None:
         raise NotImplementedError(f"{name} is catalogued in Report 10 but not implemented")
     if scenario.sampling not in spec.sources:
         raise ValueError(f"{name} supports {spec.sources}, not {scenario.sampling}")
+    procedural = isinstance(scenario, PolarScenario)
+    if procedural and spec.run not in (tractable_beam, tractable_chain, tractable_importance):
+        raise ValueError(f"{name} requires the explicit small-alphabet Scenario")
     counts, meta = spec.run(scenario, **{**dict(spec.defaults), **params})
+    if isinstance(counts, dict):
+        alphabet = 1 << scenario.model.B if procedural else scenario.phi.shape[1]
+        if any(not isinstance(w, int) or not 0 <= w < alphabet or not isinstance(c, int) or c <= 0
+               for w, c in counts.items()) or sum(counts.values()) != scenario.k:
+            raise ValueError(f"{name} violated the sparse count/output-budget contract")
+        meta["legacy_dense_adapter"] = not procedural
+        if procedural:
+            return counts, meta
+        dense = np.zeros(alphabet, dtype=np.int64)
+        for w, c in counts.items():
+            dense[w] = c
+        counts = dense
     counts = np.asarray(counts)
     if counts.shape != (scenario.phi.shape[1],) or not np.isfinite(counts).all():
         raise ValueError(f"{name} returned invalid full-message counts")

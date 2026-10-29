@@ -1,0 +1,72 @@
+% USER-MAINTAINED SCRATCHPAD.
+% Agents must not update this project unless the user explicitly requests an edit to it.
+% This is a provisional narrative outline, not a statement of established contributions.
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=23mm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{titlesec}
+\usepackage[hidelinks]{hyperref}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{3pt}
+\titlespacing*{\section}{0pt}{10pt}{3pt}
+\titlespacing*{\subsection}{0pt}{6pt}{2pt}
+\titleformat{\section}{\large\bfseries}{\thesection}{.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{.6em}{}
+\begin{document}
+
+{\LARGE\bfseries Paper outline: author scratchpad}\par
+{\small 25 October 2026 \quad|\quad Provisional narrative, before results}\par
+{\footnotesize Personal notes: agents should edit only on explicit request.
+Literature review and related work are assumed; proposed claims and decoder versions remain open.}
+
+\section{System model and computational problem}
+Define the unsourced Gaussian multiple-access model, known activity/noise assumptions, message multiplicities and multiset PUPE, then explain how $B$, $M=2^B$, $K$ and blocklength determine the computational challenge.
+
+\section{Structured polar transmission design}
+
+\subsection{Why polar coding and transmission patterns?}
+Motivate the algebraic structure and compact encoder description, with optional dense--polar comparisons at $B=12/14$ presented as receiver-dependent evidence rather than proof of equal encoding performance.
+
+\subsection{Deterministic energy balancing}
+Derive resource-energy balancing from the second-moment geometry, distinguishing its interference criterion from PUPE optimality and leaving room for a better encoder construction.
+
+\subsection{What structure does the decoder gain?}
+Identify useful pattern, amplitude and count relations; keep the intuition of one or two extra bits as something to quantify, rather than assuming additional payload or independent information.
+
+\section{The exact decoding target}
+
+\subsection{Posterior and decision objective}
+Express the physical likelihood and source prior through the polar construction, then derive the count-tail decision that minimizes expected multiset PUPE.
+
+\subsection{Useful exact reductions}
+Select the exact observations needed by the eventual algorithm---such as permutation symmetry and polar factorization---and distinguish representation savings from the unchanged $M$-message alphabet and combinatorial count-state search.
+
+\section{From the exact target to a decoder}
+Present only approximations that contribute to the final method, explaining the information each discards, its error control and its computational cost; the following version sequence is provisional.
+
+\subsection{V1: core nonlearned decoder}
+Build the basic inference method around the strongest discovery mechanism, potentially multiset beam search or guided importance sampling.
+
+\subsection{V2: complementary discovery or correction}
+Add a justified way to recover hypotheses or posterior mass missed by the core method, with correct weighting and count readout.
+
+\subsection{V3: targeted refinement}
+Introduce useful local or joint corrections, showing through controlled comparisons what they add beyond V1/V2 and whether their cost is justified.
+
+\subsection{Optional V4: learned internal approximations}
+If pursued later, learn to accelerate or improve specific internal computations while retaining the algebraic target and a clear nonlearned reference.
+
+\section{Evaluation methodology}
+
+\subsection{A tractable finite-alphabet test regime}
+Justify $B=12/14$ for explicit-codebook comparisons and test the proposed low-collision analogy to larger $B$, separating message collisions from pattern overlap and reserving exhaustive optimal decoding for genuinely tiny cases.
+
+\subsection{Matched baselines, versions and ablations}
+Compare PUPE and computational cost on common inputs against D2, the appropriately labelled ODMA baseline and relevant bounds, using tiny exact references and ablations to isolate each contribution.
+
+\section{Results}
+\emph{Reserved.}
+
+\end{document}
