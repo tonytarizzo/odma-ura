@@ -30,6 +30,7 @@ This repository is a research testbed for ODMA-aware unsourced random access dec
 
 - Use `uv` for environment management.
 - Use `uv run python ...` for Python commands once `uv.lock` exists.
+- Do not impose concurrency caps on HPC job arrays or submission commands. Leave concurrency to the scheduler and site limits.
 - If `uv` is unavailable in the current shell, say so once and use the best available local environment for verification.
 - If a run fails twice due to environment/runtime issues, stop retrying and report the blocker briefly.
 - Useful checks:

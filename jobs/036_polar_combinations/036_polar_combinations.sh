@@ -1,7 +1,7 @@
 #!/bin/bash
 #PBS -l walltime=72:00:00
 #PBS -l select=1:ncpus=2:mem=16gb
-#PBS -J 1-81%4
+#PBS -J 1-81
 #PBS -N ura036_combinations
 
 set -euo pipefail

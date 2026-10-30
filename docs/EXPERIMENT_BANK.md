@@ -1,9 +1,9 @@
 # Experiment bank
 
-Updated **27 October 2026**. This document maps research questions and algebra to executable scripts,
+Updated **30 October 2026**. This document maps research questions and algebra to executable scripts,
 fixture contracts and retained results. [CURRENT_STATE.md](CURRENT_STATE.md) owns priorities;
 Reports 7, 9, 10 and 11 own the mathematical derivations and their limitations.
-Job READMEs/manifests own HPC row definitions. Historical exact audits and matched performance evidence below retain their original scope. Approximation
+Job manifests and the commands below own HPC row definitions. Historical exact audits and matched performance evidence below retain their original scope. Approximation
 preparation is complete for the retained paths. All thirteen families now have shared-harness implementations;
 pre-reset prototype scripts remain parked. The user has submitted both Job035 and Job036; returned results remain incomplete.
 
@@ -28,6 +28,169 @@ Generated JSON stays outside git. Prior temporary outputs may no longer exist; c
 
 Coverage alone does not establish balance feasibility: the prescribed solver must converge. No silent
 support repair, fallback energies or decoder-dependent bank selection is permitted.
+
+## Sum geometry, repair and affine inference: Reports 7–11
+
+The [sum-geometry check](../tests/polar_sum_geometry_checks.py) follows the six-bit first-alias finding.
+It is a finite mathematical/geometry audit, with no production decoder changes or PUPE simulations.
+
+```bash
+uv run python -m tests.polar_sum_geometry_checks \
+  --output results/polar_sum_geometry_2026-10-29/checks.json
+```
+
+The output is generated and ignored by git. The script asserts the following independently of the
+older Report-7 test; integer equalities/cover checks are distinct from floating distance checks.
+
+| Question | Certificate / observation | Limit |
+|---|---|---|
+| What causes the first aliases? | Full 766,480-multiset K4 census equals the actual affine-class members: 392 pairs + 12 four-member classes; 52/651 planes deficient, 58 missing character flats, 464 pairwise equalities. | Complete only for this six-bit fixture and K4; K3 separately exhausts 45,760 states. |
+| Is the threshold universal? | A four-bit, ten-row linear sign code has 136 unique pairs but a triple alias. CRC0 has 32 complementary pair aliases. No quadratic-complete character basis exists in the selected CRC8 generator. | General linear-code counterexample, not a second polar-family theorem. |
+| How many new characters are needed? | All 1,623,160 six-subsets hit at most 55/58 flats; seven-row witness 8/13/19/52/60/61/63 hits all. Best three-row coverage is 40/58, achieved by 8/20/61. | Preserving old distinct rows avoids new aliases; deleting them needs another census. Cover discovery is exponential. |
+| What does the three-row replacement change? | 144 ambiguous pairs/288 multisets remain; minimum Hamming distance stays 12. Known-pattern K2 minimum squared distances improve from 1/.801428 to 1.5/1.271657, uniform/balanced. | Same B12/seed3201/pattern0 placements and energies; receiver compatibility and full-system PUPE untested. |
+| Does balance improve every noisy comparison? | All 2,162,160 K2 comparisons on that reference pattern: 982,704 distances increase, 1,179,456 decrease; minimum 1 → .801428. Direct Gaussian and grouped-character likelihoods agree. | A conditional counterexample, not a bank-wide distance or risk ranking. |
+| Can overlap change the conclusion? | A distinct-support four-pattern rectangle aliases under uniform balance; another balanced allocation separates it. | Same-pattern positive-energy kernel invariance does not extend to mixed patterns. |
+| Can inference keep identity without a full alphabet? | Affine-orbit signal equality, exact tails, slot-selection/factorial balance and a 100-bit nullspace control; sparse-Walsh bin identity with repeated counts and noise variance. | Local operations only; no discovery/mixing or complete scalable decoder guarantee. |
+| When may near aliases be merged? | Twenty finite Gaussian groups check the conditional likelihood-range/TV bound. | Group discovery, radius certificate, group evidence and global count allocation remain separate costs. |
+
+The character-distance identity's maximum discrepancy is below 8e-15. Runtime is a local diagnostic
+cost, recorded in the JSON (about six seconds in the initial run), not a decoder timing claim. The
+full pair-distance calculation materializes a 2080-by-2080 array; the four-user census materializes
+all 766,480 states. Report 7 owns exact classification/source frequency, Report 8 owns distances and
+modified signatures, Report 9 owns near-alias error, and Report 11 owns the local operation and costs.
+
+## Fixed-resource encoder comparison: Job038
+
+[Manifest](../jobs/038_polar_signatures/manifest.jsonl), [runner](../jobs/038_polar_signatures/run_row.py),
+[experiment](../jobs/038_polar_signatures/experiment.py), [merger](../jobs/038_polar_signatures/merge.py).
+This extends the Job034 mapping/D2 machinery and Job035 paired-frame contract without modifying their
+runtime sources or invalidating Job036/037 historical source audits. No new decoder family is introduced.
+
+**Question:** does replacing repeated characters improve noisy message-sum separation and count recovery,
+and does its effect depend on energy balancing or receiver discovery? The four arms are:
+
+| Signature | Uniform energy | Deterministic balanced energy |
+|---|---|---|
+| Original polar/CRC generator | Historical reference | Previous balancing control |
+| Three-row repair | Same resources and energy profile; rows 17/21/30 become 8/20/61 | Same repair and archived balanced profile |
+
+Indices are zero-based; keys use the existing MSB-first payload convention. All arms retain B12/B14,
+six payload bits, Nc32, n256, identical placement patterns and unit energy per message. Payload coding
+rate remains 6/32 and full-message rate B/256. The modified signature is derived from the old generator
+but is **not compatible with its native CRC/SCL decoder**. CRC length/information-set choices and placement
+are not separately changed or optimized. The seven-parity extension is deliberately absent: it uses
+39 occupied resources and needs a separate matched-resource study.
+
+The source is IID uniform full messages, with known K/physical variance and real AWGN
+`sigma²=1/(2 B 10^(EbN0/10))`. Loss and output are multiset count-PUPE. D2 and DEC-26 use their existing
+`run(scenario, **params) -> (counts, meta)` interfaces. D2 still has an explicit M-axis; DEC-26 uses the
+actual generator through basis proposals and sparse internal count readout. The common evaluation
+adapter materializes M columns. Matching the six-bit payload does not establish large-payload scaling.
+The DEC-26 budget is Job037's width32, eight patterns/context, radius-one basis flips and cap32, with
+physical terminal likelihoods. Candidate recall measures the union of visited message IDs, not whether
+the true joint configuration survived the beam.
+
+Each fixed encoder receives the same D2 training contract: eight layers/16 scalars, distinct-message
+training on K7/15/22/26 and uniform Eb/N0 in [-4,10], maximum 200 epochs, patience 10, 100 batches of 8,
+16 validation batches and lr .002. This historical **training source differs from the IID evaluation
+source**, identically across arms. Reference D2 reuses all 12 audited Job035 checkpoints; the repaired
+arms train 12 new calibrations. No encoder energy learning occurs. Job034's learned-energy results remain
+historical context, not a fifth matched arm or pooled IID metric. A win over balancing would not establish
+a win over jointly optimized Job034 energies.
+
+Default grid: **2 B × 3 seeds × 2 signatures × 2 energies = 24 array rows**. Each runs two receivers at
+K7/26, Eb/N0 4/10 dB and128 frames/cell: **24,576 receiver-frame evaluations**. These four cells are a
+focused subset of the historical grid; seed3201–3203 reuse is exploratory. Truth and standard noise are
+paired across arms, while observations change with the encoder. The merger rejects incomplete cohorts,
+unpaired truth/noise, unintended placement/energy changes, and source/config mismatches. It reports
+paired seed differences and the signature-by-balancing interaction. Missing historical DEC-26 runs are
+explicitly recorded as unavailable; new reference arms are still measured in this campaign.
+
+**Oracle diagnostic, separate from decoding:** for the first 32 frames/cell, reveal all outside users
+and the first two ordered slots' patterns. Enumerate 64² ordered payload pairs with the exact IID prior,
+normalize the physical likelihood and form count tails before allocating two copies. Same-pattern
+duplicates and exchangeable orderings receive the correct masses. Record nearest competing sum distance,
+near-competitor count, true pair posterior, count-PUPE, conditional Bayes risk and overlap. The first two
+slots are not selected for difficult payloads or favorable noise; same/mixed-pattern cases are reported
+separately. There are **3,072 oracle diagnostics**. This is conditional on known patterns/outside users;
+it omits alternative pattern pairs and is not a full-system Bayes result. Cost is O(n V²), memory
+O(V²+n V), including construction and normalization, separately timed. Same-pattern cases can be rare.
+
+**Reference replay:** use the saved `encoder.npz` amplitudes/placements, verified against the recorded
+matrix hash, generator, unit power and current deterministic construction within 1e-14. This addresses
+observed cross-platform amplitude differences of 5.55e-17 without weakening exact checkpoint/matrix or
+input-hash checks. The same archived profile feeds both signatures. Paths and archive/checkpoint hashes
+are retained. For deliberately independent regeneration, `--fresh-reference` rebuilds profiles and
+trains reference D2; apply it to every arm and pass it to the merger. This mode is not an exact historical replay.
+
+Local execution checks:
+
+```bash
+uv run python -m unittest tests.polar_signature_job_test tests.polar_energy_geometry_test tests.polar_mapping_test
+uv run python jobs/038_polar_signatures/run_row.py --index 4 --smoke \
+  --out-root jobs/038_polar_signatures/results_local_smoke
+uv run python jobs/038_polar_signatures/run_row.py --index 16 --probe \
+  --out-root jobs/038_polar_signatures/results_local_probe
+```
+
+Smoke uses the real six-bit signature, one short D2 epoch and two frames/cell. Probe uses one K26/4dB
+DEC-26 frame without training. Neither provides a performance ranking. Full-budget single-frame probes
+measured roughly 0.56–0.70s for DEC-26 on this laptop; setup was0.03–0.14s, the oracle pair computation
+about 0.6 ms, and the stored matrix 8/32 MiB for B12/B14. Historical D2 calibrations took 19–51 min each,
+7.06 job-hours across 12 runs. Using those as proxies suggests roughly9–10 job-hours/18–20 CPU-hours for
+the new campaign, with substantial hardware, SNR and training-convergence uncertainty. This is not an
+HPC timing guarantee. Full calibration/comparison belongs on CPU HPC; local checks are quick.
+
+The PBS array requests **two CPUs, 16 GB and 24 h per row**, no GPU and **no concurrency cap**. If all 24 rows
+run together the request is 48 CPUs/384 GB; scheduler/site limits determine actual concurrency. Never add
+array concurrency caps. Keep active-job checkouts unchanged: their source guards would reject edited
+runtime files. From the existing HPC repository with Job035 results, prepare a separate checkout:
+
+```bash
+POLAR_REFERENCE_RESULTS="$(pwd)/jobs/035_polar_decoders/results_all_decoders"
+git fetch origin
+git worktree add --detach ../odma-ura-038 origin/main
+cd ../odma-ura-038
+module load miniforge/3
+uv sync --frozen
+qsub -v "POLAR_REFERENCE_RESULTS=$POLAR_REFERENCE_RESULTS" jobs/038_polar_signatures/038_polar_signatures.sh
+```
+
+Use the actual historical results path if different. Reuse an existing dedicated checkout after inspecting
+it; do not overwrite it. From a checkout already containing the audited Job035 outputs, plain
+`qsub jobs/038_polar_signatures/038_polar_signatures.sh` suffices. Reference summary/encoder/checkpoint
+files are required and were present locally for all 12 arms. New outputs stay in
+`jobs/038_polar_signatures/results_signatures/`; complete matching runs may be skipped, partial runs are
+preserved and rejected on retry. If there is no historical archive, explicitly use fresh-reference mode
+for the entire comparison instead of silently relaxing the audit.
+
+After completion, select a complete four-arm cohort or merge the whole campaign:
+
+```bash
+uv run python jobs/038_polar_signatures/merge.py \
+  --baseline-results "$POLAR_REFERENCE_RESULTS" \
+  --out jobs/038_polar_signatures/results_analysis
+```
+
+Pass `--tractable-results` for completed Job037 controls in another checkout. `--B 12 --seeds 3201`
+selects the first four rows as a complete smaller cohort; it does not substitute for the declared
+three-seed comparison. JSON contains pair diagnostics/strata and all paired contrasts; CSV/PNG summarize
+count-PUPE and receiver timing. Generated results remain ignored. The campaign has **not been submitted**.
+
+**Validation, 30 October:** independent checks cover the repaired physical matrix, exact factor matvec/
+adjoint/Gram geometry, procedural-versus-explicit DEC-26 outputs, absence of SCL calls, brute-force
+oracle pair tails/decisions including duplicates, paired-arm rejection and uncapped PBS directives.
+Eight actual B12/B14 signature/energy smoke runs and twelve one-frame historical D2 replays passed;
+the latter preserve every audited input hash and count decision. Generated evidence is in
+`jobs/038_polar_signatures/results_validation_final_2026-10-30/`. This verifies execution and provenance,
+not a PUPE improvement. The strongest remaining limitation is that conditional two-pattern geometry
+omits global pattern competitors, while both complete receivers remain approximate.
+
+**Decision after the runs:** examine geometry, proposal coverage and full count loss together. If only
+conditional geometry improves, inspect lost proposals/joint states before blaming the code. If both
+receivers improve at matched resources, confirm on held-out seeds before extending the grid. If no
+benefit appears, retain the original encoder and record the failed implication from conditional distance
+to system performance; do not optimize additional rows merely to force a positive result.
 
 ## Tractability algebra checks: Report 11
 
@@ -67,7 +230,7 @@ uv run python -m tests.polar_tractability_structural_checks
 
 ## Procedural decoder implementations: DEC-25–34
 
-[Research log and declared variants](POLAR_TRACTABILITY_LOG.md),
+[Research log and declared variants](logs/POLAR_TRACTABILITY_LOG.md),
 [procedural decoder code](../framework/polar_tractable.py),
 [joint/XOR pair proposals](../framework/polar_pair_proposals.py).
 DEC-25/26 are SCL/basis multiset beams; DEC-27/28/29 use independent/repaired/cached parity MH;
@@ -102,7 +265,7 @@ Use a fresh output directory. Saved `config.json` files reproduce the recorded b
 the procedural B100 fixture is in `tests/polar_tractable_execution_test.py` because the common explicit
 benchmark deliberately rejects B>20. Generated results and plots remain outside git.
 
-**Matched CPU campaign:** [Job037](../jobs/037_polar_tractable/README.md) queues DEC-25–34 in 60 capped
+**Matched CPU campaign:** [Job037](../jobs/037_polar_tractable/README.md) queues DEC-25–34 in 60 uncapped
 jobs on exactly the balanced Job-035/036 physical grid, with audited historical D2/ODMA and selected
 explicit-decoder reuse. The chains share width-32 basis initialization. No new HPC jobs have been submitted.
 `results/tractable_matched_smoke_2026-10-29/` contains 1,872 paired B4 evaluations with REF/DEC14/ODMA,
@@ -128,8 +291,8 @@ DEC-14–24 cover multiset beam search, guide/product/beam proposal mixtures, te
 Gibbs and guided pair Metropolis, and a two-proposal-by-three-refinement SMC grid. All are nonlearned,
 IID-only and explicit-alphabet. Budgets and physical correction are recorded in the common harness.
 The fixed balanced B12/14 setup, seeds 3201–3203, K/SNR grids and 256 paired frames/cell match Job035.
-The original manifest has 81 rows after splitting heavy B14 IS loads, 540,672 new evaluations, and a
-four-job concurrency cap at two CPUs/16 GB each. The reduced 24 October plan retains 34 rows/237,568
+The original manifest has 81 rows after splitting heavy B14 IS loads and 540,672 new evaluations,
+at two CPUs/16 GB each, with no concurrency cap. The reduced 24 October plan retains 34 rows/237,568
 evaluations. D2/ODMA are reused; three missing B14 DEC-05 controls are being retried separately. Controls are
 joined only after pinned source, model, configuration, matrix, observation and seed-coverage checks;
 original per-run provenance remains in the aggregate. This is exploratory reuse, not a fresh-seed test.
@@ -271,7 +434,7 @@ motivated the fixed-polar decoder study; their training/native-receiver work is 
 
 Shared production contract: real Gaussian MAC, B12/14/n256, K7/15/22/26, Eb/N0=-4:2:10 dB,
 three seeds and 256 frames/cell/seed. Train distinct; evaluate distinct/IID separately. Known K/noise/codebook,
-eight D2 layers, 200-epoch cap, patience10 and best-checkpoint restoration. Fixed means encoder frozen,
+eight D2 layers, 200-epoch cap, patience 10 and best-checkpoint restoration. Fixed means encoder frozen,
 decoder trained. Preserve exact-unit versus nominal/message-dependent energy conventions.
 
 | Full-grid distinct mean PUPE | B12 | B14 |

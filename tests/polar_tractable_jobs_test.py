@@ -35,7 +35,7 @@ class TractableJobsTests(unittest.TestCase):
                 self.assertEqual(c['decoder_params'][name]['init_width'], 32)
         self.assertEqual(frames, 491520)
         script = (JOB/'037_polar_tractable.sh').read_text()
-        self.assertIn('#PBS -J 1-60%4', script)
+        self.assertIn('#PBS -J 1-60\n', script)
         self.assertIn('ncpus=2:mem=16gb', script)
 
     def test_source_audit_rejects_unreviewed_runtime_changes(self):

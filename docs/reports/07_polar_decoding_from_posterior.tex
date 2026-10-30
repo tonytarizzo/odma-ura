@@ -10,7 +10,7 @@
 \begin{document}
 {\LARGE\bfseries Polar multiuser decoding from first principles}\par
 {\large Exact multiset inference and a complete Bayes decoder}\par
-{\color{muted}16 October 2026 --- Report 7; exact Bayesian foundations}
+{\color{muted}29 October 2026 --- Report 7; exact Bayesian foundations and sum identifiability}
 
 \textbf{Research question.} Given the fixed, deterministically balanced polar encoder of Report 8, what information
 must an ideal receiver compute, and how can those calculations be completed exactly, even at prohibitive cost?
@@ -2324,8 +2324,108 @@ This proves the existence of larger ambiguous frames without claiming that they 
 
 \textbf{Consequence for decoder research.} Exact inference must preserve the probability mass and count tails of
 all compatible explanations. A correct receiver can return a Bayes action while remaining uncertain about the
-transmitted multiset. The finding does not reopen encoder optimization here; it records a limitation of the
-frozen construction that no proposed exact or approximate decoder should be expected to remove.
+transmitted multiset. Encoder modifications are studied separately in Report 8; the reference construction
+retains this limitation. The noiseless shared-codebook target is the classical $B_k$ property\cite{gu}.
+
+\subsection{A general coset criterion, and its precise boundary}
+\label{sec:coset-classification}
+Write $b=B_c$ and let $\mathcal G$ be the set of effective generator rows. For a supplied
+$r$-dimensional subspace $U\subseteq\GF(2)^b$, define
+\begin{equation}
+ Q_U=\operatorname{span}(\mathcal G\cap U^\perp),\qquad
+ W_U=Q_U^\perp\supseteq U,\qquad J_U=2^{b-\dim Q_U-r}.
+ \label{eq:coset-nullspace}
+\end{equation}
+\textbf{Proposition.} Among payload multisets that are individual cosets of $U$, the complete
+equal-signal class of $a+U$ consists of the $J_U$ cosets contained in $a+W_U$.
+It is a singleton exactly when $\dim Q_U=b-r$.
+
+\textit{Proof.} Subspace character orthogonality gives a nonzero sum only on $U^\perp$.
+Translating by $d$ preserves those observed sums exactly when $g^Td=0$ for all
+$g\in\mathcal G\cap U^\perp$, equivalently $d\in W_U$. Two shifts give the same coset
+exactly when they differ by an element of $U$. Quotienting by $U$ gives $J_U$. This proves
+completeness within this family, not among all count vectors. Positive pattern scaling is invertible.
+
+For $d\notin U$, the Fourier difference between $a+U$ and $a+d+U$ is supported exactly on
+\begin{equation}
+ F(U,d)=\{g\in U^\perp:g^Td=1\},\qquad
+ (H z)_g=2^{r+1}\chi_g(a)\,\ind\{g\in F(U,d)\}.
+ \label{eq:coset-fourier-support}
+\end{equation}
+Thus this alias is equivalent to an unobserved affine $(b-r-1)$-flat $F(U,d)$ not containing zero.
+Given $U$, binary elimination constructs $W_U$ in polynomial work, conservatively
+$O(N_cb^2+b^3)$ bit operations and $O(N_cb+b^2)$ bits of storage. Enumerating all $U$ is a
+different task: there are $\prod_{j=0}^{r-1}(2^b-2^j)/(2^r-2^j)$ of them.
+The criterion does not make the general integer-kernel minimum polynomial.
+
+The effective generator, rather than the word ``polar'', determines these statements. It is the
+composition of the linear CRC map, information-position insertion and polar transform. An invertible
+payload-coordinate change $L\mapsto LA$ merely relabels the uniform messages and leaves sum
+identifiability unchanged. Changing the CRC or information positions can change $\mathcal G$.
+For example, the repository's CRC-free polar code includes the all-one coded word: its most reliable
+input position maps to that word. Then $b(v)+b(v+d)=0$ for every $v$ and the corresponding nonzero $d$.
+At $b=6,N_c=32$, all 32 complementary pairs collide. CRC8 excludes that particular obstruction;
+its name alone does not imply a multiuser guarantee.
+
+\subsection{Why four is not a universal first-collision threshold}
+The full-rank four-bit linear sign code with row keys
+\[
+ \mathcal G=\{0,1,2,5,6,7,9,10,11,15\}
+\]
+satisfies the pair-rank condition for all 15 nonzero differences. All 136 unordered pairs,
+including repetitions, have different sums. Nevertheless,
+\[
+ b(0)+b(1)+b(2)=b(4)+b(8)+b(15).
+\]
+These claims can be checked directly on the ten characters. This is a linear-code counterexample,
+not a claim about the repository's polar reliability schedule. It disproves both ``pair injectivity
+implies triple injectivity'' and a general power-of-two rule for the first alias.
+
+A useful \emph{sufficient} condition comes from classical trade theory\cite{trades}. Suppose
+$\mathcal G\cup\{0\}$ contains all sums of at most $t$ members of some character basis.
+Vanishing observed Fourier coefficients then imply vanishing moments of all square-free monomials
+of degree at most $t$: expand each bit indicator as $(1-\chi)/2$ and conversely.
+Every nonzero integer difference with these moments zero has positive mass at least $2^t$.
+For a short proof, split the signed integer function on a coordinate where both slices are nonzero.
+Each slice has all moments through degree $t-1$ zero, so induction gives positive mass at least
+$2^{t-1}$ in each; the $t=0$ case follows from equal, nonzero integer masses. A coordinate on which
+one slice vanishes may first be deleted. Thus every $k<2^t$ sum is unique under either source law.
+The required rows cost $\sum_{j=1}^t\binom bj$ symbols before repetitions; the known-$k$ constant
+need not be transmitted for this conditional claim.
+
+This known sufficient theorem does \emph{not} explain the selected fixture. Exhaustive search finds
+no six independent observed characters whose pairwise sums are all observed. Its three-user
+injectivity remains the independently checked finite result above; a general classification of
+non-coset integer-kernel vectors remains open.
+
+\subsection{Complete finite classification of the selected first aliases}
+\evidence{Integer exhaustive certificate for the selected generator; not a theorem for all polar codes.}
+There are 651 two-dimensional payload subspaces. Exactly 52 have $J_U>1$.
+Enumerating their coset classes reproduces the \emph{actual members}, not only the sizes, of every
+class in the independent 766,480-multiset calculation: 392 classes of size two and 12 of size four.
+Consequently all 464 pairwise equalities at $k=4$ are coset equalities for this fixture.
+Equation~\eqref{eq:coset-fourier-support} gives 58 distinct missing three-flats, with eight
+translated equalities per flat. Report 8 uses these flats for a finite row-repair obstruction and
+their energy mass for noisy distances. The check is
+\path{tests/polar_sum_geometry_checks.py}; generated evidence and commands are indexed in the experiment bank.
+Its full count census is exponential in $b$, with $\binom{2^b+k-1}{k}$ count states and stored sign sums.
+
+\subsection{Source frequency is separate from existence}
+For four IID uniform payloads on one pattern, the probability of belonging to the recorded ambiguous
+multisets is $q_4=832\,4!/64^4=0.0011901855\ldots$. In a full IID bank, a union bound on the event
+that \emph{some} four transmitted slots form one of these witnesses is
+\begin{equation}
+ \Pr(\text{recorded witness})\leq\binom K4 P^{-3}q_4.
+ \label{eq:alias-source-frequency}
+\end{equation}
+For distinct full messages the corresponding bound is $\binom K4 P\,832\,4!/(64P)_4$,
+where $(m)_4=m(m-1)(m-2)(m-3)$. Some witness replacements may violate the outside distinctness
+constraint, so witnessing the subset need not give a legal full-frame replacement in that control.
+At $K=26$, the IID bounds are $6.788\,10^{-5}$ for $P=64$ and $1.061\,10^{-6}$ for $P=256$;
+the distinct bounds are $6.798\,10^{-5}$ and $1.061\,10^{-6}$.
+These are prior event bounds, not posterior certificates, noisy PUPE estimates or bounds on all
+mixed-pattern aliases. They show why eliminating this first obstruction alone is not a persuasive
+explanation of the observed decoder gaps. Near competitors and other pattern allocations remain necessary.
 
 \clearpage
 \section{Exact reference changes, invariants and decision contrasts}
@@ -2532,5 +2632,12 @@ Variational Inference}, 2008, especially Sec.~2.5 on exact elimination and junct
 \bibitem{pulvirenti} E. Pulvirenti and D. Tsagkarogiannis, \emph{Cluster expansion in the canonical ensemble},
 2011 preprint. \href{https://arxiv.org/abs/1105.1022}{arXiv:1105.1022}.
 Cited for the classical connected-expansion context; its convergence theorem is not applied to this decoder.
+\bibitem{gu} Y. Gu, \emph{Zero-error communication over adder MAC}, 2018.
+\href{https://arxiv.org/abs/1809.07364}{arXiv:1809.07364}.
+The shared-codebook $B_h$ definition is the noiseless multiset-identifiability target here;
+user-specific uniquely decodable tuples have different assumptions.
+\bibitem{trades} E. Ghorbani, S. Kamali, G. B. Khosrovshahi and D. S. Krotov,
+\emph{On the volumes and affine types of trades}, Electronic Journal of Combinatorics 27(1), 2020, P1.29,
+especially Lemma 4. \href{https://arxiv.org/abs/1810.02296}{arXiv:1810.02296}.
 \end{thebibliography}
 \end{document}

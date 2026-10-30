@@ -234,7 +234,7 @@ class DecoderBankTests(unittest.TestCase):
                             for r in rows if r["decoders"] == ["DEC-07"]))
         self.assertEqual({r["decoders"][0] for r in rows}, {f"DEC-{i:02}" for i in range(1, 14)} | {"D2", "ODMA"})
         scheduler = (folder / "035_polar_decoders.sh").read_text()
-        self.assertIn("#PBS -J 1-90%4", scheduler)
+        self.assertIn("#PBS -J 1-90\n", scheduler)
         self.assertIn("select=1:ncpus=2:mem=16gb", scheduler)
 
     def test_bundled_job_resume_and_mapping_merge(self):

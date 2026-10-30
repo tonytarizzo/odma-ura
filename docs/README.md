@@ -5,7 +5,7 @@ The working documents index the current polar decoder study:
 | Document | Owns |
 |---|---|
 | [Current state](CURRENT_STATE.md) | Fixed Bayes problem, completed foundations, decoder catalogue and current implementation boundary. |
-| [Tractability log](POLAR_TRACTABILITY_LOG.md) | Exploratory reasoning, structural combinations, controls and implementation decisions for Report 11. |
+| [Tractability log](logs/POLAR_TRACTABILITY_LOG.md) | Exploratory reasoning, structural combinations, controls and implementation decisions for Report 11. |
 | [Experiment bank](EXPERIMENT_BANK.md) | Each script's question, corresponding algebra, setup, controls, results and reproduction command. |
 
 The decoder study has four separate reports:
@@ -20,8 +20,8 @@ The decoder study has four separate reports:
 [Report 8](reports/08_polar_energy_geometry.pdf) defines and analyzes the frozen balanced encoder.
 The Bayes count-tail objective stays fixed across all four decoder reports.
 The [035 shared harness](../jobs/035_polar_decoders/README.md) implements REF, all thirteen DEC families
-and D2/ODMA controls, with paired frames, PUPE/runtime plots and a complete 90-job CPU array capped
-at four simultaneous two-CPU jobs. Each family has one declared finite variant; this does not claim every Report-10 variation is implemented.
+and D2/ODMA controls, with paired frames, PUPE/runtime plots and a complete 90-job CPU array with two CPUs
+per job and no concurrency cap. Each family has one declared finite variant; this does not claim every Report-10 variation is implemented.
 The [036 combination study](../jobs/036_polar_combinations/README.md) adds DEC-14–24. These implementations retain full-alphabet dependence and serve as small-B accuracy references for the tractability investigation.
 DEC-25–34 add procedural tractable variants; their algebra, exact checks and local smoke evidence are indexed in the experiment bank. The common small-B harness still constructs an explicit encoder; the procedural interface does not. [Job 037](../jobs/037_polar_tractable/README.md) compares these variants on the paired balanced Job-035/036 grid, reusing audited historical controls.
 The reports retain their design-stage claims; new measurements belong to the experiment bank and job records.

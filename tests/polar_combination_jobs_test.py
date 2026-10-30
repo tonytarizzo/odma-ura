@@ -39,7 +39,7 @@ class CombinationJobTests(unittest.TestCase):
         self.assertEqual(len(seen),2*3*11*4)
         self.assertEqual(frames,540_672)
         script=(JOB/'036_polar_combinations.sh').read_text()
-        self.assertIn('#PBS -J 1-81%4',script)
+        self.assertIn('#PBS -J 1-81\n',script)
         self.assertIn('ncpus=2:mem=16gb',script)
 
     def test_reuse_requires_unchanged_shared_dependencies_and_definitions(self):

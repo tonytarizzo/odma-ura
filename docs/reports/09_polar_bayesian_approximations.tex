@@ -1800,6 +1800,37 @@ cannot increase its variance. This preserves irreducible message ambiguity; sele
 message would not. Finding and summing the classes is still charged, and partial classes must be explicit
 disjoint groups rather than an assumed census of all aliases.
 
+\subsection{Near aliases: retain identity and charge likelihood variation}
+The 29 October geometry extension separates a zero distance from a small distance. Consider a declared
+finite group $\mathcal C$ of legal configurations, with their exact source masses $\pi(a)$, and replace
+their conditional likelihoods by a common value. The resulting conditional law is
+$Q_{\mathcal C}(a)=\pi(a)/\sum_{c\in\mathcal C}\pi(c)$. Put $s_a=\Phi a$ and choose a center $s_0$
+with a certified radius $\|s_a-s_0\|\leq\rho$. For $r=y-s_0$,
+\[
+ \log g(y-s_a)-\log g(r)
+ =\frac{r^T(s_a-s_0)-\|s_a-s_0\|^2/2}{\sigma^2}.
+\]
+Hence a valid within-group log-likelihood oscillation bound is
+\begin{equation}
+ \Omega_{\mathcal C}\leq\frac{2\|r\|\rho+\rho^2}{\sigma^2},\qquad
+ \TV(P(\cdot\mid\mathcal C,y),Q_{\mathcal C})
+ \leq\tanh(\Omega_{\mathcal C}/4).
+ \label{eq:near-alias-conditional}
+\end{equation}
+This is the earlier likelihood-range bound applied to a geometric group, not a new approximation family.
+Every conditional count tail has the same absolute-error bound. If all states share the same outside
+$K-m$ copies, the conditional excess multiset-PUPE of the surrogate Bayes action is at most
+$2(m/K)\tanh(\Omega_{\mathcal C}/4)$. For each fixed action only the remaining $m$ true copies vary;
+the two action comparisons give the factor two. At $\rho=0$ the exact source conditional is recovered.
+
+A small Euclidean radius alone is insufficient uniformly in the observation or as $\sigma^2$ decreases.
+Preserving this conditional law does not certify the group's total posterior mass; changing its evidence
+requires the separate normalization/support account. Nor may identities be replaced by one representative.
+Report 11's affine translation orbit supplies exact membership and selected count-tail queries for one
+zero-radius family in polynomial work. General group discovery, radius certification and allocation over
+many overlapping compact groups remain charged. Report 8 provides the physical character-energy metric
+and a counterexample to using resource balance as a surrogate for this radius.
+
 \clearpage
 \section{Entry L: residual-guided proposals and block updates}
 \label{sec:guided-decoder}

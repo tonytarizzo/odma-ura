@@ -37,7 +37,9 @@ docs/*
 !docs/POLAR_DECODING_RESEARCH_LOG.md
 !docs/POLAR_APPROXIMATION_LOG.md
 !docs/POLAR_DECODER_DESIGN_LOG.md
-!docs/POLAR_TRACTABILITY_LOG.md
+!docs/logs/
+docs/logs/*
+!docs/logs/POLAR_TRACTABILITY_LOG.md
 !docs/PUPE_METRIC.md
 !docs/archive/
 docs/archive/*

@@ -1,10 +1,68 @@
 # Tractable polar decoding: research and implementation log
 
-Updated 29 October 2026. This agent-maintained log records exploratory reasoning, controls and decisions; [Report 11](reports/11_tractable_polar_decoding.tex) contains the concise algebra. The author's paper-outline scratchpad is separate.
+Updated 30 October 2026. This agent-maintained log records exploratory reasoning, controls and decisions; [Report 11](../reports/11_tractable_polar_decoding.tex) contains the concise algebra. The author's paper-outline scratchpad is separate.
 
 ## Aim and working boundary
 
-Keep the fixed Report-8 encoder, known K/noise, IID source and multiplicity-aware PUPE. Use Reports 7 and 9 to remove full-payload computations and identify useful structural approximations. A small representation is not enough: charge discovery, normalization, repeated residual contexts, mixing and count readout. New constructions need comparison with established methods before any novelty claim. No learned components or HPC campaign are added in this pass.
+Keep the Report-8 encoder as a fixed reference, known K/noise, IID source and multiplicity-aware PUPE. The 29 October sum-geometry continuation also studies explicitly labelled encoder modifications. Use Reports 7 and 9 to remove full-payload computations and identify useful structural approximations. A small representation is not enough: charge discovery, normalization, repeated residual contexts, mixing and count readout. New constructions need comparison with established methods before any novelty claim. Job038 subsequently adds a focused encoder comparison using existing receivers and matched D2 calibration; it does not introduce a learned inference family.
+
+## 30 October: implement the discriminating encoder comparison
+
+The user requested a new job extending earlier encoder work, comparison with balancing and historical
+results, and a concrete decoder continuation. Job034 owns learned energy/D2, Job035 owns deterministic
+balance/full-message controls, and Job037 already owns the tractable decoder bank. Added Job038 locally
+under `jobs/038_polar_signatures/`; shared runtime files remain unchanged so existing source audits retain
+their meaning. No new Markdown file or DEC family was needed. Commands and complete budgets are in the
+existing experiment index.
+
+The selected test is the four-arm reference/repair3 by uniform/balanced comparison, with fixed Nc32,
+n256, B12/B14, placement and per-message power. Only repeated output-character rows are replaced;
+the original native CRC/SCL receiver is incompatible. Matched D2 and existing DEC-26 basis proposals
+score the actual modified waveforms. DEC-26's implementation constructs an unused polar object even
+in basis-only mode: the wrapper carries the original CRC metadata for that constructor, the job rejects
+SCL/union modes, and an independent test fails if SCL is called. This is a compatibility detail, not
+an assertion that the new signature is still decoded by the original CRC/SCL map.
+
+The four historical cells K7/26 at 4/10 dB, 128 IID frames/cell and three old seeds give 24 array rows,
+24,576 receiver-frame evaluations. D2 retains the historical distinct-source training contract on the
+full load/SNR range. Twelve reference checkpoints are reused; twelve repaired calibrations are new.
+Job034's learned-energy optimum is historical context only, so this experiment must not claim superiority
+to learned energies from a win over deterministic balancing. The 39-symbol extension is deferred because
+it changes occupied resources and overlap, requiring its own fair control.
+
+A separate first-two-slot oracle preserves source weighting without looking for favorable witnesses.
+Given the outside users and the two patterns, its ordered 64² pair posterior exactly accounts for same-
+pattern repeated messages and permutation masses. Count tails determine the two-copy action. It records
+near-competitor distances, pair evidence/risk, overlap and cost, stratified by same/mixed patterns. This
+does not compare alternative pattern allocations, solve message discovery, or establish global Bayes
+risk. It provides a limited geometric control beside the full receivers' candidate recall and PUPE.
+
+One provenance check changed the implementation: recomputing balanced amplitudes locally differs from
+the archived HPC values by up to 5.55e-17. Exact checkpoint hashes correctly rejected that regeneration.
+The default now validates and freezes archived amplitudes for both signature arms, reconstructing the
+original matrix exactly. A separately labelled fresh-reference mode regenerates and retrains instead.
+All12 historical one-frame D2 replays then preserved input hashes and count decisions. Eight B12/B14
+four-arm smoke runs pass, including short matched training and the merger/plot path. No production
+PUPE ranking follows from these checks. Final evidence is generated under
+`jobs/038_polar_signatures/results_validation_final_2026-10-30/`.
+
+Validation passes 46 focused tests covering physical operators, oracle pair tails against direct
+enumeration, legal count actions, procedural compatibility, paired comparisons and job/reuse contracts.
+Full-budget DEC-26 K26/4dB probes take approximately 0.55–0.70s/frame locally; previous reference D2
+training took 19–51 min/calibration. A rough 9–10 aggregate job-hour estimate combines these proxies;
+training on the repair and HPC hardware may differ. The job requests 2 CPUs/16 GB/24 h per row. The user
+explicitly requested **no concurrency caps, now or in future**: removed caps from scripts, current
+submission instructions and tests, and added the rule to AGENTS.md. Historical timing assumptions in
+older entries describe their original planning context, not current submission policy. No jobs submitted.
+
+For now the encoder's next useful step is this evidence, not more row searches. For decoding, the affine
+orbit result gives a local invariant move but recorded exact witnesses are rare and it cannot discover
+other waveform modes. Sparse-Walsh packet identities need measurements the reference does not transmit.
+Neither warrants a new broad HPC family. Continue with the existing Job037 bank, then a bounded mixed-
+pattern conditional-provider experiment: measure sector construction, envelope acceptance, actual moves
+and conditional tail error in imperfect outside contexts, against existing pair proposals at matched
+total work. If useful, integrate it as a proposal variant inside an existing corrected chain and test
+global mixing/PUPE. If sector setup or envelope slack dominates, record that failure before adding a DEC.
 
 ## Earlier tractability passes: retained starting point
 
@@ -250,3 +308,277 @@ Report 11 was edited in place and compiled successfully using the existing deskt
 4. Test corrections on cases where the matched initializer is imperfect, reporting actual state changes and paired loss against that initializer. Zero errors from an unchanged correct initializer cannot rank these kernels.
 
 These are concrete continuing paths; neither the available algebra nor this smoke establishes a feasible multiuser B100 receiver. Learning remains outside this pass.
+
+## Sum geometry continuation, 29 October: question and discovery record
+
+The current user reopens encoder design alongside tractable inference, keeping the present encoder as the reference. Read CURRENT_STATE, the experiment index, Report 7's identifiability/count-class derivations, Report 8's energy moments and distance caveats, Report 9's class-conditional correction, Report 10's count readout and Report 11's proposals/overlap operations. The four pre-existing Job036/037 shell/README modifications are outside this investigation.
+
+**Precise question.** Does the first four-user alias reflect missing affine sets of characters, and can that description produce a finite repair criterion and an alphabet-free operation that preserves count uncertainty? For one known pattern with positive energies, put E_g=sum_{i:ell_i=g} e_i. For z=a-a', the squared distance is sum_g E_g (H z)_g^2. Thus row multiplicity and energy affect distances through E_g; a positive reweighting cannot change the integer kernel. CRC and the polar information set act through the effective generator, not through a generic label 'polar'.
+
+**Algebra before measurement.** For an r-dimensional payload subspace U and two different cosets a+U,a+d+U, put F(U,d)={g:g annihilates U, g dot d=1}. Their Fourier difference has magnitude 2^(r+1) exactly on F and zero elsewhere. Consequently d_signal^2=4^(r+1) sum_{g in F} E_g. Equivalently, define W_U=span(G intersect U-perp)-perp. All cosets inside a+W_U have the same signal, with class size 2^(dim W_U-r). Computing W_U from a supplied basis of U is polynomial in Nc and b; searching every U is not. This gives a complete criterion for coset competitors only.
+
+**Actively rejected explanations.** Pair injectivity does not imply triple injectivity for a general binary linear sign code. The b=4 row set {0,1,2,5,6,7,9,10,11,15} has full rank and passes every pair-rank condition, yet {0,1,2} and {4,8,15} have equal sums. This also rejects a universal power-of-two first-alias rule. A low-degree character/trade certificate was another possible explanation of the selected threshold: a complete degree-two set after a binary change of basis would exclude trades of volume below four. An exhaustive independent-basis clique search finds no such basis in the selected G. Do not use that sufficient theorem as an explanation of this fixture.
+
+**Initial finite findings, awaiting the retained check below.** Enumerating the 651 binary payload planes gives precisely 392 two-member and 12 four-member ambiguous coset classes, matching the previous full K4 census. Their 464 pairwise equalities occupy 58 different missing Fourier supports, each occurring eight times. A set-cover calculation suggests seven missing characters are necessary and sufficient to separate all these equalities while retaining the old characters; a seven-row witness is {8,13,19,52,60,61,63}. An independent integer exhaustive check, rather than only the floating MILP solver status, will certify the lower bound. The best three-row addition hits only 40/58 supports. Replacing three duplicates therefore cannot eliminate the first aliases.
+
+**Prior-work comparison.** The noiseless shared-codebook multiset target is the classical B_h-code problem; Gu, *Zero-error communication over adder MAC* (2018), https://arxiv.org/abs/1809.07364, distinguishes it from user-specific uniquely decodable code tuples. The low-degree sufficient condition is established trade theory: Ghorbani et al., *On the volumes and affine types of trades*, https://arxiv.org/abs/1810.02296, Lemma 4. These are not new general coding theorems. Sparse Walsh methods, especially Li et al.'s SPRIGHT, https://arxiv.org/abs/1508.06336, already use affine character queries and sparse recovery. Their query access, source/noise scaling and designed measurement sets must be reconciled with the fixed rows, unit message energy and unknown overlapping patterns here. The concrete contributions under examination are a verified fixture classification/repair obstruction, physical distance accounting and a conditional count-preserving operation.
+
+### Validated outcome and direction change
+
+The retained check is `tests/polar_sum_geometry_checks.py`; its command and generated JSON are in EXPERIMENT_BANK. It independently compares actual class members from the full integer K4 census against the affine census. They agree exactly. Distance identities across all plane/coset pairs agree within 7.11e-15. The integer cover certificate exhausts all 1,623,160 six-subsets: maximum coverage is 55/58; the seven-row witness covers all. The best three-row cover 8/20/61 leaves 144 two-member classes (288 multisets) after replacing only repeated rows, with minimum Hamming distance 12. This improves the earlier exploratory three-row choice's 152 classes but does not establish risk optimality.
+
+A targeted noisy-geometry check uses exactly the B12/seed3201 reference placements, known pattern 0, and all 2,080 K2 multisets. Under uniform/balanced energies the reference minimum squared distances are 1/.8014282121; the three-row replacement gives 1.5/1.2716568767 with the same energies and coordinates. The reference's 2,162,160 competing-pair distances include 982,704 increases and 1,179,456 decreases under balancing. Thus balancing is not monotone for sum geometry, while the three-row candidate has a concrete conditional separation gain worth retaining. Neither fact compares full-system PUPE, and no receiver was run. The closest balanced reference competition is {0,43} versus {4,47}.
+
+The seven-parity extension is a constructive B4 signature when all old characters remain. Allocating energy eta/7 to each new row and scaling the old profile by 1-eta separates every old four-user alias by squared distance at least 64 eta/7; old nonzero distances retain at least their 1-eta fraction. It costs 39 occupied symbols instead of 32, changes overlap and payload bits per occupied symbol, and does not automatically preserve resource balance. A fixed-length arbitrary redesign is not ruled out; deleting old distinct characters can create new aliases. Neither this extension nor the three-row replacement is silently substituted into the production polar/SCL encoder.
+
+The affine criterion also yields an exact conditional operation. For four selected ordered slots on a common pattern whose distinct payloads form a plane, compute W_U and shift all four by a uniform d in W_U. Forward/reverse laws and likelihoods agree under IID uniform messages, so acceptance is one. The orbit's count-tail formula keeps outside multiplicities and gives each represented payload block-inclusion probability 1/J. With outside counts c12=2,c1=1, the two induced count vectors have factorial weights 1/6 and 1/2; the slot-selection multiplicities compensate exactly. A uniform count-space replacement would be wrong. Distinct-source shifts intersecting outside messages can be rejected symmetrically. The routine only moves within a waveform class, so it supplies no global discovery or mixing result. Basis construction is polynomial for a supplied plane, and a 100-bit nullspace control contains no payload alphabet. Enumerating eligible quadruples or affine groups is explicitly charged in Report 11.
+
+The conditional near-alias bound preserves source-weighted identity and accounts for log-likelihood oscillation, with a separate group-evidence error. Twenty finite groups verify the stated TV inequality. A short-Walsh packet identity independently checks repeated-message singleton recovery and the unit-power bin-noise variance sigma² Nc/2^q. This is the known sparse-Walsh interface, not permission to query untransmitted characters. Existing orbital MCMC (Niepert, https://arxiv.org/abs/1206.5396) also precedes the general symmetry move; the contribution here is the explicit row-nullspace and count handling.
+
+The strongest relevance limit is source frequency. The probability of containing a recorded four-user witness is at most 6.79e-5 at B12/K26 and 1.06e-6 at B14/K26 under IID, with nearly equal distinct-source bounds. Those are prior witness-event bounds, not all-alias or noisy-risk bounds. They redirect practical attention toward two/three-user near competitors, mixed patterns and proposal coverage rather than a broad campaign aimed only at eliminating K4 equalities. The next discriminating control is a matched conditional exact-posterior or candidate-coverage comparison of the reference and three-row signature, followed by mixed-pattern checks; a performance benefit remains open.
+
+Validated results are integrated into the existing Reports 7/8/9/11, with the local-operation link in Report 10. No new Markdown files, DEC families, runtime sources or HPC jobs were created. A first packet-noise check used zero absolute tolerance for theoretically zero off-diagonals; changing it to 1e-14 accounts for observed 2.1e-17 floating roundoff, without changing the identity or the integer certificates.
+
+### Final verification
+
+The retained sum-geometry script passes with the final three-row distance control included (5.69 s on this local run). `uv run python -m unittest tests.polar_exact_reductions_test tests.polar_energy_geometry_test` passes all 12 tests; `compileall` on the new script and `git diff --check` also pass. All five edited LaTeX sources, Reports 7–11, compile successfully using the desktop editor. These compilations validate the saved sources/live previews; no adjacent PDF exports or generated results were added to git. The four pre-existing Job036/037 edits remain untouched.
+
+---
+
+## Preserved earlier tractability record, 26–27 October
+
+The following is the original earlier log, retained in full. Its paths and commands describe the layout at that time; consult the experiment bank for current commands and report locations.
+
+# Polar tractability investigation
+
+## 26 October 2026 — first algebra-first installment
+
+Scope: fixed analytical polar/CRC, transmission patterns and KL-balanced energies; known K and physical noise;
+IID full messages and multiplicity-aware PUPE. Accuracy concessions are allowed when declared. This work adds
+Report 11 at `docs/reports/11_tractable_polar_decoding/main.tex`, without changing existing reports, decoders,
+experiments, the author-owned archive or HPC jobs. The project was created with the app's LaTeX project tool.
+
+### Evidence and initial direction
+
+Read Reports 7–10, the current state/experiment bank, relevant research logs, the 26 October scaling audit,
+the polar implementation, and the parked revisable-sampling prototype. Earlier memory was used only to locate
+the exact-versus-approximate boundary, then checked against current repository evidence.
+
+The full-M Job035/036 results are useful small-B accuracy references, not the only existing algorithmic work:
+`tests/polar_revisable_sampling.py` already contains SCL-list/prior full-support proposals, correct forward/reverse
+pair densities and sparse count-tail allocation. Its exact-reference audit uses enumeration, whereas its proposal
+operation does not enumerate payloads. Do not call those ingredients new or infer useful mixing from invariance.
+Report 9 Entry Q already groups restricted character rows and gives exact independent-character partitions.
+
+The working question is not how to hide M behind a sparse final list. Charge pattern preparation, all residual
+contexts, candidate generation, proposal normalization, global inference, sparse readout and memory. With an arbitrary
+frozen P-by-d placement/energy bank, P=2^Bp remains in input size. Payload scaling needs bounded Bp and growing b/d;
+the B12/B14 experiment keeps b=6,d=32 and increases only P. Fixed search budgets are not fixed-PUPE guarantees.
+
+### Derivation: a normalized independent-parity envelope
+
+For an exact one-slot conditional, the outside residual r gives score
+`s_p(v)=r^T phi(p,v)/sigma^2=sum_i h_pi (-1)^(ell_i^T v)` with `h_pi=sqrt(e_pi)r_position/sigma^2`.
+Physical rescoring is necessary across patterns: SCL path metrics include pattern-dependent channel constants.
+
+After fixing an affine payload prefix `v=v0+Rz`, group identical restricted character rows:
+`s(z)=H0+sum_g H_g chi_g(z)`. Retain independent rows F and let
+`D_F(z)=sum_{g notin F} H_g chi_g(z)`, `R_F=sum_{g notin F}|H_g|`.
+Then `Z_F=2^(q-rank F) exp(H0) product_{g in F} 2cosh(H_g)` normalizes a full-support proposal.
+Sample its independent parity bits with logistic probabilities and solve the binary system, choosing free bits
+uniformly. This is polynomial arithmetic without a payload scan. Binary factorization and changing bases are charged.
+
+The exact partition satisfies `exp(-R_F) Z_F <= Z <= exp(R_F) Z_F`. Greedy independent-row selection in decreasing
+`|H_g|` minimizes both R_F and this particular upper bound: the latter's inclusion benefit is
+`|H_g|-log cosh(H_g)`, also increasing with magnitude. This optimizes only this bound family.
+
+Across patterns, choose pattern with probability `U_p/sum U_p`, draw its basis proposal, and accept with
+`exp(D_F-R_F)`. The accepted law is the exact one-slot conditional, with acceptance `Z_all/U_all`.
+No exact polar partition is needed to execute it; expected runtime is the unknown reciprocal acceptance.
+A finite rejection cap must return failure or use a valid invariant alternative, not quietly substitute a raw proposal.
+The bound also certifies a discovered list's conditional missed mass by `1-Z_list/U_all`; it is not a full multiuser
+certificate when the outside configuration is uncertain.
+
+### Reversal: exact correction can be exponentially slow
+
+Do not promote the product-parity proposal to a chosen scalable decoder. The actual b=6,d=32,CRC8 generator
+has 28 distinct nonzero character rows, rank six, and contains keys `(2,5,7)` with `2 xor 5=7`.
+For coefficients `(t,t,-t)`, its score on the two independent signs is `t(x+u-xu)`. Any two-character basis
+gives acceptance
+
+`A(t)=(3 exp(t)+exp(-3t))/(exp(t)*(2cosh t)^2) ~ 3 exp(-2t)`.
+
+Exact values: t=2 gives .0529940; t=4 gives .001005713; t=8 gives 3.37605e-7 (about 2.96 million attempts).
+These scores are realizable on one known-pattern residual because amplitudes are positive and occupied resources
+are distinct. This is a conditional algebra obstruction, not a measurement of typical residuals or PUPE.
+
+A targeted alternative is to retain a few dependent parity factors jointly in a normalized reference. The triangle
+requires only four parity assignments and is then exact. More generally the joint state size/elimination width and
+the cost of choosing useful factors must be charged. Whether a small set resolves relevant conflicts remains open.
+
+### Additional deductions retained for Report 11
+
+* A Gaussian continuation guide with scalar covariance yields ordinary polar LLRs; a diagonal covariance adds a
+  pattern-dependent quadratic constant. A dense covariance creates characters `ell_i xor ell_j`, so it is still a
+  character score but not generally an ordinary d-channel SCL input. Dropping those terms is a guide approximation.
+* H weighted legal configurations need only O(HK) nonzero tail levels: `sum_w max_h a_hw <= HK`. Heap allocation costs
+  O(C_s+K log C_s), C_s<=HK, and message labels cost B bits. Sparse readout is existing machinery, with this accounting
+  making clear that an M-by-K table is not mathematically required.
+* Restricting actions to C using the original posterior loses at most the posterior expected outside-copy fraction.
+  Conditioning the entire posterior on all copies lying in C instead has an omitted-event-mass bound. They differ:
+  K=4, mass .25 on aaaa and .75 on bbbc, C={a,b}, gives outside-copy fraction .1875 but conditioning regret .5.
+* If H independent exact posterior draws were available, a union bound over MK count-tail events gives
+  `H >= [B log 2 + log(2K/delta)]/(2 eta^2)` for uniform tail error eta and excess Bayes risk at most 2eta.
+  Sparse empirical readout still suffices. This isolates posterior sampling/discovery as the unresolved barrier;
+  correlated chain states and self-normalized IS draws do not satisfy that premise merely by having exact targets.
+* Bounded SCL/list proposals, restricted multiset beam, IS, local/pair MH and small joint-parity references remain
+  alternatives. The number of distinct residual contexts J can be KW or HK and must not disappear in cost claims.
+
+### Tiny independent checks
+
+`uv run python docs/reports/11_tractable_polar_decoding/checks.py` passes. Forty random q=4 character fixtures
+(16 payloads each) verify normalization, the envelope, optimal independent-basis weight by exhaustive subsets,
+list-mass bounds, rejection identity and detailed balance of a list/parity mixture. Maximum discrepancies:
+normalization 1.11e-15; correction identity 8.88e-16; detailed balance 2.78e-17. Envelope/partition ratios ranged
+1.309–55.964 on arbitrary scores; this is not an operating-point study.
+
+The actual CRC8 generator verifies the triangle and acceptance formula. Twelve random SCL calls return five
+nonempty CRC-valid lists; their path metrics match physical channel metrics to 3.55e-15. Empty lists are explicit
+outcomes, not silently repaired. All 15 count states for three words/K4 verify sparse tails and exhaustive minimum
+risk, with tail discrepancy 1.11e-16. These are double-precision identity checks, not rigorous interval arithmetic.
+
+### Current research boundary
+
+The defensible next questions are list coverage on competing residuals, value per additional residual context,
+envelope tightness and small joint-factor repair, and finite-budget inference error at matched complete work.
+No evidence yet establishes favorable acceptance, adequate nonexhaustive discovery, fast mixing or fixed-PUPE
+polynomial scaling. Do not turn this first installment into a selected architecture or a broad new survey.
+
+## 27 October 2026 — continuation: spend finite search to tighten a positive envelope
+
+The user requested completion of the first installment followed by further exploration. Parent review/compilation
+owns `main.tex` and `checks.py`; this continuation uses `continuation.tex` and `continuation_checks.py`. The parent
+is independently studying residual-context reuse. This pass instead asks whether a bounded deterministic search
+can repair the independent-parity envelope without giving up its available normalization and sampler.
+
+The relevant classical connection is ordered-statistics decoding: choose a reliable independent information set,
+then reprocess low-weight flips of its hard decisions. The primary source is Fossorier and Lin, IEEE TIT 1995,
+DOI 10.1109/18.412683, [publisher record](https://ieeexplore.ieee.org/document/412683/).
+That attribution motivates candidate construction, not a transfer of its single-user performance claims to URA.
+The additional object here is a positive partition envelope and exact conditional sampler for the full remaining
+payload space, with multiplicity semantics retained in the outer receiver.
+
+For the grouped character score, let F span all nonzero-coefficient keys and have rank r. Independent parity
+coordinates under q_F disagree with their favored signs with probabilities `p_j=1/(1+exp(2|H_j|))`. Every assignment
+has `2^(q-r)` equal-score payloads; rank-deficient cases must retain that cell multiplicity and sample free bits
+uniformly rather than discard full message identities.
+
+Let C_t contain parity-coordinate assignments with at most t flips. Its size is
+`N_t=sum_{j=0}^t binom(r,j)`. Enumerate their exact **cell** masses, giving Z_t, while a capped Bernoulli-count DP
+computes `tau_t=Q_F(number of flips>t)` in `O(r(t+1))` work. Since the initial pointwise envelope is `E=U q_F`,
+replace its value by the exact physical weight on C_t and leave it unchanged outside. The total is
+`U_t=Z_t+U*tau_t`, with `Z<=U_t<=U`, and omitted target mass at most `U*tau_t/(Z_t+U*tau_t)`.
+
+An exact proposal samples the explored cells proportional to their exact mass with mixture weight `Z_t/U_t`,
+or q_F conditioned on `number of flips>t` with mixture weight `U*tau_t/U_t`. Suffix Bernoulli-count tables supply
+that conditioned draw directly; using rejection from q_F would hide a potentially large `1/tau_t` cost.
+Accept explored cells automatically and outside cells with the original `exp(D_F-R_F)` correction. The accepted
+law is exact, with acceptance `Z/U_t`. Unknown patterns still need their own envelope masses and a sum over P.
+
+For the frustrated triangle `(a,a,-a)`, t=1 explores three parity cells and yields
+`U_1=3 exp(a)+exp(-a)`, compared with `Z=3 exp(a)+exp(-3a)`. Its acceptance tends to one although the original
+product-envelope acceptance tends to zero. This repairs that disclosed mechanism using O(r) explored cells,
+without proving that bounded t repairs general residuals. The next check is an independent fixture that forces
+many conflicts, so the remaining combinatorial boundary is not hidden by this favorable example.
+
+### Correction and generalization after review
+
+The parent noticed that **radius zero already repairs the triangle**: replacing the favored cell's overlarge
+`exp(3a)` envelope mass by its exact `exp(a)` gives `U_0=3exp(a)+exp(-a)`. The single-flip cells already saturate
+the envelope, so radius one has the same U. This correction is retained explicitly rather than presenting the
+initial radius-one calculation as the minimal construction.
+
+The more general identity needs no Hamming ball. For any finite explored set A and positive envelope `E=UQ>=f`,
+set `E_A=f` on A and `E_A=E` outside. Then `U_A=Z_A+U Q(A^c)`, monotonically decreasing with additional states,
+and each explored state's gain is `E(w)-f(w)`. Exact rejection uses the normalized repaired envelope and accepts
+outside with `f/E`; its expected attempts are `U_A/Z`. A known lower envelope `LQ<=f` gives the interval
+`[Z_A+L Q(A^c), Z_A+U Q(A^c)]`. The same proposal has normalized importance second moment at most `U_A/Z`.
+
+For an arbitrary explored list, transform payloads into independent parity plus uniform free coordinates and
+build an exclusion trie. A positive recursion computes the probability of avoiding listed leaves beneath each
+prefix; those values give exact sequential complement draws in O(q) traversal after O(|A|q) trie preparation.
+This avoids both cancellation in `1-Q(A)` and a hidden expected `1/Q(A^c)` cost from rejection-sampling the
+complement. Label conversion and inverse binary maps are separately charged. Thus SCL lists can repair the same
+envelope; reliable-basis flips are an alternative discovery rule, not a required architecture.
+
+The triangle also separates discovery from sampling: one explored cell has target mass approaching 1/3, and its
+omitted-mass bound approaches 2/3, although repaired full-space acceptance tends to one. The remaining sampler
+actually finds the other modes. A list-only approximation must not inherit the repaired sampler's conclusion.
+
+### A second boundary and its exact control
+
+For m independent frustrated triangles, a fixed flip radius can still fail exponentially. At large strength a,
+target flip count approaches Binomial(m,2/3). With fixed m and t<m-1, the remaining-envelope term has ratio to
+the target of order `exp(2a(m-t-1))`. At a=4, one-cell repair acceptance is .999888 for one triangle, .000754348
+for two, and 3.81784e-10 for four. Radius one only raises the four-triangle case to 3.25330e-7.
+
+This is not a general hardness construction: the independent triangles factor into exact four-state components,
+so an exact reference handles that family in O(m) local tables. Given any binary character basis, express all
+other keys in that basis and connect the coordinates co-occurring in each character. Connected components yield
+an exact partition factorization; charge their ranks and table sizes. Structural checks without payload
+enumeration give one component of rank6 for b6/d32/CRC8, rank32 for b32/d128/CRC16 and rank88 for b88/d512/CRC16,
+when every nonzero generator character is present. Hence no automatic favorable large-payload decomposition is
+established for this construction. These are structure controls, not measured inference regimes.
+
+### Continuation checkpoint and verification
+
+`continuation.tex` contains section-only material for parent integration. `continuation_checks.py` verifies 30
+five-bit fixtures (32 payloads), arbitrary-list repaired normalization, positive exclusion-trie probabilities,
+monotone envelopes, omitted-mass bounds, count-DP tails and exact accepted densities. It also verifies the triangle,
+uniform free-cell multiplicities, independent-triangle factorized partitions and the component structure controls.
+Command: `uv run python docs/reports/11_tractable_polar_decoding/continuation_checks.py`.
+Maximum identity discrepancy: 1.33227e-15. No production decoder or performance benchmark was added.
+
+The new defensible boundary is finite explored-set repair plus an accessible complement sampler. Whether
+preparation pays for itself, how many useful residual contexts/draws can share it, and whether full multiuser
+inference moves between competing explanations remain unresolved. The parent's independent residual-reuse
+derivation can transport the repaired pointwise envelope, so the two results combine without assuming a winner.
+
+## 27 October 2026 — independent review and residual-context reuse
+
+The first installment passed the desktop compiler and latexmk; all eight pages were rendered and inspected.
+The expanded checks include constant/rank-deficient cases, affine-prefix grouping, a multi-pattern envelope
+identity and exhaustive minimum-log-envelope selection. Their largest reported discrepancy was 7.11e-15.
+The report now uses the updated deterministic-check numbers. No runtime or HPC source was changed.
+
+A parent-side continuation asks whether the expensive residual contexts can be shared. For a fixed encoder,
+noise and allowed domain, the score difference is Delta r^T phi(w)/sigma^2. A certified interval [l,u],
+obtained from unit norms or grouped character sums without enumerating payloads, has width Omega=u-l.
+It gives TV(pi_r,pi_r0)<=tanh(Omega/4) and transports a cached list's missed-mass bound epsilon0 to
+exp(Omega)*epsilon0/(1-epsilon0+exp(Omega)*epsilon0). This is a conditional comparison, not a joint decoder
+certificate. The derivation is saved in residual_reuse.tex.
+
+More usefully for exact correction, if exp(s0)<=U0*q0, the same cached proposal satisfies
+exp(sr)<=exp(u)*U0*q0. Its new rejection acceptance is at least exp(-Omega)*Z0_lower/U0; this also gives
+a fixed-context independence-MH minorization. It saves reconstruction, not physical rescoring or mixing.
+Nearest-center selection, grouped pattern scans, cache storage and the possibly poor covering number are
+charged. High SNR shrinks useful residual neighborhoods. A frozen bank and identical forward/reverse
+selection are essential; arbitrary state-history adaptation is not covered.
+
+### Integrated review and deliverable, 27 October
+
+Both investigations are now integrated in the 14-page Report11. The parent reviewed the continuation's
+envelope/complement identities and counterexamples; the independent agent reviewed the residual-reuse
+proofs. The latter review added the cached-law error term: eta0+tanh(Omega/4), capped at one, when the
+stored conditional is itself approximate.
+
+All three check scripts pass: 40 initial character fixtures, 30 continuation fixtures and 40 balanced
+polar residual-context pairs, plus the stated edge cases and structural controls. Reuse's largest
+reported correction/invariance discrepancy is 1.11e-16. No stochastic operating-point performance or
+multiuser mixing claim follows. The desktop compiler and latexmk both succeed; all 14 final pages were
+rendered and visually checked, with no overfull boxes or unresolved references. Source, checks and PDF
+are in the self-contained project, and README/current-state/experiment-bank links are updated.
+
+Further theoretical work remains: combine small joint-factor references with selective repair, choose
+exploration by envelope slack versus target coverage, and understand global user-coupling and useful
+residual reuse regions. This is a completed pair of investigations, not the closure of tractability work.

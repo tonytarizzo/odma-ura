@@ -9,10 +9,10 @@ From the repository root, after transferring this code to the HPC and synchroniz
 ```bash
 module load miniforge/3
 uv sync --frozen
-qsub -J '1-60%4' jobs/037_polar_tractable/037_polar_tractable.sh
+qsub jobs/037_polar_tractable/037_polar_tractable.sh
 ```
 
-The array is **10 receivers × 2 message lengths × 3 seeds = 60 jobs**. Each job covers all four loads and eight SNRs, with 256 frames/cell: **8,192 evaluations/job; 491,520 total**. Each requests two CPUs, 16 GB and 72 hours; the cap permits at most **8 CPUs and 64 GB** simultaneously. No GPU is requested. No training is performed. D2, adapted polar ODMA and earlier explicit receivers are reused, not queued again.
+The array is **10 receivers × 2 message lengths × 3 seeds = 60 jobs**. Each job covers all four loads and eight SNRs, with 256 frames/cell: **8,192 evaluations/job; 491,520 total**. Each requests two CPUs, 16 GB and 72 hours; no array concurrency limit is requested, so actual concurrency depends on the scheduler and site limits. No GPU is requested. No training is performed. D2, adapted polar ODMA and earlier explicit receivers are reused, not queued again.
 
 The fixed experiment contract is n256, polar length32, CRC8, balanced mapping, prefix bits B-6, K7/15/22/26, Eb/N0 -4:-2:10 dB, seeds3201/3202/3203. Both original coding-bound overlays remain enabled. The Polyanskiy achievable-error curve is not a floor for this fixed code; the genie/list-Fano lower bound can be weak. REF remains a tiny-case fixed-encoder reference.
 
@@ -63,6 +63,6 @@ uv run python -m tests.polar_tractable_budget_probe --B 14 --out results/job037_
 uv run python jobs/037_polar_tractable/build_manifest.py
 ```
 
-One local K26/4dB frame at the declared budgets took 0.58–3.59 s/receiver for B12 and 0.54–5.40 s for B14. Multiplying these individual times by 8,192 gives approximately **1.2–12.3 job-hours per row** and 271 job-hours overall (542 CPU-hours at two CPUs/job). With four active jobs this is roughly 68 hours, before queueing. These are crude extrapolations from one frame/SNR/seed on a laptop, not HPC forecasts; candidate outcomes and hardware affect cost. The full sweep belongs on CPU HPC; small checks remain practical locally.
+One local K26/4dB frame at the declared budgets took 0.58–3.59 s/receiver for B12 and 0.54–5.40 s for B14. Multiplying these individual times by 8,192 gives approximately **1.2–12.3 job-hours per row** and 271 job-hours overall (542 CPU-hours at two CPUs/job). Elapsed time depends on scheduler concurrency and queueing. These are crude extrapolations from one frame/SNR/seed on a laptop, not HPC forecasts; candidate outcomes and hardware affect cost. The full sweep belongs on CPU HPC; small checks remain practical locally.
 
-The 29 October paired B4 smoke, tiny exact checks and B12 matched-initializer diagnostic are indexed in `docs/EXPERIMENT_BANK.md` and `docs/POLAR_TRACTABILITY_LOG.md`. Their outputs are ignored, and they do not establish a production ranking.
+The 29 October paired B4 smoke, tiny exact checks and B12 matched-initializer diagnostic are indexed in `docs/EXPERIMENT_BANK.md` and `docs/logs/POLAR_TRACTABILITY_LOG.md`. Their outputs are ignored, and they do not establish a production ranking.

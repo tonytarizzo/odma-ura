@@ -42,7 +42,7 @@ def main():
     rows = manifest(args.profile, tuple(args.mappings), args.sampling)
     args.out.write_text("".join(json.dumps(row) + "\n" for row in rows))
     print(f"Wrote {len(rows)} jobs containing {sum(len(r['runs']) for r in rows)} sequential runs to {args.out}; "
-          f"submit with qsub -J '1-{len(rows)}%4'")
+          f"submit with qsub -J '1-{len(rows)}'")
 
 
 if __name__ == "__main__":

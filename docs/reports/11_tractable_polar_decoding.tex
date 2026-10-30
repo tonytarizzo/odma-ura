@@ -796,6 +796,121 @@ decoder outperforms another. Compare matched PUPE and cost empirically, while re
 diagnostics to explain failures. The coding bounds plotted in the benchmark concern different codes
 or ensembles; their gap is not an estimate of this encoder's recoverable decoder loss.
 
+\section{Use geometric aliases without discarding count uncertainty}
+\label{sec:affine-alias-update}
+Report 7's first four-user ambiguity now has a complete finite coset classification. More generally,
+for a payload subspace $U$, put
+$W_U=\operatorname{span}(\mathcal G\cap U^\perp)^\perp$.
+All cosets of $U$ inside $a+W_U$ have exactly the same same-pattern waveform.
+Report 8 owns their physical distance and energy-design consequences. The receiver question here is
+whether this equality can be used without constructing the $2^b$ payload table.
+
+\subsection{An exact conditional move found from the current messages}
+Maintain the existing ordered $K$-slot representation under the IID uniform source. Choose four slots
+on one hypothesized pattern. If their payloads are distinct and have XOR zero, they form an affine
+plane $a+U$: two independent differences give its basis. Otherwise leave the state unchanged.
+Compute a binary basis of $W_U$, draw a uniform $d\in W_U$ using independent basis coefficients,
+and replace all four selected payloads $v_i$ by $v_i\oplus d$.
+
+\textbf{Invariance.} Translation leaves $U$ and hence $W_U$ unchanged. The reverse shift is the same
+$d$, with the same probability. The block waveform is identical by the Report-7 criterion, so the
+full likelihood, including every outside pattern and any observation noise, is identical. The IID
+ordered-slot prior is uniform. Acceptance is therefore one. Conditional on this ordered translation
+orbit, the draw is an exact uniform heat-bath update; it is not a draw from the entire four-slot
+conditional posterior. Uniform selection among all slot quadruples is valid. Selection among
+same-pattern quadruples is also valid if it depends only on pattern occupancies, which this move preserves.
+Payload-dependent selection requires its reverse probability.
+
+The distinct-message source can use the same symmetric proposal and reject shifts intersecting any
+outside message. This gives an invariant kernel, not an exact conditional draw on the legal part of
+the orbit. With a nonuniform source the prior ratio must enter acceptance. In count space, uniform
+coset replacement alone is generally wrong: outside duplicates change $1/\prod_w a_w!$.
+For example, outside counts $c_{12}=2,c_1=1$ give prior factors $1/6$ and $1/2$ for the two
+four-user aliases in Report 7. Ordered-slot selection supplies the compensating factor of three
+automatically. It must not be discarded when projecting the operation to counts.
+
+\subsection{Preserve the tails analytically, or sample full identities}
+Let $c$ be the outside counts, $A=a+W_U$ and $J=2^{\dim W_U-2}$.
+Each translated plane contains four distinct payloads; every payload in $A$ belongs to exactly one
+of its $J$ cosets. On this IID ordered-slot orbit, for a word on the chosen pattern,
+\begin{equation}
+ \Pr(c_v+\mathbf1\{v\text{ in the block}\}\geq j\mid\text{orbit})
+ =\mathbf1\{c_v\geq j\}
+  +\frac{\mathbf1\{c_v=j-1\}\mathbf1\{v\in A\}}{J}.
+ \label{eq:affine-orbit-tail}
+\end{equation}
+Outside-pattern counts remain fixed. This identity keeps each message's multiplicity information;
+one arbitrary representative plane would not. Membership in $A$ uses binary linear equations,
+not a payload scan. For a bounded list of queried words this is a direct Rao--Blackwell operation.
+Alternatively, draw the shift and retain the four explicit full-message IDs in the ordinary sparse
+count-tail accumulator. That avoids constructing the affine set, while retaining sampling uncertainty.
+
+These compact tail functions do not automatically solve the final allocation over a mixture of many
+overlapping affine sets. Discovering the maximum aggregate score can require additional intersection
+work. The sampled-ID route uses the existing finite-chain or importance framework and its actual
+error account; orbital invariance alone supplies no finite-sample confidence or mixing bound.
+
+\subsection{Complete cost and why this is a local repair}
+The generator can be cached once by encoding $b$ basis payloads; charge those $b$ polar/CRC operations
+and $N_cb$ bits of storage. For a supplied plane, row restriction, rank and nullspace construction cost
+conservatively $O(N_cb^2+b^3)$ bit operations with $O(N_cb+b^2)$ storage. A shift costs $O(b^2)$ bit
+operations and four ID updates; no likelihood normalization or rejection loop is needed for IID.
+An independent check can re-encode the four words. Grouping slots by pattern costs $O(K)$; searching
+all eligible quadruples instead of selecting one costs $\sum_p\binom{K_p}{4}$ plane tests.
+For $T$ visited contexts these preparation costs recur unless the identical $U$ is cached explicitly.
+$S$ recorded full configurations still cost $O(SK)$ sparse count updates and the Report-10 readout.
+
+The retained finite script checks the physical orbit, analytic tails, factorial-prior warning and a
+100-bit nullspace calculation with no alphabet allocation. It does not implement a new DEC family.
+The method cannot leave its waveform class, discover an unrelated missing mode or remove irreducible
+encoder uncertainty. In the current bank, Report 7 bounds the prior probability of the recorded
+four-user witness by only $6.8\,10^{-5}$ at B12/$K=26$. This is therefore an exact targeted repair,
+not a promising explanation of a large PUPE gain by itself. Near-alias moves require physical rescoring;
+Report 9 gives a conditional likelihood-variation bound for merging them.
+
+\textbf{Prior work.} Symmetry-based orbital MCMC is established
+(\href{https://arxiv.org/abs/1206.5396}{Niepert, 2012}). The specialization here obtains an exact
+local translation group from binary row restrictions, with explicit slot/count accounting and tail queries.
+It does not inherit a general rapid-mixing guarantee or establish a new general MCMC principle.
+
+\subsection{Sparse Fourier discovery requires an actual measurement design}
+There is also a direct connection to sparse Walsh recovery. If the encoder supplies every character
+$H^Tt+d$, $t\in\GF(2)^q$, for a rank-$q$ binary map $H$, then
+\begin{equation}
+ 2^{-q}\sum_t\chi_t(j)\sum_v a_v\chi_{H^Tt+d}(v)
+ =\sum_{v:Hv=j}a_v\chi_d(v).
+ \label{eq:character-bin}
+\end{equation}
+This follows by character orthogonality. The $d=0$ packet gives nonnegative bin counts.
+Additional offsets completing the rows of $H$ to a basis identify a bin containing just one distinct
+payload, even if its multiplicity exceeds one: all offset magnitudes equal its count exactly when
+all supported payloads have the same basis bits. This is a noiseless singleton test, not a noisy rule.
+
+For $C$ hash maps, $D=b-q+1$ such packets per map require $CD2^q$ physical symbol observations
+before sharing identical rows, $O(CDq2^q)$ short-transform work, plus row construction, singleton
+processing, association and peeling. Constructing explicit row keys costs $O(CD2^q b)$ bit operations
+after $O(Cb^3)$ basis completion; procedural generation can instead retain $O(Cb^2)$ map bits.
+With a queue and each bin decoded at most once, at most $K$ recovered distinct payloads incur
+$O(KCb^2)$ additional conservative bit work for labels, hashing and updates. Memory includes
+$CD2^q$ observations/bin values, map data and $O(Kb)$ output bits, with count and numerical precision
+specified separately. Repeated residual contexts multiply this work; searching all patterns adds $P$
+conditional problems unless a discovery rule avoids that scan. Known integer counts and full payload
+labels must survive peeling.
+Worst-case supports can have no singleton. Under uniform energy over these observations, division by
+the symbol amplitude and the normalized short transform give bin-noise variance
+$\sigma^2N_c/2^q$; reusing observations also creates inter-packet dependence. More queries at fixed
+unit power therefore do not come with unchanged noise precision.
+
+The affine-query and peeling principle is established in
+\href{https://arxiv.org/abs/1508.06336}{Li et al., SPRIGHT, 2015}, whose analysis uses designed
+queries and stated random-support/noise assumptions. Repeated IID messages change the nonzero-coefficient
+law. The fixed generator need not contain these packets, and an unknown mixed-pattern observation
+is not direct access to one payload's Walsh
+coefficients. Adding the packets changes the signature length, energy distribution and receiver.
+The identity identifies a concrete design interface; it does not establish scalable count-PUPE recovery
+for the reference. A next useful control is packet availability and physical bin precision before
+implementing a complete peeling receiver.
+
 \section{Combine the operations and charge the complete cost}
 Let $J$ count residual contexts, $R_p$ patterns decoded per context, $L_s$ the SCL width, $C$ pooled words,
 $W$ beam width and $H$ complete proposals. An efficient SCL implementation costs $O(L_sd\log d)$ time

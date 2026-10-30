@@ -1,7 +1,7 @@
 #!/bin/bash
 #PBS -l walltime=72:00:00
 #PBS -l select=1:ncpus=2:mem=16gb
-#PBS -J 1-60%4
+#PBS -J 1-60
 #PBS -N ura037_tractable
 
 set -euo pipefail

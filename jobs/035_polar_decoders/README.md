@@ -165,27 +165,25 @@ continuation potentials otherwise get clipped almost uniformly.
 
 The former 648 rows came from 2 B × 2 mappings × 3 seeds × (13 decoders × 4 load shards + 2 baselines).
 That was an unnecessarily large scheduling layout. Bundling reduces job count, **not total experiment
-work**. Resource use is controlled independently: at most **four jobs run concurrently**, each requesting
-**two CPUs, 16 GB and 72 h**, with no GPU. This array therefore requests at most **eight CPUs and 64 GB
-at once**. Completed jobs release their resources; 72 h is a per-job time limit, not the expected runtime.
+work**. Each job requests **two CPUs, 16 GB and 72 h**, with no GPU. No array concurrency cap is requested;
+the scheduler and site limits determine concurrency. If all 90 rows run together, their combined request
+is 180 CPUs and 1,440 GB. Completed jobs release their resources; 72 h is a per-job time limit, not expected runtime.
 The two-thread local measurements are the relevant rough guide. Each default bundle contains 16,384
 frames; the B14 DEC-05 endpoint rates imply about 13–48 hours per bundle before setup, with significant
-hardware/SNR uncertainty. Shorter jobs will finish much sooner. The campaign takes longer elapsed time
-with the concurrency cap. Halving frames or omitting a mapping would reduce total work, but is not done
+hardware/SNR uncertainty. Shorter jobs will finish much sooner. Halving frames or omitting a mapping would reduce total work, but is not done
 silently here.
 
 After transferring the code/environment, from the repository root:
 
 ```bash
 uv sync
-qsub -J '1-90%4' jobs/035_polar_decoders/035_polar_decoders.sh
+qsub jobs/035_polar_decoders/035_polar_decoders.sh
 # After every job finishes, merge on a CPU node:
 uv run python jobs/035_polar_decoders/merge.py
 ```
 
-The `%4` is PBS's simultaneous-subjob limit; it is also embedded in the script, so plain `qsub` retains
-the cap. See the [PBS job-array documentation](https://help.altair.com/2024.1.0/PBS%20Professional/PBSUserGuide2024.1.pdf),
-section 8.4.1.1. No job has been submitted by Codex. This replaces the old 648-row submission command.
+Submission commands and scripts intentionally omit simultaneous-subjob limits. No job has been submitted
+by Codex. This replaces the old 648-row submission command.
 
 Each manifest line is a named bundle with a `runs` list of ordinary resolved benchmark configurations.
 The runner executes those runs sequentially. If a bundle is retried, it skips a completed child run only
@@ -205,7 +203,7 @@ campaign or separate output roots; repeated run names cannot overwrite existing 
 ```bash
 uv run python jobs/035_polar_decoders/build_manifest.py --mappings balanced \
   --out jobs/035_polar_decoders/manifest_balanced.jsonl
-qsub -J '1-90%4' -v POLAR_DECODER_MANIFEST=jobs/035_polar_decoders/manifest_balanced.jsonl \
+qsub -v POLAR_DECODER_MANIFEST=jobs/035_polar_decoders/manifest_balanced.jsonl \
   jobs/035_polar_decoders/035_polar_decoders.sh
 ```
 
@@ -218,7 +216,7 @@ The checked-in manifest's rows **50, 65 and 80** contain DEC-05 at B14 for seeds
 Select those indices and the balanced child directly; no manifest edits or replacement checkout are needed:
 
 ```bash
-qsub -J '50-80:15%3' -N ura035_is_retry \
+qsub -J '50-80:15' -N ura035_is_retry \
   -v POLAR_DECODER_MAPPING=balanced,POLAR_DECODER_OUT_ROOT=jobs/035_polar_decoders/results_balanced_is_retry \
   jobs/035_polar_decoders/035_polar_decoders.sh
 ```

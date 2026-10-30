@@ -1037,6 +1037,10 @@ Do not add two estimates of the same bias, or declare a bias removed merely beca
 Restoring source-prior conditionals inside known disjoint equal-signal classes cannot increase TV
 (Report 7). Charge the class construction and full-word marks. Selecting a preferred word inside an
 ambiguous class does not remove the physical model's nonidentifiability.
+Report 11's affine translation update is a concrete alphabet-free local option for DEC-06-style chains:
+its IID ordered-slot move preserves the exact posterior and has explicit count-tail queries. It is not
+a new complete decoder or a convergence certificate. Report 9 separately bounds near-alias conditional
+merging; encoder changes and their receiver-compatibility requirements belong to Report 8.
 
 Generic loopy BP, EP, AMP/VAMP, SC/SCL and a neural guide are not additional derived full decoders here.
 They still need count readout, unseen-word handling and error accounting. A message calculation may

@@ -24,9 +24,14 @@ waveforms and sparse count decisions; the common small-B benchmark still constru
 Run `uv run python -m unittest tests.polar_tractable_test tests.polar_tractable_execution_test tests.polar_tractable_harness_test tests.polar_pair_proposals_test tests.polar_tractable_importance_test tests.polar_tractable_jobs_test`.
 The tests cover proposal laws, exact tiny endpoints, pair recursion, adapter equivalence and bounded B100
 execution (not B100 performance). The [experiment bank](../docs/EXPERIMENT_BANK.md) records smoke commands,
-budgets and results; the [tractability log](../docs/POLAR_TRACTABILITY_LOG.md) records the research decisions.
+budgets and results; the [tractability log](../docs/logs/POLAR_TRACTABILITY_LOG.md) records the research decisions.
 DEC-33 adds a whole-configuration importance envelope and expected decision-regret bound; DEC-34 combines
 candidate rules. [Job037](../jobs/037_polar_tractable/README.md) owns the matched CPU array and historical-control audit.
+
+`uv run python -m unittest tests.polar_signature_job_test` checks Job038's fixed-resource signature repair,
+physical operators, independent oracle pair posterior/count decisions, compatible DEC-26 execution,
+paired-arm audits and uncapped PBS arrays. The existing [experiment index](../docs/EXPERIMENT_BANK.md#fixed-resource-encoder-comparison-job038)
+owns its smoke/probe/HPC commands and validation; these checks do not establish a PUPE improvement.
 
 ## Multiplicity-aware PUPE
 

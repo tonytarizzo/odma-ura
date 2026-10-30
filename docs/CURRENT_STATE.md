@@ -1,23 +1,25 @@
 # Current state: polar multiuser decoding
 
-Updated **29 October 2026**. This page owns the current research direction. The
+Updated **30 October 2026**. This page owns the current research direction. The
 [experiment bank](EXPERIMENT_BANK.md) owns script/setup/result mappings; the reports below own the
 derivations, computational accounting and retained lessons.
 [Report 7](reports/07_polar_decoding_from_posterior.pdf)
 contains the exact Bayesian foundations, with adjacent [source](reports/07_polar_decoding_from_posterior.tex).
 [Report 9](reports/09_polar_bayesian_approximations.pdf), with [source](reports/09_polar_bayesian_approximations.tex),
-separately owns algebraically motivated assumptions and their error bounds. Report 8 defines the fixed encoder.
+separately owns algebraically motivated assumptions and their error bounds. Report 8 defines the reference
+encoder and separately labelled geometry modifications.
 [Report 10](reports/10_polar_decoder_designs.pdf), with [source](reports/10_polar_decoder_designs.tex),
 owns the mathematical decoder catalogue; implementation evidence is indexed in the experiment bank.
 [Report 11](reports/11_tractable_polar_decoding.pdf), with [source](reports/11_tractable_polar_decoding.tex),
 owns the separate investigation of tractable approximations for the same encoder and loss.
-The [tractability log](POLAR_TRACTABILITY_LOG.md) records exploratory reasoning, checks and implementation decisions.
+The [tractability log](logs/POLAR_TRACTABILITY_LOG.md) records exploratory reasoning, checks and implementation decisions.
 
 ## Problem and fixed contract
 
-Develop the strongest practical nonlearned receiver for the fixed ODMA–polar/CRC construction, aiming
-for a substantial PUPE improvement over D2. The current priority is to reduce payload-dependent computation
-while retaining useful accuracy, with any accuracy concessions explicit. Unknown K/other latent parameters
+Investigate multiuser sum geometry and develop an effective nonlearned receiver, aiming for a substantial
+PUPE improvement over D2 with reduced payload-dependent computation. Keep the existing ODMA–polar/CRC
+construction as a fixed reference; study explicitly labelled generator/CRC, placement and energy modifications
+with their rate, power, resource and receiver costs. Any accuracy concessions must remain explicit. Unknown K/other latent parameters
 and learned internal approximations remain later work. The receiver knows the encoder,
 active-user count K and physical noise variance; messages and their placement patterns are unknown.
 
@@ -45,6 +47,63 @@ historical IID membership scores cannot be relabeled as multiplicity recovery. D
 comparisons retain their PUPE where the evaluated output support/budget is unchanged.
 
 ## Where the research stands
+
+**Latest geometry continuation, 29 October:** Report 7's four-user aliases are now completely classified
+for the selected fixture by affine payload planes. All 404 classes/464 pairwise equalities correspond
+to 58 missing three-dimensional character flats. For a supplied payload subspace U, binary row
+restriction and a nullspace describe all equivalent cosets without enumerating payloads. This is a
+general theorem for coset competitors, not a complete characterization of arbitrary count aliases.
+A ten-row, four-bit linear-code counterexample has unique pair sums but a triple alias. The selected
+threshold is not universal; a classical low-degree trade certificate also fails its premise here.
+
+Report 8 proves the same-pattern metric `d² = sum_g E_g (H(a-a'))_g²`, with coset competitors measuring
+the energy in their separating character flat. An exhaustive integer cover check shows **seven new
+characters are necessary and sufficient to separate all old four-user aliases while retaining the old
+characters**. The best three-row cover hits 40/58 flats; replacing the three duplicates with rows
+8/20/61 leaves 144 ambiguous pairs (288 multisets), preserves minimum Hamming distance 12 and needs
+a compatible receiver. A seven-parity extension gives a conditional B4 construction with explicit
+39-symbol/unit-power cost. Neither modification has a PUPE result or replaces the reference.
+
+Balancing is not monotone for competing-sum distances: on B12/seed3201/known pattern0, the K2 minimum
+squared distance changes from 1 to .801428. The three-row replacement raises those minima to 1.5
+and 1.271657 with identical coordinates and energies, a conditional geometric gain without a PUPE claim.
+A separate balanced four-pattern rectangle demonstrates
+that mixed-pattern aliases can change under energy shaping, unlike fixed-pattern aliases.
+Source-frequency bounds put the probability of containing a recorded four-user witness below
+6.8e-5 at B12/K26 and 1.1e-6 at B14/K26. These do not bound other aliases or noisy PUPE.
+
+Report 11 derives an exact IID ordered-slot affine translation update and conditional count-tail
+formula with polynomial setup and no payload axis. It is a local operation, not a new DEC family;
+it cannot discover unrelated modes. Report 9 bounds near-alias conditional merging, retaining identity,
+source weights and a separate group-evidence error. Sparse Walsh packet discovery is connected to
+SPRIGHT with its required measurements and fixed-power noise cost exposed. General B_h coding,
+trade theory and orbital MCMC are established prior art; fixture certificates and the physical/count
+specialization are the present results. The experiment bank indexes the independent checks.
+
+**Next discriminating step is prepared as Job038:** a fixed-resource 2x2 comparison of reference/three-row
+repair and uniform/balanced energies. It reuses the Job034/035 D2 training machinery and the existing
+DEC-26 parity-basis receiver. B12/B14, three historical seeds, K7/26 and 4/10 dB give 24 rows and
+24,576 receiver-frame evaluations at 128 frames/cell. Archived Job035 amplitudes preserve the exact
+reference; its 12 D2 checkpoints are reused, while the 12 repaired arms receive matched calibration.
+The [experiment bank](EXPERIMENT_BANK.md#fixed-resource-encoder-comparison-job038) owns commands, costs,
+oracle pair diagnostics, validation and interpretation. Local execution/replay checks pass; the production
+campaign has not been submitted or measured. This is an exploratory comparison, not held-out validation.
+
+Encoder work can now wait for this focused evidence: compare conditional noisy geometry, candidate recall
+and full-message count-PUPE together before expanding the grid or optimizing more rows. The seven-parity
+extension remains a separate resource-changing design. Exact four-user witness removal alone is too rare
+to justify a broad campaign. Job038 changes the transmitted signature, not the message length, placements
+or power; original CRC/SCL decoding is incompatible with the repair.
+
+**Decoder continuation:** use the already implemented DEC-25–34/Job037 bank to identify discovery versus
+correction failures. The new affine orbit operation is a local exact update, not a new DEC family, and
+sparse-Walsh packets require different transmitted measurements. The next implementation gate is a
+mixed-pattern affine conditional provider tested at fixed outside contexts: compare overlap-sector setup,
+envelope acceptance, useful state changes and count-tail error against existing pair proposals at matched
+work. Implement it as a variant inside an existing corrected chain only if that diagnostic pays for its
+construction; then test full-chain mixing and paired PUPE. A fresh broad theorem survey or HPC family is
+not required before that focused test. B12/B14 still share six payload bits; neither campaign validates
+large-payload scaling.
 
 **The broad exact-derivation phase is complete for this contract.** Report 7 derives a complete finite
 Bayes decoder and alternative exact evaluations, lossless state reductions, polar pair/three-user contractions,
@@ -156,11 +215,11 @@ D2 remains an explicit-M effective-channel approximation, with no derived AMP/st
    the experiment bank indexes checks and measured results. Compare choices through their mathematics and computational
    effect, and distinguish empirical finite-budget prioritization from a theorem about an entire family.
 
-**Current authorization, 29 October:** continue algebra-first, nonlearned tractability research using
-sub-agents, seeking structural combinations of the exact and approximate observations. Retain a progress
-log plus the concise shared-style report. Implement the current tractable routes as new numbered decoders
-and run correctness/smoke checks. Do not create HPC job scripts yet. The author-owned paper outline is
-outside this task.
+**Current authorization, 29 October:** pursue encoder sum geometry and tractable count inference together,
+algebra first, with targeted independent checks and prior-work comparison. Preserve the reference and
+existing uncommitted work. Use existing logs, handover, experiment index and Reports 7–11; create no new
+Markdown files or reports. The author-owned paper outline remains outside this task. The earlier decoder
+implementation authorization and Job037 preparation are recorded below as history.
 
 **Implementation history:** after the first returned Job035 results, the user requested a broader round
 of combinations, smoke/correctness checks, Job036, and a push to main. DEC-14–24 now combine multiset
@@ -321,7 +380,8 @@ directory with shared styling; its source was compiled in the existing editor, w
 
 ## Deferred scope
 
-Further encoder learning/placement search, the retired shared mixer, hash/amplitude searches and sectioned
-association work are outside the current decoder study. Historical code, manifests and Reports 1–6 remain
+Encoder learning, broad placement sweeps, the retired shared mixer, hash/amplitude searches and sectioned
+association work remain deferred. Targeted generator/CRC, placement and energy geometry controls are now
+within the current investigation. Historical code, manifests and Reports 1–6 remain
 available. Unknown K, fading and false-alarm-aware output losses require new contracts. No current evidence
 establishes dense optimality, paper-scale reproduction or useful multiuser PUPE at B100.
