@@ -1,7 +1,7 @@
 #!/bin/bash
 #PBS -l walltime=72:00:00
 #PBS -l select=1:ncpus=2:mem=16gb
-#PBS -J 1-90
+#PBS -J 1-90%4
 #PBS -N ura035_decoders
 
 set -euo pipefail

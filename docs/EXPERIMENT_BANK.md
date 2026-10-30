@@ -5,7 +5,8 @@ fixture contracts and retained results. [CURRENT_STATE.md](CURRENT_STATE.md) own
 Reports 7, 9, 10 and 11 own the mathematical derivations and their limitations.
 Job manifests and the commands below own HPC row definitions. Historical exact audits and matched performance evidence below retain their original scope. Approximation
 preparation is complete for the retained paths. All thirteen families now have shared-harness implementations;
-pre-reset prototype scripts remain parked. The user has submitted both Job035 and Job036; returned results remain incomplete.
+pre-reset prototype scripts remain parked. Jobs035–037 have returned substantial results; the latest local audit below distinguishes complete,
+partial, absent and source-guard-failed runs. Local availability does not establish live scheduler status.
 
 ## Reading the evidence
 
@@ -59,138 +60,123 @@ full pair-distance calculation materializes a 2080-by-2080 array; the four-user 
 all 766,480 states. Report 7 owns exact classification/source frequency, Report 8 owns distances and
 modified signatures, Report 9 owns near-alias error, and Report 11 owns the local operation and costs.
 
-## Fixed-resource encoder comparison: Job038
+## Common-D2 encoder comparison: Job038
 
 [Manifest](../jobs/038_polar_signatures/manifest.jsonl), [runner](../jobs/038_polar_signatures/run_row.py),
-[experiment](../jobs/038_polar_signatures/experiment.py), [merger](../jobs/038_polar_signatures/merge.py).
-This extends the Job034 mapping/D2 machinery and Job035 paired-frame contract without modifying their
-runtime sources or invalidating Job036/037 historical source audits. No new decoder family is introduced.
+[signature construction](../jobs/038_polar_signatures/experiment.py),
+[archived controls](../jobs/038_polar_signatures/comparators.py), [merger](../jobs/038_polar_signatures/merge.py).
+**30 October extension:** the primary comparison now uses **D2 for every encoder**, including the archived
+learned dense/sparse and learned-energy controls. It supersedes the earlier 24-row, two-receiver plan.
+Shared Job035–037 runtime sources and their compatibility contracts are unchanged.
 
-**Question:** does replacing repeated characters improve noisy message-sum separation and count recovery,
-and does its effect depend on energy balancing or receiver discovery? The four arms are:
-
-| Signature | Uniform energy | Deterministic balanced energy |
+| Encoder ID | Construction / training | Resources |
 |---|---|---|
-| Original polar/CRC generator | Historical reference | Previous balancing control |
-| Three-row repair | Same resources and energy profile; rows 17/21/30 become 8/20/61 | Same repair and archived balanced profile |
+| `polar_reference_uniform` | Original CRC/polar characters, uniform energy; frozen encoder | 32 occupied coordinates |
+| `polar_reference_balanced` | Original characters, deterministic KL-balanced energies | Same 32 positions |
+| `polar_repair3_uniform` | Replace duplicate rows 17/21/30 by character keys 8/20/61 | Same positions and uniform energies |
+| `polar_repair3_balanced` | Same repair, archived reference balanced energies | Same positions and energies |
+| `dense_fixed`, `dense_joint` | Job032 fixed Gaussian / jointly learned dense encoder and D2 | 256 occupied coordinates |
+| `sparse_fixed`, `sparse_joint` | Job032 fixed / jointly learned sparse encoder and D2 | 32 occupied coordinates |
+| `polar_energy_joint` | Job034 learned positive symbol energies and D2 | Original characters and 32 positions |
 
-Indices are zero-based; keys use the existing MSB-first payload convention. All arms retain B12/B14,
-six payload bits, Nc32, n256, identical placement patterns and unit energy per message. Payload coding
-rate remains 6/32 and full-message rate B/256. The modified signature is derived from the old generator
-but is **not compatible with its native CRC/SCL decoder**. CRC length/information-set choices and placement
-are not separately changed or optimized. The seven-parity extension is deliberately absent: it uses
-39 occupied resources and needs a separate matched-resource study.
+These are stable experiment labels, not new framework families. Reference/repair contrasts isolate the
+payload signature. Dense comparisons match channel length, B, K, power and D2, but **not occupied-support
+size**; report that resource advantage for sparse constructions. CRC and placement are not optimized.
+The seven-parity extension uses 39 symbols and remains outside this matched-resource comparison.
+Native CRC/SCL is incompatible with the repair; no custom decoder is added. Existing DEC-26 remains
+available via the one-frame `--probe`, outside the primary common-D2 ranking.
 
-The source is IID uniform full messages, with known K/physical variance and real AWGN
-`sigma²=1/(2 B 10^(EbN0/10))`. Loss and output are multiset count-PUPE. D2 and DEC-26 use their existing
-`run(scenario, **params) -> (counts, meta)` interfaces. D2 still has an explicit M-axis; DEC-26 uses the
-actual generator through basis proposals and sparse internal count readout. The common evaluation
-adapter materializes M columns. Matching the six-bit payload does not establish large-payload scaling.
-The DEC-26 budget is Job037's width32, eight patterns/context, radius-one basis flips and cap32, with
-physical terminal likelihoods. Candidate recall measures the union of visited message IDs, not whether
-the true joint configuration survived the beam.
+All nine arms use n256, B12/B14 (six payload bits), known K/noise, real AWGN with
+`sigma²=1/(2 B 10^(EbN0/10))`, IID full messages and multiset count-PUPE. D2 has eight layers/16 learned
+scalars and an explicit M-axis. Training remains distinct-message, K7/15/22/26, uniform SNR in [-4,10],
+200-epoch cap, patience10, 100 batches of8, 16 validation batches, lr .002. Historical joint arms also
+optimized encoder parameters at lr .001: this is a comparison of trained systems under a common receiver
+architecture/protocol, not equal total optimization work or an optimal-decoder encoder ranking.
+Twelve original D2 calibrations and thirty historical encoder+D2 checkpoints are reused; only the twelve
+repaired calibrations are new. Report setup, original training and inference costs separately.
 
-Each fixed encoder receives the same D2 training contract: eight layers/16 scalars, distinct-message
-training on K7/15/22/26 and uniform Eb/N0 in [-4,10], maximum 200 epochs, patience 10, 100 batches of 8,
-16 validation batches and lr .002. This historical **training source differs from the IID evaluation
-source**, identically across arms. Reference D2 reuses all 12 audited Job035 checkpoints; the repaired
-arms train 12 new calibrations. No encoder energy learning occurs. Job034's learned-energy results remain
-historical context, not a fifth matched arm or pooled IID metric. A win over balancing would not establish
-a win over jointly optimized Job034 energies.
+The five archived families are **reevaluated**, not merged from old IID membership metrics. Their stored
+float32 matrices are promoted and explicitly column-normalized in float64 to satisfy the current strict
+unit-power contract. The original error must be below 1e-5; actual rescaling and checkpoint/summary hashes
+are recorded. D2 parameters are reused and its physical Gram statistics recomputed. This precision-level
+projection is declared, not an exact historical replay. Learned-energy columns are first materialized
+using their original float32 computation. Original archives remain untouched.
 
-Default grid: **2 B × 3 seeds × 2 signatures × 2 energies = 24 array rows**. Each runs two receivers at
-K7/26, Eb/N0 4/10 dB and128 frames/cell: **24,576 receiver-frame evaluations**. These four cells are a
-focused subset of the historical grid; seed3201–3203 reuse is exploratory. Truth and standard noise are
-paired across arms, while observations change with the encoder. The merger rejects incomplete cohorts,
-unpaired truth/noise, unintended placement/energy changes, and source/config mismatches. It reports
-paired seed differences and the signature-by-balancing interaction. Missing historical DEC-26 runs are
-explicitly recorded as unavailable; new reference arms are still measured in this campaign.
+**54 rows = 2 B × 3 seeds × 9 encoders**, at K7/26, Eb/N0 4/10 dB, 128 frames/cell:
+**27,648 D2-frame evaluations**. Rows 1–24 are the four polar arms; rows 25–54 reevaluate archived controls.
+Truth and standardized noise are exactly paired across arms; observations differ with the encoder.
+The merger requires all nine arms for selected B/seeds and reports seed-paired differences against
+balanced, learned-energy, fixed dense and learned dense. These old seeds are exploratory, not held-out.
+No broad grid or extra encoder search is justified before this comparison.
 
-**Oracle diagnostic, separate from decoding:** for the first 32 frames/cell, reveal all outside users
-and the first two ordered slots' patterns. Enumerate 64² ordered payload pairs with the exact IID prior,
-normalize the physical likelihood and form count tails before allocating two copies. Same-pattern
-duplicates and exchangeable orderings receive the correct masses. Record nearest competing sum distance,
-near-competitor count, true pair posterior, count-PUPE, conditional Bayes risk and overlap. The first two
-slots are not selected for difficult payloads or favorable noise; same/mixed-pattern cases are reported
-separately. There are **3,072 oracle diagnostics**. This is conditional on known patterns/outside users;
-it omits alternative pattern pairs and is not a full-system Bayes result. Cost is O(n V²), memory
-O(V²+n V), including construction and normalization, separately timed. Same-pattern cases can be rare.
-
-**Reference replay:** use the saved `encoder.npz` amplitudes/placements, verified against the recorded
-matrix hash, generator, unit power and current deterministic construction within 1e-14. This addresses
-observed cross-platform amplitude differences of 5.55e-17 without weakening exact checkpoint/matrix or
-input-hash checks. The same archived profile feeds both signatures. Paths and archive/checkpoint hashes
-are retained. For deliberately independent regeneration, `--fresh-reference` rebuilds profiles and
-trains reference D2; apply it to every arm and pass it to the merger. This mode is not an exact historical replay.
-
-Local execution checks:
+The structured arms additionally retain 3,072 separate **oracle** pair diagnostics (first 32 frames/cell):
+outside users and the first two slots' patterns are revealed, all 64² ordered payload pairs are scored
+with physical likelihood, and count tails allocate two copies. Same/mixed-pattern strata remain separate.
+This omits other pattern assignments; O(nV²) time and O(V²+nV) memory include normalization. It is not a
+complete receiver or a full-system Bayes result. Dense controls have no corresponding pattern oracle.
 
 ```bash
 uv run python -m unittest tests.polar_signature_job_test tests.polar_energy_geometry_test tests.polar_mapping_test
-uv run python jobs/038_polar_signatures/run_row.py --index 4 --smoke \
-  --out-root jobs/038_polar_signatures/results_local_smoke
-uv run python jobs/038_polar_signatures/run_row.py --index 16 --probe \
-  --out-root jobs/038_polar_signatures/results_local_probe
+uv run python jobs/038_polar_signatures/build_manifest.py
+uv run python jobs/038_polar_signatures/run_row.py --index 4 --smoke --out-root jobs/038_polar_signatures/results_local_smoke_new
+uv run python jobs/038_polar_signatures/run_row.py --index 26 --smoke --out-root jobs/038_polar_signatures/results_local_smoke_new
 ```
 
-Smoke uses the real six-bit signature, one short D2 epoch and two frames/cell. Probe uses one K26/4dB
-DEC-26 frame without training. Neither provides a performance ranking. Full-budget single-frame probes
-measured roughly 0.56–0.70s for DEC-26 on this laptop; setup was0.03–0.14s, the oracle pair computation
-about 0.6 ms, and the stored matrix 8/32 MiB for B12/B14. Historical D2 calibrations took 19–51 min each,
-7.06 job-hours across 12 runs. Using those as proxies suggests roughly9–10 job-hours/18–20 CPU-hours for
-the new campaign, with substantial hardware, SNR and training-convergence uncertainty. This is not an
-HPC timing guarantee. Full calibration/comparison belongs on CPU HPC; local checks are quick.
-
-The PBS array requests **two CPUs, 16 GB and 24 h per row**, no GPU and **no concurrency cap**. If all 24 rows
-run together the request is 48 CPUs/384 GB; scheduler/site limits determine actual concurrency. Never add
-array concurrency caps. Keep active-job checkouts unchanged: their source guards would reject edited
-runtime files. From the existing HPC repository with Job035 results, prepare a separate checkout:
+Production remains an **unsubmitted** HPC campaign. Submit from a stable checkout containing these changes,
+with completed Job032/034/035 archives available. Do not update the checkout used by active Job037 runs.
+Paths can point to existing archives in another checkout:
 
 ```bash
-POLAR_REFERENCE_RESULTS="$(pwd)/jobs/035_polar_decoders/results_all_decoders"
-git fetch origin
-git worktree add --detach ../odma-ura-038 origin/main
-cd ../odma-ura-038
 module load miniforge/3
 uv sync --frozen
-qsub -v "POLAR_REFERENCE_RESULTS=$POLAR_REFERENCE_RESULTS" jobs/038_polar_signatures/038_polar_signatures.sh
+qsub -v "POLAR_REFERENCE_RESULTS=/absolute/path/to/035/results_all_decoders,POLAR_EXPLICIT_RESULTS=/absolute/path/to/032/results/comparison,POLAR_MAPPING_RESULTS=/absolute/path/to/034/results" jobs/038_polar_signatures/038_polar_signatures.sh
 ```
 
-Use the actual historical results path if different. Reuse an existing dedicated checkout after inspecting
-it; do not overwrite it. From a checkout already containing the audited Job035 outputs, plain
-`qsub jobs/038_polar_signatures/038_polar_signatures.sh` suffices. Reference summary/encoder/checkpoint
-files are required and were present locally for all 12 arms. New outputs stay in
-`jobs/038_polar_signatures/results_signatures/`; complete matching runs may be skipped, partial runs are
-preserved and rejected on retry. If there is no historical archive, explicitly use fresh-reference mode
-for the entire comparison instead of silently relaxing the audit.
-
-After completion, select a complete four-arm cohort or merge the whole campaign:
+If the default local-relative archive paths exist, plain `qsub jobs/038_polar_signatures/038_polar_signatures.sh`
+is sufficient. The script requests two CPUs, 16GB, 24h per row; **no concurrency cap**, no GPU. Scheduler/site
+limits determine concurrency; all 54 simultaneous requests would total 108 CPUs/864GB. Archived rows do no
+training. Historical reference calibrations suggest about 7 job-hours for twelve new calibrations, with
+substantial convergence/hardware uncertainty; reevaluation is much cheaper. The 24h value is a per-row
+limit, not a campaign runtime forecast. Matching completed outputs are skipped; preserve partial outputs
+and use a new output root for deliberate retries. Generated outputs remain ignored.
 
 ```bash
-uv run python jobs/038_polar_signatures/merge.py \
-  --baseline-results "$POLAR_REFERENCE_RESULTS" \
-  --out jobs/038_polar_signatures/results_analysis
+uv run python jobs/038_polar_signatures/merge.py --out jobs/038_polar_signatures/results_analysis
 ```
 
-Pass `--tractable-results` for completed Job037 controls in another checkout. `--B 12 --seeds 3201`
-selects the first four rows as a complete smaller cohort; it does not substitute for the declared
-three-seed comparison. JSON contains pair diagnostics/strata and all paired contrasts; CSV/PNG summarize
-count-PUPE and receiver timing. Generated results remain ignored. The campaign has **not been submitted**.
+Use `--B 12 --seeds 3201` only for a complete nine-arm smaller cohort. The four-arm interaction and all-nine
+D2 figures are separate. Local validation checks physical repair, exact factor geometry, native-SCL rejection,
+independent pair posteriors, source pairing, archived normalization/checkpoint contract, manifest completeness
+and submission settings. The existing 20 focused tests pass. The first learned-dense smoke exposed the
+stricter unit-power tolerance; explicit recorded normalization fixes that real precision mismatch.
 
-**Validation, 30 October:** independent checks cover the repaired physical matrix, exact factor matvec/
-adjoint/Gram geometry, procedural-versus-explicit DEC-26 outputs, absence of SCL calls, brute-force
-oracle pair tails/decisions including duplicates, paired-arm rejection and uncapped PBS directives.
-Eight actual B12/B14 signature/energy smoke runs and twelve one-frame historical D2 replays passed;
-the latter preserve every audited input hash and count decision. Generated evidence is in
-`jobs/038_polar_signatures/results_validation_final_2026-10-30/`. This verifies execution and provenance,
-not a PUPE improvement. The strongest remaining limitation is that conditional two-pattern geometry
-omits global pattern competitors, while both complete receivers remain approximate.
+**Completed locally, 30 October:** all 42 reusable control rows (seven encoders × two B × three seeds)
+now have 512 frames each in `jobs/038_polar_signatures/results_signatures/`: **21,504 evaluations**.
+`validation.json` records independent power, physical-observation, count-metric and truth/noise pairing
+checks; all 12 historical reference replays preserve their count decisions. Largest archived column
+rescaling is 4.915e-7. These are new current-metric control measurements, not repair performance.
+The nine-arm B12/seed3201 smoke also exercises construction, pairing, merger and plots; its repaired
+training is one epoch and its results must not be ranked. Evidence is under
+`results_nine_arm_smoke_2026-10-30/`. The 20 focused tests and Reports 8/10/11 compilation pass.
 
-**Decision after the runs:** examine geometry, proposal coverage and full count loss together. If only
-conditional geometry improves, inspect lost proposals/joint states before blaming the code. If both
-receivers improve at matched resources, confirm on held-out seeds before extending the grid. If no
-benefit appears, retain the original encoder and record the failed implication from conditional distance
-to system performance; do not optimize additional rows merely to force a positive result.
+**Remaining HPC work:** twelve repair calibrations/evaluations. If keeping the local archived controls,
+submit only the structured portion after transferring this code to a stable HPC checkout:
+
+```bash
+qsub -J 1-24 jobs/038_polar_signatures/038_polar_signatures.sh
+```
+
+This includes twelve inexpensive reference replays; rows 25–54 need not be submitted again. Supply the
+reference-archive environment path above if it is in another checkout. Alternatively copy completed
+`results_signatures/` to HPC and submit the full script: matching rows skip, leaving only the twelve
+repairs. Never overwrite incompatible/partial outputs; original archives remain untouched. No HPC
+submission has been made here. Pull result directories, rather than old source files, back into this
+updated local checkout before the all-nine merger.
+
+**Decision rule:** retain the reference unless the repair has a useful paired gain at matched resources.
+A win over balanced does not imply a win over learned dense; inspect each contrast and codebook seed.
+Confirm a promising result on held-out seeds and the full load/SNR grid. If no gain appears, record the
+failed inference from conditional distance to system performance and close this finite repair trial.
 
 ## Tractability algebra checks: Report 11
 
@@ -279,6 +265,40 @@ nine tractable variants and DEC14 miss none. The chains start at zero-error conf
 stay there, so this is not a correction/mixing success claim. `results/tractable_importance_bound_smoke_2026-10-29/`
 reruns REF/DEC33 after tightening the K1 bound; all 144 DEC33 decisions/input hashes are unchanged.
 Its K1 expected-regret bounds average about 0.48–0.50; all tested multiuser bounds remain 1 (vacuous).
+
+## Returned decoder audit: 30 October 2026
+
+```bash
+uv run python jobs/037_polar_tractable/audit_results.py --out jobs/037_polar_tractable/results_analysis_NEW_DATE
+# Replot an existing snapshot without rereading all frames:
+uv run python jobs/037_polar_tractable/audit_results.py --plot-only --out jobs/037_polar_tractable/results_analysis_2026-10-30_verified
+```
+
+The retained local snapshot is `jobs/037_polar_tractable/results_analysis_2026-10-30_verified/`:
+`audit.json`, `inventory.json`, `cells.json`, `aggregates.json`, `contrasts.json`, `log_failures.json`
+and decoder-selection/cost PNGs. These are generated and ignored. The audit recomputes1,130,406 frame
+metrics, checks inputs and provenance, and separates complete matched cohorts from uncertified cells.
+The analysis script hash identifies the audit implementation; later plot-only additions do not change
+that recorded provenance. Detailed decisions and limitations are in the existing
+[tractability log](logs/POLAR_TRACTABILITY_LOG.md#30-october-returned-result-audit-pruning-decisions-and-common-d2-encoder-test).
+
+Job036:36 complete,27 partial,one source-guard failure,17 absent from the original81 rows.
+Job037:42 complete,18 partial of60. All 42 chosen balanced035 controls are complete, using certified
+DEC-05 retries where available. These counts describe local artifacts, not scheduler status. Refresh
+returned files before treating the missing036 results as unrun or resubmitting anything.
+
+The replicated result is the explicit multiset beam14's B14 gain over D2: K26 at4/10dB gives
+6.030/.341% versus40.400/8.569% count-PUPE. Procedural26 gives31.510/4.778%; single-slot correction32
+improves that to30.198/3.135%. SCL-only discovery25 is weak; cached29, common-product IS DEC-33 and union34
+have not earned further broad sweeps at the tested budgets. The33/34 closure evidence is B12-complete;
+B14 remains incomplete. Pair31 is inferior to single32 in the highlighted hard cells.27/28 at B14 and
+30 remain open. Old035/036 examples below are historical snapshots, not the latest coverage or ranking.
+
+The next test is joint-state retention and conditional correction at matched cost, with14 and26→32
+as the two retained references. No additional decoder array was created or submitted in this pass.
+Existing running jobs should finish; no automatic cancellation or blanket resubmission is authorized
+by these analysis decisions. Missing-copy and positive-tail capacity diagnostics localize information
+loss but are not posterior-error certificates or causal proofs of the specific pruning failure.
 
 ## Active combination campaign: 036
 

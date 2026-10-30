@@ -1123,13 +1123,20 @@ convergent refinement are identified; standalone Gaussian and variational produc
 irreducible modeling-error conditions rather than an automatic exact limit.
 No option is claimed tractable at the intended load solely because its inner equations are finite.
 
-\textbf{Review before code.} Decide which execution families and variations are worth retaining for the
-first comparison. For each chosen design, fix its query/proposal provider, exact versus approximate
-corrections, discovery rule and numerical stopping budget. The subsequent implementation stage should
-measure actual tail/decision error, certificate tightness or failure probability, and total construction,
-inference and readout cost separately. This report supplies that choice set; it does not select a winner
-or start simulations. New derivations should address a specific remaining computational obstacle exposed
-by a chosen design.
+\textbf{Selection after implementation.} Jobs035--037 now provide finite implementations and returned
+comparisons; their current coverage is in the experiment index. The 30 October evidence retains the
+explicit multiset beam (DEC-14) as an accuracy reference and reliable-basis discovery followed by
+single-slot correction (DEC-26/32) as the procedural development reference. The present SCL-only beam,
+fixed proposal cache, common-product mixture and candidate-union beam do not justify another broad
+sweep at their tested budgets; incomplete variants remain explicitly unresolved. Report 11 records the
+matched evidence and the distinction between visited words, retained joint states and numerical tails.
+These are decisions about finite variants, not impossibility results for their execution families.
+
+The next design question is how to preserve useful joint configurations at lower total cost. Screening,
+beam width and correction must first be separated on fixed frames, with truth used only for evaluation.
+A new provider or family should resolve a measured bottleneck and retain the common source, physical
+likelihood and count-decision contract. Merely adding another posterior representation would not answer
+what the present runs have exposed.
 
 \begin{thebibliography}{9}
 \bibitem{report7} Project Report 7, \emph{Polar decoding from the posterior}.

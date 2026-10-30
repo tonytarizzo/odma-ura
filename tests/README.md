@@ -30,7 +30,8 @@ candidate rules. [Job037](../jobs/037_polar_tractable/README.md) owns the matche
 
 `uv run python -m unittest tests.polar_signature_job_test` checks Job038's fixed-resource signature repair,
 physical operators, independent oracle pair posterior/count decisions, compatible DEC-26 execution,
-paired-arm audits and uncapped PBS arrays. The existing [experiment index](../docs/EXPERIMENT_BANK.md#fixed-resource-encoder-comparison-job038)
+paired-arm audits, archived encoder normalization/replay and the nine-encoder common-D2 manifest.
+The existing [experiment index](../docs/EXPERIMENT_BANK.md#common-d2-encoder-comparison-job038)
 owns its smoke/probe/HPC commands and validation; these checks do not establish a PUPE improvement.
 
 ## Multiplicity-aware PUPE

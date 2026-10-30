@@ -10,6 +10,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from experiment import run_experiment, source_hashes
+from comparators import run_comparator
 
 
 def main():
@@ -18,6 +19,8 @@ def main():
     parser.add_argument("--manifest", type=Path, default=Path(__file__).with_name("manifest.jsonl"))
     parser.add_argument("--out-root", type=Path, default=Path(__file__).with_name("results_signatures"))
     parser.add_argument("--baseline-results", type=Path, default=ROOT / "jobs/035_polar_decoders/results_all_decoders")
+    parser.add_argument("--explicit-results", type=Path, default=ROOT / "jobs/032_published_baselines/results/comparison")
+    parser.add_argument("--mapping-results", type=Path, default=ROOT / "jobs/034_polar_mapping/results")
     parser.add_argument("--fresh-reference", action="store_true", help="Regenerate amplitudes and train reference D2; apply to all arms")
     parser.add_argument("--smoke", action="store_true", help="Actual b6 signature, two frames/cell, one D2 epoch; never a PUPE result")
     parser.add_argument("--probe", action="store_true", help="One K26/4dB frame, DEC-26 only; no training, for timing")
@@ -29,6 +32,24 @@ def main():
         parser.error(f"Index must be 1..{len(rows)}")
     row = copy.deepcopy(rows[args.index - 1])
     c = row["config"]
+    if "signature" not in row:
+        if args.fresh_reference or args.probe:
+            parser.error("Archived controls require their saved checkpoints; --probe is for the structured arms")
+        if args.smoke:
+            c["eval_frames"] = 2
+            row["name"] += "_smoke"
+            c["name"] = row["name"]
+            row["scope"] = "archived_checkpoint_execution_check_not_performance"
+        out = args.out_root / row["name"]
+        if (out / "summary.json").is_file():
+            saved = json.loads((out / "summary.json").read_text())
+            if saved["status"] != "complete" or saved["row"] != row or saved["source_sha256"] != source_hashes():
+                raise ValueError(f"Existing archived control differs from row/source: {out}")
+            print(f"Already complete: {out}")
+            return
+        result = run_comparator(row, out, args.explicit_results, args.mapping_results)
+        print(json.dumps({"output": str(out), "evaluation": result["evaluation"]}, indent=2))
+        return
     if args.fresh_reference or args.smoke or args.probe:
         row["reference_policy"] = "regenerated"
     if args.smoke or args.probe:

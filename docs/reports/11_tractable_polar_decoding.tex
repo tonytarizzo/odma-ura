@@ -1006,15 +1006,73 @@ The new mixed-pattern parity-cover operation in Section~\ref{sec:parity-cover} r
 construction; it is not silently included in DEC-25--34. Further tiny exhaustive checks verify
 DEC-33's ordered mixture, repeated-word orbit factors, global envelope and beam evidence lower bound.
 
+\section{Returned evidence and the next tractability question}
+The 30 October local audit checks 1,130,406 frames from Jobs035--037 against saved configurations,
+reviewed source snapshots, physical matrices, observation hashes and recomputed multiset count loss.
+The following comparisons use certified complete runs only: three exploratory seeds, 256 IID frames
+per cell, the balanced $n=256,b=6,d=32$ encoder, known $K$ and physical noise. Runtime is recorded
+across different HPC executions, excluding training/setup; it is not a controlled same-node benchmark.
+
+\begin{center}\small
+\begin{tabular}{@{}lrrrr@{}}\toprule
+ & \multicolumn{2}{c}{$B=12,K=26$} & \multicolumn{2}{c}{$B=14,K=26$}\\
+Count-PUPE (percent) & 4dB & 10dB & 4dB & 10dB\\\midrule
+D2 & 2.519 & .456 & 40.400 & 8.569\\
+DEC-14, explicit multiset beam & .310 & .045 & 6.030 & .341\\
+DEC-25, SCL beam & 14.108 & 1.808 & 69.381 & 35.732\\
+DEC-26, basis beam & .671 & .050 & 31.510 & 4.778\\
+DEC-31, XOR pair correction & .366 & .020 & 30.464 & 3.400\\
+DEC-32, single-slot correction & .270 & .010 & 30.198 & 3.135\\\bottomrule
+\end{tabular}
+\end{center}
+At $B=14,K=26,4$dB the recorded seconds/frame are $.049,.587,2.236,3.855$ for
+D2/14/26/32. Thus the procedural implementation has not yet bought practical speed or matched the
+explicit beam's accuracy at this payload size. The large $B=14$ gap cannot be interpreted as a
+large-payload result: only the pattern-bank size increased. The paired three-seed interval for
+DEC-32 minus DEC-26 is $[-.01939,-.00685]$ at 4dB and $[-.01947,-.01339]$ at 10dB. These exploratory intervals
+are not simultaneous model-selection guarantees or held-out validation.
+
+\textbf{Locate the information loss.} Let $\mathcal C$ be the visited-word union and let
+$c_w=\max\{j:\widehat T_{w,j}>0\}$ for a saved numerical tail table, with empty maximum zero.
+Any action confined to these capacities satisfies
+\[
+ \ell(a,\widehat a)\geq 1-\frac1K\sum_w\min(a_w,c_w).
+\]
+This follows directly from $\widehat a_w\leq c_w$; it is an optimistic capacity bound, because the
+capacities need not occur together in one retained configuration. It is evaluated using truth and
+is not a receiver certificate. Numerical zeros may arise from state omission, finite sampling or underflow.
+For DEC-26 at $B=14,K=26,4$dB, the visited-word missing-copy bound is $.04412$, the positive-tail capacity
+bound $.24439$, and actual loss $.31510$. At 10dB they are $.00336,.02639,.04778$.
+Word discovery alone therefore understates the remaining joint-state/tail problem. This diagnostic
+does not yet separate pruning from numerical concentration or finite-chain effects.
+
+The correction DEC-32 accepts on average 114.37 of 128 proposals at $B=14,K=26,10$dB, but changes its state
+only $.582$ times. Self-proposals explain why nominal acceptance is not a mixing diagnostic.
+For DEC-33 at $B=12,K=26,4/10$dB, all 768 decisions per cell equal DEC-26's decisions, despite ESS about 512
+and more than five times its recorded cost; its expected-risk bound remains 1. These data close neither
+importance sampling in general nor the unreturned $B=14$ runs. They do deprioritize this fixed mixture.
+Likewise SCL-only DEC-25, the fixed cache DEC-29 and union-beam DEC-34 are not priorities for another broad sweep at
+these budgets. XOR-pair DEC-31 remains an ablation against simpler DEC-32; B14 variants DEC-27/28 and four-symbol DEC-30
+remain unresolved pending completed runs.
+
+\textbf{Next discriminating test.} Keep DEC-14 as the explicit accuracy reference and DEC-26 followed by DEC-32 as
+the procedural reference. On a declared set of physical frames, record where true prefixes disappear
+from the beam, and vary screening breadth separately from state width. Truth is used for diagnosis,
+never for proposal selection. Then compare a small correction budget at matched elapsed work, retaining
+all normalization, repeated contexts and count readout. A mixed-pattern affine provider is worthwhile
+only if coordinated replacement is the measured obstruction and its setup/conditional draw cost is
+competitive. More decoder families are not required before this test.
+
 \section{Established results and remaining questions}
 Normalized proposals, finite-set repair, residual reuse and sparse count decisions avoid payload
 enumeration in declared operations. Overlap conditioning extends these to mixed patterns, but interaction
 rank and inner acceptance can still be costly. The counterexamples rule out automatic sufficiency of
 independent factors, fixed flip radii or small lists.
 
-Next, compare corrections from matched initial configurations and increase payload length at declared
-$P,n,d,K$ scaling. Measure parity-cover rank, setup and acceptance on actual residuals. The present
-identities and smoke checks establish no fixed-PUPE large-payload scaling result.
+After the joint-state diagnostic, compare useful corrections from matched initial configurations and
+increase payload length at declared $P,n,d,K$ scaling. Measure parity-cover rank, setup and acceptance
+on actual residuals. The present identities and returned small-payload results establish no fixed-PUPE
+large-payload scaling result.
 
 \textbf{Relation to existing methods.} Reliable-basis reprocessing and polar list decoding are
 established\cite{fossorier,tal}, as are combinations of search, bounding and importance sampling, and

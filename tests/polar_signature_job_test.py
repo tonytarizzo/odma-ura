@@ -5,6 +5,7 @@ import copy
 import json
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -25,6 +26,9 @@ merge_spec = importlib.util.spec_from_file_location("signature_merge", JOB / "me
 merge = importlib.util.module_from_spec(merge_spec)
 with patch.dict(sys.modules, {"experiment": experiment}):
     merge_spec.loader.exec_module(merge)
+    comparator_spec = importlib.util.spec_from_file_location("signature_comparators", JOB / "comparators.py")
+    comparators = importlib.util.module_from_spec(comparator_spec)
+    comparator_spec.loader.exec_module(comparators)
 
 
 class SignatureJobTest(unittest.TestCase):
@@ -123,19 +127,65 @@ class SignatureJobTest(unittest.TestCase):
         bad[(12, 3201, "repair3", "balanced")][0]["encoder"]["amplitudes_sha256"] = "different"
         with self.assertRaises(ValueError):
             merge.compare(bad)
+        full = {(b, seed, f"polar_{signature}_{mapping}"): entry
+                for (b, seed, signature, mapping), entry in cohort.items()}
+        for label in ("dense_fixed", "dense_joint", "sparse_fixed", "sparse_joint", "polar_energy_joint"):
+            full[(12, 3201, label)] = copy.deepcopy(full[(12, 3201, "polar_reference_uniform")])
+        all_cells, all_contrasts = merge.compare_all_d2(full)
+        self.assertEqual(len(all_cells), 9)
+        self.assertEqual(len(all_contrasts), 16)
+        full[(12, 3201, "dense_joint")][1][("D2", 7, 4, 0)]["truth_sha256"] = "unpaired"
+        with self.assertRaises(ValueError):
+            merge.compare_all_d2(full)
 
     def test_manifest_and_uncapped_submission(self):
         rows = [json.loads(line) for line in (JOB / "manifest.jsonl").read_text().splitlines()]
-        self.assertEqual(len(rows), 24)
+        self.assertEqual(len(rows), 54)
         expected = {(b, seed, signature, mapping) for b in (12, 14) for seed in (3201, 3202, 3203)
                     for signature in ("reference", "repair3") for mapping in ("uniform", "balanced")}
-        self.assertEqual({(r["config"]["B"], r["config"]["seed"], r["signature"], r["config"]["mapping"]) for r in rows}, expected)
+        self.assertEqual({(r["config"]["B"], r["config"]["seed"], r["signature"], r["config"]["mapping"])
+                          for r in rows if "signature" in r}, expected)
+        self.assertTrue(all(r["config"]["decoders"] == ["D2"] for r in rows))
+        self.assertEqual(len({(r["config"]["B"], r["config"]["seed"], r["encoder_id"]) for r in rows}), 54)
         self.assertEqual(sum(len(r["config"]["decoders"]) * len(r["config"]["loads"]) * len(r["config"]["eval_ebn0"])
-                             * r["config"]["eval_frames"] for r in rows), 24576)
-        for script in JOB.parent.glob("*/*.sh"):
+                             * r["config"]["eval_frames"] for r in rows), 27648)
+        for script in JOB.glob("*.sh"):
             for line in script.read_text().splitlines():
                 if line.startswith("#PBS -J"):
                     self.assertNotIn("%", line, str(script))
+
+    def test_archived_matrix_normalization_and_decoder_contract(self):
+        from benchmarks import ura_comparison
+        from framework.polar_mapping import PolarD2
+        c = normalized_config({"profile": "smoke", "B": 4, "n": 12, "loads": [2], "train_loads": [2],
+                               "decoders": ["D2"], "eval_sampling": ["iid"], "bounds": False})
+        old = {**c, "family": "dense", "mode": "fixed", "decoder": "d2", "loads": c["train_loads"]}
+        encoder = ura_comparison.make_encoder(old)
+        original = encoder.explicit_matrix().detach().numpy().copy()
+        decoder = PolarD2(c["layers"])
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            path = root / f"B{c['B']}_n256_dense_fixed_d2_s{c['seed']}"
+            path.mkdir()
+            summary = {"status": "complete", "config": old, "initial_matrix_sha256": experiment.digest(original),
+                       "revision": "synthetic", "source_sha256": {}, "training": {}, "encoder_learned_parameters": 0}
+            (path / "summary.json").write_text(json.dumps(summary))
+            torch.save({"config": old, "encoder": encoder.state_dict(), "decoder": decoder.state_dict()}, path / "checkpoint.pt")
+            row = {"config": c, "encoder_id": "dense_fixed"}
+            actual, learned, phi, provenance = comparators.load_checkpoint(row, root, root)
+            expected = original.astype(np.float64)
+            expected /= np.linalg.norm(expected, axis=0)
+            np.testing.assert_array_equal(phi, expected)
+            np.testing.assert_allclose(np.square(phi).sum(0), 1, atol=1e-14)
+            self.assertLess(provenance["maximum_column_rescaling"], 1e-6)
+            y = phi[:, [3, 3]].sum(1)
+            counts, _ = run("D2", Scenario(phi, y, 2, .02), encoder=actual, decoder=learned)
+            reference = decoder.double()(actual, torch.tensor(y)[None, :, None], torch.ones(1, 1).double(), 2, noise_var=.02)
+            np.testing.assert_array_equal(counts, reference.counts[0].numpy())
+            bad = copy.deepcopy(row)
+            bad["config"]["layers"] += 1
+            with self.assertRaises(ValueError):
+                comparators.load_checkpoint(bad, root, root)
 
 
 if __name__ == "__main__":

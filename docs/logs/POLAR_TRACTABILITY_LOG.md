@@ -6,6 +6,122 @@ Updated 30 October 2026. This agent-maintained log records exploratory reasoning
 
 Keep the Report-8 encoder as a fixed reference, known K/noise, IID source and multiplicity-aware PUPE. The 29 October sum-geometry continuation also studies explicitly labelled encoder modifications. Use Reports 7 and 9 to remove full-payload computations and identify useful structural approximations. A small representation is not enough: charge discovery, normalization, repeated residual contexts, mixing and count readout. New constructions need comparison with established methods before any novelty claim. Job038 subsequently adds a focused encoder comparison using existing receivers and matched D2 calibration; it does not introduce a learned inference family.
 
+## 30 October: returned-result audit, pruning decisions and common-D2 encoder test
+
+This supersedes the priorities and the two-receiver Job038 plan below; older entries retain their
+original scope. The user requested analysis of returned Jobs036/037, closure of weak avenues, common-D2
+comparison against balanced and learned dense encoders, and a concrete next decoder direction.
+
+`jobs/037_polar_tractable/audit_results.py` independently checked **1,130,406** saved frame records:
+manifest/config, reviewed source hashes and decoder budgets for completed runs, archived physical
+matrices and input arrays against D2, observation hashes, legal counts, recomputed count-PUPE and
+candidate recall. Only full 256-frame cells from certified complete runs enter matched contrasts;
+partial cells are separate diagnostics. Seed sets are explicit, with paired frame and seed intervals.
+No run was submitted/cancelled and no active-campaign runtime file changed.
+
+| Local snapshot | Complete | Partial, uncertified | Source-guard failure | Absent |
+|---|---:|---:|---:|---:|
+| Job036, original 81-shard manifest | 36 | 27 | 1 | 17 |
+| Job037, 60 rows | 42 | 18 | 0 | 0 |
+
+All 42 selected balanced Job035 control runs are complete, including the three DEC-05 retries.
+Job036 B14/DEC-19/seed3201/K22–26 contains 4096 frames but its downloaded log reports source changes
+before final certification. It is excluded. Missing local files do not establish live scheduler state;
+some absent original036 rows were previously deprioritized. Do not resubmit them automatically.
+A refreshed copy is needed if HPC has finished more work than this local snapshot contains.
+
+Three seeds, K26, 256 IID frames/seed/cell, balanced reference; PUPE in percent:
+
+| Decoder | B12,4dB | B12,10dB | B14,4dB | B14,10dB |
+|---|---:|---:|---:|---:|
+| D2 | 2.519 | .456 | 40.400 | 8.569 |
+| DEC-14 explicit multiset beam | .310 | .045 | 6.030 | .341 |
+| DEC-25 SCL-only beam | 14.108 | 1.808 | 69.381 | 35.732 |
+| DEC-26 basis beam | .671 | .050 | 31.510 | 4.778 |
+| DEC-29 frozen-cache correction | .621 | .035 | 31.425 | 4.612 |
+| DEC-31 XOR pair correction | .366 | .020 | 30.464 | 3.400 |
+| DEC-32 SCL single-slot correction | .270 | .010 | 30.198 | 3.135 |
+
+DEC-14 minus D2 at B14/K26/4dB is −.34370, paired three-seed t95 [−.37177,−.31563].
+DEC-32 minus DEC-26 is −.01312 [−.01939,−.00685] there and −.01643 [−.01947,−.01339]
+at 10 dB. These are descriptive exploratory intervals, not multiplicity-corrected held-out inference.
+Recorded B14/4dB seconds/frame: D2 .049, DEC14 .587, DEC26 2.236, DEC32 3.855. Different HPC
+executions and excluded training/setup prevent a controlled same-node timing claim; procedural
+execution has not yet bought practical speed at these six-bit payload sizes.
+
+**What can close at current budgets:** SCL-only beam25 as the main search, the fixed four-center
+cache29, the unconditional common-product/beam IS33, and the union-beam34 are not priorities for
+further broad sweeps. In completed B12/K26 4/10dB cells, DEC-33 returns exactly DEC-26's hard counts at about
+5.6–5.8 times its recorded cost; ESS≈511–512 while the expected-risk bound is 1. High ESS is not
+independent discovery or posterior accuracy. DEC-34 adds about 5.5 times cost without useful gain there;
+its B14 runs remain uncertified, so the claim is B12-specific. DEC-31 loses to simpler DEC-32 at the highlighted
+B12/B14 cells; keep it as an ablation, not the default joint correction. This closes these finite
+implementations/budgets, not the underlying mathematical methods.
+
+**Job036:** B14/seed3201/K26/4dB, DEC-15/16/17/18 yield 24.084/5.965/6.115/6.070% versus DEC-14's 6.130%.
+At 10dB their errors are 1.277/.270/.165/.120% versus DEC-14's .346%. Product-free beam DEC-16 is already strong;
+17/18's high-SNR gains are worth understanding but cost roughly 33–48s/frame versus beam .44s.
+Current unconditional product mixtures and SMC composites DEC-20–24 do not justify a new broad bank.
+Preserve a cheap, targeted correction question; do not infer family-wide failure from one seed or
+finite budget. The failed DEC-19 hard-load row and incomplete B14 cells cannot settle all pair-refinement
+comparisons. B14 parity chains DEC-27/28 and four-symbol DEC-30 remain open pending complete results.
+
+**Failure localization:** at B14/K26/4dB, DEC-26's visited-word missing-copy floor is 4.41%, its positive
+numerical-tail capacity floor 24.44%, and actual loss 31.51%. At 10dB these are .336%,2.639%,4.778%.
+For a saved tail table define capacity c_w=max{j:tail(w,j)>0}; any action using that capacity misses
+at least 1−sum_w min(a_w,c_w)/K. This is an optimistic information-support diagnostic, not a posterior
+certificate: capacities need not coexist in one state, and zeros can reflect pruning, sampling or
+floating underflow. Thus global candidate recall alone cannot identify the failing stage.
+At B14/10dB, DEC-32 accepts 114.37 of 128 moves on average but changes state only .582 times. Its low empirical
+support explains most remaining error; large nominal acceptance cannot be used as a mixing argument.
+
+**Next decoder experiment:** keep DEC-14 as the performance reference and DEC-26→32 as the procedural reference.
+Instrument where true prefixes leave the beam (truth for analysis only), comparing screen breadth and
+beam width on the same predeclared B14/K26 4/10dB frames. Separate word discovery, joint-state retention,
+positive-tail support and allocation loss; include full setup/repeated-context work. Then test a smaller
+correction budget from the retained configurations at matched elapsed work. A mixed-pattern affine
+provider is justified only if these errors require coordinated moves and its conditional draw pays
+for setup/normalization. No new DEC family or broad HPC submission is needed before this diagnostic.
+
+**Encoder:** Job038 now has nine encoder labels and only common D2 in the primary comparison. The four
+reference/repair3 × uniform/balanced arms are joined by frozen/learned dense, frozen/learned sparse and
+learned polar energy from Jobs032/034. All 30 archives are available. Their physical matrices and D2 are
+reevaluated on the current paired IID count frames, with recorded float64 unit normalization of stored
+float32 columns; old IID membership metrics are not imported. Only 12 repaired calibrations need
+training. 54 rows, 27,648 D2-frame evaluations, 3,072 separate pattern/outside-oracle diagnostics. Dense
+uses 256 occupied coordinates rather than 32; joint historical training spends encoder optimization too.
+The original 2x2 effect is kept separately from comparisons against dense. No custom decoder is added.
+
+All 42 reusable control rows completed locally, with 21,504 frames independently checked for physical
+signals, unit power, count-PUPE and cross-encoder truth/noise pairing. All 12 archived reference replays
+preserve their decisions. Maximum column rescaling is 4.915e-7. The nine-arm execution/merge smoke and 20
+focused regression tests pass; Reports 8/10/11 compile. Repair production training remains pending:
+submit Job038 rows 1–24 from a stable checkout (twelve reference replays plus twelve repair calibrations),
+or copy the complete controls and let the full array skip them. No job has been submitted.
+
+The fresh common-D2 controls also show why learned dense must not be the only comparator.
+At B14/K26, three seeds and 128 IID frames/seed/cell, count-PUPE in percent is:
+
+| Encoder | 4 dB | 10 dB |
+|---|---:|---:|
+| Balanced polar | 40.775 | 9.315 |
+| Fixed dense | 40.525 | 9.535 |
+| Learned polar energy | 41.496 | 9.445 |
+| Learned dense | 43.219 | 14.253 |
+
+These are 128-frame encoder-control results, separate from the 256-frame decoder table above.
+The paired three-seed 95% t interval for balanced minus fixed dense at 10 dB is
+[−2.48, 2.04] percentage points; against learned dense it is [−14.67, 4.80].
+The point estimates do not establish a general ranking. Keep all these controls, report training costs,
+and wait for the repair arms before drawing conclusions about the proposed signature.
+
+Report 8 is retitled **Encoder geometry and multiuser sum design** and explains deterministic generation,
+known frame/KL/adder-code foundations and the bounded next programme. The finite three-row search is
+not a general construction theorem; the combinatorial encoder space is not exhausted. A clear stopping
+rule is to evaluate this candidate, validate a useful win on new seeds/full grid, or close it if the
+conditional-distance gain fails to yield common-receiver benefit. More encoder families are not needed
+merely because the algebra permits them. Generated evidence and commands are in the experiment bank.
+
 ## 30 October: implement the discriminating encoder comparison
 
 The user requested a new job extending earlier encoder work, comparison with balancing and historical

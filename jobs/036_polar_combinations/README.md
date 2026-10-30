@@ -92,7 +92,8 @@ The uniform mapping is not repeated in this round. The prior uniform results rem
 - B14 DEC-15–19 are each split into K7/15 and K22/26 shards: 15 extra array rows.
 - **81 array rows, 540,672 decoder-frame evaluations**; sharding does not add statistical work.
 - Each row requests two CPUs, 16 GB, 72 hours. No GPU is required or used.
-- No array concurrency limit is requested; actual concurrency depends on the scheduler and site limits.
+- At most four subjobs: eight CPUs / 64 GB reserved by this array. If Job035 also has four active
+  subjobs, the two arrays together can reserve sixteen CPUs / 128 GB.
 
 A one-frame laptop probe at K26/4 dB measured approximately 0.075–4.9 seconds/receiver at B12 and
 0.31–20.5 seconds at B14. The slowest B14 variant is pair-refined mixture IS (19). A 4,096-frame shard
@@ -100,7 +101,7 @@ at that single measured latency would take about 23.3 hours; this is an extrapol
 bound or HPC timing prediction. Splitting the heavy B14 runs provides margin for different nodes/SNRs.
 The main remaining runtime risk is hardware/optimizer variability under the 72-hour cap.
 
-### Queue while Job035 is still running
+### Queue safely while Job035 is still running
 
 Do **not** pull into or modify the working checkout used by active Job035 processes: their final source
 fingerprint checks would reject changed files. From the existing HPC repository, create a separate
@@ -113,7 +114,7 @@ git worktree add --detach ../odma-ura-036 origin/main
 cd ../odma-ura-036
 module load miniforge/3
 uv sync --frozen
-qsub jobs/036_polar_combinations/036_polar_combinations.sh
+qsub -J '1-81%4' jobs/036_polar_combinations/036_polar_combinations.sh
 ```
 
 If `../odma-ura-036` already exists, inspect/reuse it rather than overwriting it. Submit from its repository

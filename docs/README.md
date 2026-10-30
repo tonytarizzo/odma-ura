@@ -17,14 +17,16 @@ The decoder study has four separate reports:
 | [10. Complete decoder options](reports/10_polar_decoder_designs.pdf) ([source](reports/10_polar_decoder_designs.tex)) | One exact reference family and thirteen decoder families, with high-level explanations, complete discovery/inference/count decisions, variations and coverage of Reports 7/9. Adds product-law top-word discovery, exact auxiliary-field joint correction and finite prefix/tempered particle-batch guarantees. The report records the design-stage mathematics; subsequent implementations and measurements are recorded separately below. |
 | [11. Tractable polar decoding](reports/11_tractable_polar_decoding.pdf) ([source](reports/11_tractable_polar_decoding.tex)) | Nonlearned computational reductions: parity proposals, selective envelope repair, reliable-basis search, residual reuse, bounded same-pattern pair discovery, mixed-pattern parity conditioning and sparse count decisions. Includes costs, conditional guarantees, counterexamples and established-method attribution; no validated scalable receiver is claimed. |
 
-[Report 8](reports/08_polar_energy_geometry.pdf) defines and analyzes the frozen balanced encoder.
+[Report 8: Encoder geometry and multiuser sum design](reports/08_polar_energy_geometry.pdf) defines the
+reference encoder, character repairs, energy geometry and matched encoder comparisons.
 The Bayes count-tail objective stays fixed across all four decoder reports.
 The [035 shared harness](../jobs/035_polar_decoders/README.md) implements REF, all thirteen DEC families
 and D2/ODMA controls, with paired frames, PUPE/runtime plots and a complete 90-job CPU array with two CPUs
 per job and no concurrency cap. Each family has one declared finite variant; this does not claim every Report-10 variation is implemented.
 The [036 combination study](../jobs/036_polar_combinations/README.md) adds DEC-14–24. These implementations retain full-alphabet dependence and serve as small-B accuracy references for the tractability investigation.
 DEC-25–34 add procedural tractable variants; their algebra, exact checks and local smoke evidence are indexed in the experiment bank. The common small-B harness still constructs an explicit encoder; the procedural interface does not. [Job 037](../jobs/037_polar_tractable/README.md) compares these variants on the paired balanced Job-035/036 grid, reusing audited historical controls.
-The reports retain their design-stage claims; new measurements belong to the experiment bank and job records.
+The experiment bank and research log own the full returned-run audit; Reports 10/11 retain its concise
+selection and tractability lessons. Job038 now compares nine encoders through common D2.
 Old approximation catalogues and empirical rankings are no longer active documents.
 
 The [PUPE metric record](PUPE_METRIC.md) separately owns the 11 October correction, output-budget conventions

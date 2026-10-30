@@ -80,30 +80,46 @@ SPRIGHT with its required measurements and fixed-power noise cost exposed. Gener
 trade theory and orbital MCMC are established prior art; fixture certificates and the physical/count
 specialization are the present results. The experiment bank indexes the independent checks.
 
-**Next discriminating step is prepared as Job038:** a fixed-resource 2x2 comparison of reference/three-row
-repair and uniform/balanced energies. It reuses the Job034/035 D2 training machinery and the existing
-DEC-26 parity-basis receiver. B12/B14, three historical seeds, K7/26 and 4/10 dB give 24 rows and
-24,576 receiver-frame evaluations at 128 frames/cell. Archived Job035 amplitudes preserve the exact
-reference; its 12 D2 checkpoints are reused, while the 12 repaired arms receive matched calibration.
-The [experiment bank](EXPERIMENT_BANK.md#fixed-resource-encoder-comparison-job038) owns commands, costs,
-oracle pair diagnostics, validation and interpretation. Local execution/replay checks pass; the production
-campaign has not been submitted or measured. This is an exploratory comparison, not held-out validation.
+**Returned-results decision, 30 October:** the local audit verifies 1,130,406 frame records. Job036 has
+36 certified complete rows, 27 partial, one source-guard failure and 17 absent from its 81-row original
+manifest; Job037 has 42 complete and 18 partial rows. All 42 selected balanced035 controls are complete.
+A local snapshot cannot determine live scheduler status. The existing experiment bank and tractability
+log contain precise coverage, paired intervals, failure diagnostics and reproducible commands.
 
-Encoder work can now wait for this focused evidence: compare conditional noisy geometry, candidate recall
-and full-message count-PUPE together before expanding the grid or optimizing more rows. The seven-parity
-extension remains a separate resource-changing design. Exact four-user witness removal alone is too rare
-to justify a broad campaign. Job038 changes the transmitted signature, not the message length, placements
-or power; original CRC/SCL decoding is incompatible with the repair.
+Retain **DEC-14 explicit multiset beam** as the performance reference and **DEC-26 basis beam followed
+by DEC-32 single-slot correction** as the procedural reference. At B14/K26/4dB, three-seed count-PUPE
+is 6.030% for DEC-14, 40.400% for D2, 31.510% for DEC-26 and 30.198% for DEC-32. At 10dB it is .341%,8.569%,4.778%,3.135%.
+Procedural execution is presently slower at these six-bit payload sizes. Close broad development of
+the present SCL-only beam DEC-25, frozen-cache DEC-29, common-product IS DEC-33 and union-beam DEC-34; DEC-33/34's complete
+negative evidence is B12-specific. Keep XOR-pair DEC-31 as an ablation, since simpler DEC-32 is better in the
+highlighted cells. B14 chains DEC-27/28, four-symbol DEC-30 and incomplete Job036 refinements remain unresolved.
 
-**Decoder continuation:** use the already implemented DEC-25–34/Job037 bank to identify discovery versus
-correction failures. The new affine orbit operation is a local exact update, not a new DEC family, and
-sparse-Walsh packets require different transmitted measurements. The next implementation gate is a
-mixed-pattern affine conditional provider tested at fixed outside contexts: compare overlap-sector setup,
-envelope acceptance, useful state changes and count-tail error against existing pair proposals at matched
-work. Implement it as a variant inside an existing corrected chain only if that diagnostic pays for its
-construction; then test full-chain mixing and paired PUPE. A fresh broad theorem survey or HPC family is
-not required before that focused test. B12/B14 still share six payload bits; neither campaign validates
-large-payload scaling.
+The main decoder question is now **how to retain the right joint states at lower cost**. At B14/K26/10dB,
+26 visits 99.66% of transmitted copies but still incurs 4.78% loss. Positive numerical tails retain capacity
+for all but 2.64%; this separates word discovery from state/tail retention without identifying every cause.
+32 accepts 114 of 128 proposals on average but changes state only .58 times. Do not interpret acceptance,
+word recall or IS ESS as posterior coverage. First compare screen breadth/beam width and targeted
+correction on fixed frames with complete cost accounting; conditional mixed-pattern affine proposals
+become a priority only if coordinated replacement is the measured obstruction. No new broad decoder
+array is required yet. B12/B14 both retain six payload bits and do not validate large-payload scaling.
+
+**Encoder next step: extended Job038.** Nine encoder arms now use the same D2: original/repair3 ×
+uniform/balanced, fixed/learned dense, fixed/learned sparse, and learned polar energies. This directly
+addresses both balanced-reference and learned-dense comparisons. 54 rows cover B12/B14, three historical
+seeds, K7/26 and 4/10dB, 128 IID frames/cell: 27,648 D2-frame evaluations. Reuse 42 archived calibrations;
+train only 12 repaired arms. The 30 older dense/sparse/energy controls are freshly evaluated with paired
+truth/noise and the current count metric, with recorded float64 unit normalization. Dense occupies 256
+coordinates versus 32 for polar/sparse; historical joint training also optimizes the encoder.
+
+Report 8 is now **Encoder geometry and multiuser sum design**. The generator and balancing rule are
+deterministic for the supplied fixture/placements; efficient general row selection and optimal PUPE
+remain unproved. Test this one finite candidate before broadening encoder search. A useful improvement
+needs held-out/full-grid confirmation; no improvement closes this repair trial without ruling out all
+structured encoders. The seven-parity extension changes resources and remains deferred. Native polar
+CRC/SCL is incompatible with the repair; no custom receiver is introduced for the common-D2 test.
+All 42 reusable control rows have now completed locally (21,504 fresh evaluations); twelve repaired
+calibrations remain for HPC. Job038 has not been submitted. The experiment bank owns updated commands,
+validation and costs. The common-nine-arm smoke passes, without a repair performance claim.
 
 **The broad exact-derivation phase is complete for this contract.** Report 7 derives a complete finite
 Bayes decoder and alternative exact evaluations, lossless state reductions, polar pair/three-user contractions,

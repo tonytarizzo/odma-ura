@@ -1,13 +1,13 @@
 \documentclass[10pt,a4paper]{article}
-\newcommand{\ReportShortTitle}{Why polar energy shaping helps}
+\newcommand{\ReportShortTitle}{Encoder geometry and multiuser sum design}
 \input{report_style.tex}
 \newcommand{\E}{\mathbb E}
 \newcommand{\tr}{\operatorname{tr}}
 \newcommand{\GF}{\operatorname{GF}}
 \begin{document}
-{\LARGE\bfseries Why polar energy shaping helps}\par
-{\large From a learned correction to a testable geometric explanation}\par
-{\color{muted}29 October 2026 --- Energy geometry and multiuser sum design; companion to Report 7}
+{\LARGE\bfseries Encoder geometry and multiuser sum design}\par
+{\large Polar/CRC signatures, placement, energy and matched comparisons}\par
+{\color{muted}30 October 2026 --- Encoder algebra; companion to the exact inference in Report 7}
 
 \textbf{Result to explain.} With unchanged full-alphabet D2, learned symbol energies bring ODMA--polar close to
 fixed dense codebooks. Full-grid mean PUPE at $B=12/14$ is $0.17116/0.28776$, versus fixed polar
@@ -366,14 +366,27 @@ PUPE campaign on their removal alone. CRC changes, placement changes and auxilia
 separate controls. Report 11 gives a count-preserving affine operation for the reference and explains
 why arbitrary sparse-Fourier measurements are not available for free.
 
-Job038 implements this comparison with four fixed-resource arms: original/repaired signatures crossed
-with uniform/balanced energy. D2 is calibrated for each physical encoder, and the existing parity-basis
-receiver supplies a compatible nonlearned control. A separate two-slot diagnostic reveals the outside
-users and both patterns, then evaluates the exact IID payload-pair posterior and count decision over
-$64^2$ ordered pairs. It includes mixed-pattern overlap but excludes alternative pattern allocations;
-it is neither a complete receiver nor a full-system Bayes risk. Physical-factor and count-tail checks,
-plus exact replay of historical reference inputs and D2 decisions, pass. Performance remains unmeasured;
-the experiment index records the budgets, source-law distinction in D2 training, and computational costs.
+Job038 retains the four fixed-resource arms: original/repaired signatures crossed with
+uniform/balanced energy. Its primary comparison now uses the same full-alphabet D2 architecture for
+all arms, adding frozen and learned dense/sparse controls from Job032 and learned symbol energies
+from Job034. Each uses its matched calibration; repaired arms receive new calibration under the
+same training protocol. Dense occupies all 256 coordinates, whereas sparse/polar occupy 32: channel
+length and power match, occupied-resource count does not. The stable labels and complete experiment
+contract are in the experiment index. No new decoder is introduced.
+
+Historical encoder/decoder checkpoints are reevaluated under the current IID count loss. Their
+float32 columns are explicitly unit-normalized in float64; the small rescaling and original training
+cost are recorded. The comparison therefore does not reuse old IID membership scores or claim exact
+floating-point replay. Joint historical training also optimized the encoder, whereas the repair is
+fixed before D2 calibration. Common receiver architecture is a useful control, not a proof that the
+Bayes-optimal encoder ordering is the same. Distinct-message training versus IID evaluation remains
+common to all arms. There is no measured repair PUPE result yet.
+
+A separate two-slot diagnostic reveals outside users and both patterns, then evaluates the exact IID
+payload-pair posterior and count decision over $64^2$ ordered pairs. It includes mixed-pattern overlap
+but excludes alternative pattern allocations; it is neither a complete receiver nor a full-system
+Bayes risk. Native polar CRC/SCL is incompatible with the modified generator; this compatibility cost
+is recorded without adding a custom receiver to the comparison.
 
 \textbf{Prior-work boundary.} The $B_h$-code/adder-channel problem is classical
 (\href{https://arxiv.org/abs/1809.07364}{Gu, 2018}). Noisy signature codes also study sum separation;
@@ -406,6 +419,34 @@ equivariant to these transformations. No such relationship to the dense referenc
 operating region, then use independent seeds and paired trials to bound the performance difference. A mean close to
 dense, or an interval containing zero, is not an equivalence test. Receiver inference and approximation remain fixed
 in that claim; it is not global encoder optimality.
+
+\subsection{What is settled, and a bounded encoder programme}
+The selected row replacement is deterministic: use the stated binary rows and compute $Lv$ modulo 2.
+For a supplied placement bank, the KL-balanced energy profile is uniquely defined when the stated
+feasibility/convergence conditions hold. Seeded placement generation is reproducible, but is not a new
+algebraic placement design. The finite exhaustive search that discovered the three rows must be charged;
+no efficient universal row-selection rule at growing payload length has been established.
+
+The encoder search is not exhausted. Even choosing 32 distinct characters from 64 admits
+$\binom{64}{32}$ sets; arbitrary placements and larger payload dimensions add further freedom.
+The practically bounded programme has three steps: test this fixed-resource repair; use failures to
+identify a specific near-sum or overlap defect; then change only the responsible rows, energy constraints
+or placements. The same-pattern max--min energy problem above is convex for a supplied contrast list;
+finding all relevant contrasts and optimizing mixed-pattern geometry remain separate hard problems.
+Second-moment balance and removal of a particular alias family do not solve these objectives.
+
+Classical frame potential and KL projection already supply the balancing mathematics. Classical
+adder-channel $B_h$ coding supplies the sum-identifiability objective. Our present contribution is the
+selected-code character/alias certificate, finite repair obstruction and physical/count-aware comparison;
+these are not yet a general new code construction or a performance theorem. Sparse-Walsh constructions
+such as \href{https://arxiv.org/abs/1508.06336}{SPRIGHT} also motivate designed measurements, but require
+measurement and receiver assumptions absent from this fixed placement/power system; see Report 11.
+
+A useful stopping rule is empirical: if the repaired signature fails the common-D2 test, close this
+finite candidate unless an independently diagnosed receiver mismatch explains the result. If it wins,
+validate on new seeds and the full operating grid before broadening construction search. Matching a
+learned dense comparator with a compact deterministic encoder is also valuable when its storage,
+construction and occupied-resource advantages are stated. Neither outcome establishes universal optimality.
 
 \subsection{Two active research directions}
 \begin{enumerate}
