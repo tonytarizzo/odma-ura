@@ -1,0 +1,50 @@
+{
+  "status": "Selected bounded continuation-development phase, declared after the finite termination proof and before any fifth-block query or implementation. No existing frozen source may change while selected-parity comparative timing runs. Independent implementation and driver preflight are required before this phase executes.",
+  "hypothesis": "The fresh fourth-sweep receiver still ends four frames after positive net cancellation-count growth. Such a change reduces the fitted outside count and changes the next fixed queue, residual and scalar query model. Continuing this same discovery/refit calculation while its cancellation count grows may recover further complete messages at a finite, state-dependent allowance, without selecting another arbitrary sweep cap.",
+  "operation": {
+    "reference": "The independently verified native-only repetition plus query memoization, terminal support completion and conditional fourth-sweep DEC-35 profile. Rollback512 and continuation128 retain original PolarCode providers. This does not combine the separately tested all-stage acceleration profile.",
+    "first_four": "Preserve the original first three sweeps, then the existing fourth trigger based on actual count moves anywhere in sweep three. Preserve every initial refit, fixed block queue, within-block residual update, code call, full-ID conversion, bank update, refit and exact-byte cache. Do not restart a continuation or recreate its bank/cache between blocks.",
+    "later_trigger": "After block four or any later completed block, allow the next block only if the endpoint cancellation-count total is strictly larger than the count at the start of that block. Existing incomplete-refit and no-new-ID stops take priority. Temporary growth, count-neutral swaps, drops alone, new IDs without count growth, terminal support completion and truth do not trigger another block.",
+    "known_K_edge": "A growing block ending at K permits one final block under this exact rule; it will terminate if it does not grow. Do not silently replace this by a stop-at-K policy.",
+    "discovery_and_fit": "Every block retains the fixed top min(P,K+5) absolute-residual pattern queue formed at its start. Each query uses the latest raw residual and original outside-count variance; original SCL128 generates legal complete payloads, associated with their queried pattern. Every found full ID enters the bank, and every new-ID update invokes the unchanged unrestricted CountBank refit with max_moves=2000. No supplied pattern, companion, true prefix or restricted discovery bank.",
+    "decision": "Apply the unchanged support-completion decision once after continuation terminates. Preserve cancellation multiplicities and count-PUPE evaluation. An extra false copy can alter cancellation and later decisions, so no pointwise accuracy dominance over the four-sweep receiver is claimed."
+  },
+  "exact_bound_and_cost": {
+    "bound": "Let c4 be the terminal count of a completed growing fourth block. At most K-c4+1 additional blocks may start, including the last non-growing or incomplete block. The whole continuation has at most K-c4+5 <= K-c3+4 <= K+4 blocks. At K100 and Q105 the universal bound is104 blocks and10920 logical queries; actual SCL calls are no more than logical queries.",
+    "why_new_work_is_justified": "The verified fresh128 fourth block adds53 retained true IDs on four frames, and each of those blocks has positive net cancellation-count growth. Its .698% complete-cost overhead demonstrates an actual useful continuation mechanism at the previous cap. The new count potential gives a termination rule for testing whether that capability persists; it does not assume another gain.",
+    "charged": "Every all-pattern queue construction, residual/variance/LLR calculation, byte-cache lookup, actual SCL call, full-message association, bank construction/update, physical refit and terminal completion is charged. Native and rollback costs are included in any later complete receiver experiment. A finite K-based bound alone is not an affordable worst-case memory or runtime guarantee: bank growth and refits remain measured.",
+    "resource_policy": "There is no new numerical beam, sweep or query budget to tune in this phase. The existing2000-move cap remains and any incomplete fit fails the completeness gate. The count theorem is asserted at runtime. Measured cost and peak memory must be reported even for failure; no historical initialization time is presented as a newly measured receiver runtime."
+  },
+  "retained_and_discarded": {
+    "retained": "Original balanced encoder and actual CRC/polar code, physical y and Gaussian noise variance, known K, IID full-message source, repeated patterns/messages, complete-message identity, multiplicity-aware fitting and count-PUPE. Original scalar-channel and outside-Gaussian approximations remain exactly those of the reference.",
+    "changed": "Only the continuation stopping/allocation policy after the verified fourth block changes. It supplies new conditioned calculations from the same observation, not new channel measurements or a new likelihood.",
+    "discarded": "The growth predicate declines further work after potentially useful equal-count or net-negative corrections. Conversely it can continue after accepting false copies. CountBank objective values across changing banks are not used as a common potential; bounded integer cancellation count alone proves termination.",
+    "assumptions": "The capability hypothesis is that repeated net-positive fitted count changes often remove enough true interference to expose new ordinary-query candidates. It is falsified by lack of repeated recovery, harmful trajectories or inability to complete at the proved allowance; algebra alone does not establish it."
+  },
+  "development_panel": {
+    "seeds": "All128 frame-zero seeds7101 through7228 from progress_continuation/confirmation/main, not a subset of the four improved frames.",
+    "initialization": "Use the bound original physical/source realization and saved native/rollback initial action and complete base bank from that panel. Re-run both continuations and decisions from the same immutable initial inputs, with fresh private banks/caches. No final four-sweep candidate or cancellation state is supplied to either starting bank.",
+    "arms": ["Verified conditional-fourth reference", "Identical first-four policy with strict endpoint count-growth continuation"],
+    "order": "Alternate the two complete continuation-arm orders by seed. Construct geometry once per frame, separately report it, and preserve inputs between arms. Reconcile the reference and the candidate's original prefix against the archived fourth-sweep result.",
+    "timing_scope": "New continuation plus support-completion times are paired and measured. Geometry/source reconstruction and historical native/rollback initialization are reported separately. This reused-context development panel is not fresh population evidence or a newly measured complete receiver runtime."
+  },
+  "frozen_development_gates": {
+    "all128_complete_legal_count_actions": true,
+    "all_source_physical_input_and_reference_replay_checks": true,
+    "identical_original_prefix_through_fourth_including_refits_bank_and_cache": true,
+    "all_started_blocks_and_calls_within_integer_bound": true,
+    "minimum_net_saved_count_copies": 4,
+    "minimum_improved_frames": 2,
+    "minimum_net_saved_copies_after_removing_best_frame": 1,
+    "maximum_single_frame_regression_copies": 2,
+    "cost_scope": "Report measured additional queries, complete continuation cost, peak memory and every frame's cost and false-copy change. There is no retrospective cost threshold that can be tuned to accept an outcome. Passing capability licenses review of actual cost and a separately frozen fresh complete receiver; it is not performance-cost dominance."
+  },
+  "required_preflight": [
+    "The independent finite count-growth proof and fixed physical counterexamples have already passed. Bind their declaration, source and output before implementation.",
+    "Verify the new optional implementation preserves the existing default and conditional-fourth paths exactly, including intermediate refit metadata, caches, original pattern queues and caller inputs. Existing scientific sources and hashes remain archived for prior experiments.",
+    "Use tiny fixed fixtures with repeated messages, count-neutral swaps, drops, temporary increases, growth to K, no-new-ID and incomplete-refit stops. Verify terminal completion never feeds cancellation or the predicate, and no hidden refit/reinitialization occurs between blocks.",
+    "Before any fifth-block query, freeze the driver, source snapshots, all128 physical/source hashes and historical input records, arm order, cost accounting, count metrics and literal gate calculations. Independently audit outcomes before any fresh receiver phase."
+  ],
+  "advancement_and_stop": "A failed development gate stops this strict-count-growth continuation policy without a new threshold, alternating schedule or count-neutral retry. A pass permits a separately declared fresh complete comparison against the current verified four-sweep DEC-35 profile, with full native/rollback/discovery/refit/readout cost and no shared accepted lists or historical timing credit. Neither outcome closes all continuation rules or completes the overarching research goal.",
+  "implementation_sequence": "During the selected-parity main, prepare only declarations/read review and new independent source drafts. Do not edit its35 frozen dependencies. Preserve the previous feedback source before a later narrowly scoped optional extension, then verify unchanged original profiles and current source bindings before running this phase."
+}

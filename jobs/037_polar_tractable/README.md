@@ -66,3 +66,20 @@ uv run python jobs/037_polar_tractable/build_manifest.py
 One local K26/4dB frame at the declared budgets took 0.58–3.59 s/receiver for B12 and 0.54–5.40 s for B14. Multiplying these individual times by 8,192 gives approximately **1.2–12.3 job-hours per row** and 271 job-hours overall (542 CPU-hours at two CPUs/job). With four active jobs this is roughly 68 hours, before queueing. These are crude extrapolations from one frame/SNR/seed on a laptop, not HPC forecasts; candidate outcomes and hardware affect cost. The full sweep belongs on CPU HPC; small checks remain practical locally.
 
 The 29 October paired B4 smoke, tiny exact checks and B12 matched-initializer diagnostic are indexed in `docs/EXPERIMENT_BANK.md` and `docs/logs/POLAR_TRACTABILITY_LOG.md`. Their outputs are ignored, and they do not establish a production ranking.
+
+## Fresh B100 terminal confirmation
+
+The November checkpoint is one serial PBS job for seeds 7501–7628, frame zero. It compares count-growth DEC-35 with a single SCL4096 terminal query allocated by each of two pattern scores. Every policy pays the whole common cold receiver and geometry. The two extensions use the fitted counts before support completion. The job requests two CPUs, 16 GB and eight hours of wall time.
+
+From the repository root on the HPC login node:
+
+```bash
+git pull --ff-only origin main
+module load miniforge/3
+uv sync --frozen --python 3.12
+qsub jobs/037_polar_tractable/037_dec35_terminal.sh
+```
+
+PBS records the commit and runtime versions, runs the six finite provider tests, and verifies the source hashes in `terminal_confirmation_inputs.json` before generating frame zero of seeds 7501–7628. The original workspace verified the frozen development evidence before release. The public manifest records its provenance. The panel, selectors, outcomes, receiver timing and advancement gates use the same calculation as the archived transfer bundle.
+
+The job writes its log to `jobs/037_polar_tractable/results_terminal/job.log`. The `main/` subdirectory holds the source snapshot, 128 individual frame records and `summary.json`. Keep the whole results directory for the independent audit. An existing results directory stops a second invocation from overwriting it.

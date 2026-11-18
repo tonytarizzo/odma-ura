@@ -221,6 +221,7 @@ class DecoderSpec:
     sources: tuple = ("iid", "distinct")
     defaults: tuple = ()
     stochastic: bool = False
+    partial_counts: bool = False
 
 
 from framework.polar_decoder_queries import fields, fourier, gaussian_counts, prefix
@@ -228,6 +229,64 @@ from framework.polar_decoder_search import chains, configuration, particles
 from framework.polar_decoder_contractions import connected, quantized, regions, signed_rank
 from framework.polar_decoder_combinations import combined_importance, combined_particles, multiset_beam
 from framework.polar_tractable import PolarScenario, tractable_beam, tractable_chain, tractable_importance
+
+
+def count_feedback(scenario, *, max_sweeps=3, max_moves=2000, memoize=False, complete_support=False,
+                   native_rate_zero=False, native_repetition=False, all_stage_repetition=False, progress_extra_sweep=False,
+                   count_growth=False):
+    """DEC-35 preserves its original default; provider, continuation and terminal-decision variants are explicit."""
+    from baselines.polar import PolarCode
+    flags = (memoize, complete_support, native_rate_zero, native_repetition, all_stage_repetition, progress_extra_sweep, count_growth)
+    if any(type(value) is not bool for value in flags):
+        raise ValueError("DEC-35 memoize, complete_support and provider options must be bool values")
+    if not isinstance(scenario, PolarScenario):
+        raise ValueError("DEC-35 requires a procedural PolarScenario with the original polar geometry")
+    if not isinstance(scenario.model.code, PolarCode) or scenario.model.p < 32 or scenario.model.code.list_size != 128:
+        raise ValueError("DEC-35 requires at least 32 patterns and the native SCL128 code")
+    if max_sweeps != 3 or max_moves != 2000:
+        raise ValueError("DEC-35 requires three sweeps and 2000 moves per refit")
+    options = {"memoize": memoize, "complete_support": complete_support}
+    if sum((native_rate_zero, native_repetition, all_stage_repetition)) > 1:
+        raise ValueError("Select one native provider or all-stage provider; repetition already includes rate-zero collapse")
+    if count_growth and not progress_extra_sweep:
+        raise ValueError("The verified count_growth variant requires progress_extra_sweep=True")
+    if progress_extra_sweep:
+        if not native_repetition or not memoize or not complete_support:
+            raise ValueError("The verified progress_extra_sweep variant requires native_repetition=True, "
+                             "memoize=True and complete_support=True")
+        if count_growth:
+            from framework.polar_count_growth import run as receiver
+            options["count_growth"] = True
+        else:
+            from framework.polar_progress_continuation import run as receiver
+        counts, meta = receiver(scenario)
+        options.update(native_repetition=True, progress_extra_sweep=True)
+    elif all_stage_repetition:
+        if not memoize or not complete_support:
+            raise ValueError("The verified all_stage_repetition variant requires memoize=True and complete_support=True")
+        from framework.polar_all_stage_repetition import run as receiver
+        counts, meta = receiver(scenario)
+        options["all_stage_repetition"] = True
+    elif native_repetition:
+        if not memoize or not complete_support:
+            raise ValueError("The verified native_repetition variant requires memoize=True and complete_support=True")
+        from framework.polar_native_repetition import run as receiver
+        counts, meta = receiver(scenario)
+        options["native_repetition"] = True
+    elif native_rate_zero:
+        if not memoize or not complete_support:
+            raise ValueError("The verified native_rate_zero variant requires memoize=True and complete_support=True")
+        from framework.polar_native_rate_zero import run as receiver
+        counts, meta = receiver(scenario)
+        options["native_rate_zero"] = True
+    elif memoize or complete_support:
+        from framework.polar_count_feedback import run as receiver
+        counts, meta = receiver(scenario, memoize=memoize, complete_support=complete_support)
+    else:
+        from framework.polar_count_cavity import run as receiver
+        counts, meta = receiver(scenario, mode="raw128", max_sweeps=max_sweeps, max_moves=max_moves)
+    return counts, {**meta, "dec35_options": options}
+
 
 REGISTRY = {
     "REF": DecoderSpec("REF: exact count Bayes", reference),
@@ -301,6 +360,11 @@ REGISTRY["DEC-33"] = DecoderSpec("DEC-33: exchangeable parity + beam IS", tracta
                                  ("flip_order", 1), ("max_refine", 32), ("beam_weight", .5)), True)
 REGISTRY["DEC-34"] = DecoderSpec("DEC-34: union-discovery multiset beam", tractable_beam, ("iid",),
                                 tuple({**_TRACTABLE_BEAM, "candidate_method": "union"}.items()), True)
+REGISTRY["DEC-35"] = DecoderSpec("DEC-35: raw SCL discovery + physical count feedback", count_feedback, ("iid",),
+                                (("max_sweeps", 3), ("max_moves", 2000), ("memoize", False), ("complete_support", False),
+                                 ("native_rate_zero", False), ("native_repetition", False), ("all_stage_repetition", False),
+                                 ("progress_extra_sweep", False), ("count_growth", False)),
+                                partial_counts=True)
 
 
 def run(name, scenario, **params):
@@ -310,13 +374,14 @@ def run(name, scenario, **params):
     if scenario.sampling not in spec.sources:
         raise ValueError(f"{name} supports {spec.sources}, not {scenario.sampling}")
     procedural = isinstance(scenario, PolarScenario)
-    if procedural and spec.run not in (tractable_beam, tractable_chain, tractable_importance):
+    if procedural and spec.run not in (tractable_beam, tractable_chain, tractable_importance, count_feedback):
         raise ValueError(f"{name} requires the explicit small-alphabet Scenario")
     counts, meta = spec.run(scenario, **{**dict(spec.defaults), **params})
     if isinstance(counts, dict):
         alphabet = 1 << scenario.model.B if procedural else scenario.phi.shape[1]
+        total = sum(counts.values())
         if any(not isinstance(w, int) or not 0 <= w < alphabet or not isinstance(c, int) or c <= 0
-               for w, c in counts.items()) or sum(counts.values()) != scenario.k:
+               for w, c in counts.items()) or total > scenario.k or (not spec.partial_counts and total != scenario.k):
             raise ValueError(f"{name} violated the sparse count/output-budget contract")
         meta["legacy_dense_adapter"] = not procedural
         if procedural:
@@ -330,7 +395,7 @@ def run(name, scenario, **params):
         raise ValueError(f"{name} returned invalid full-message counts")
     if np.any(counts < 0) or np.any(counts != np.floor(counts)) or counts.sum() > scenario.k:
         raise ValueError(f"{name} violated the hard-count/output-budget contract")
-    if name not in ("D2", "ODMA") and counts.sum() != scenario.k:
+    if name not in ("D2", "ODMA") and not spec.partial_counts and counts.sum() != scenario.k:
         raise ValueError(f"{name} must allocate K copies")
     if scenario.sampling == "distinct" and np.any(counts > 1):
         raise ValueError(f"{name} returned duplicate words under the distinct-source control")
