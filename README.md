@@ -28,6 +28,7 @@ establish scalable message search.
 - [`jobs/README.md`](jobs/README.md): private HPC workflow and job commands.
 - [`Job 033`](jobs/033_matched_d2/README.md): completed matched D2 controls, building on the published comparisons in 032.
 - [`Job 034`](jobs/034_polar_mapping/README.md): 12/12 complete; symbol-energy shaping approaches dense D2, shared mixing does not help.
+- [Job 039](jobs/039_polar_paper/README.md) measures the B100 DEC-35 energy crossing, compares search at matched cost and replays cancellation feedback.
 
 ## Repository Layout
 

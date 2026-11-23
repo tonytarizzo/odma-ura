@@ -1,6 +1,6 @@
 # Current state: polar multiuser decoding
 
-Updated **30 October 2026**. This page owns the current research direction. The
+Updated **23 November 2026**. This page owns the current research direction. The
 [experiment bank](EXPERIMENT_BANK.md) owns script/setup/result mappings; the reports below own the
 derivations, computational accounting and retained lessons.
 [Report 7](reports/07_polar_decoding_from_posterior.pdf)
@@ -13,6 +13,14 @@ owns the mathematical decoder catalogue; implementation evidence is indexed in t
 [Report 11](reports/11_tractable_polar_decoding.pdf), with [source](reports/11_tractable_polar_decoding.tex),
 owns the separate investigation of tractable approximations for the same encoder and loss.
 The [tractability log](logs/POLAR_TRACTABILITY_LOG.md) records exploratory reasoning, checks and implementation decisions.
+
+## DEC-35 paper evaluation and retry research — 23 November 2026
+
+[Job 039](../jobs/039_polar_paper/README.md) freezes original count-growth DEC-35, optimized native SIC and progressive rollback on paired B100 Gaussian-MAC frames. The two loads use separate panels of 256 geometries across 12 energies at K100 and 14 at K50. A second panel of 128 K100 frames compares conventional search at the observed time and call count, fixes the search budget for add-only versus reversible fitting, and replays every actual continuation query with the older and updated cancellation. The one-command PBS release includes the dependent reducer and paper tables. The target-energy results await the complete HPC panel.
+
+**DEC-35 with a final magnitude search.** On the original balanced encoder at K100 and .5 dB, a fitted count of 99 triggered one SCL4096 query of the pattern with the largest summed absolute residual. Of 128 fresh complete frames, twelve gained one correct copy and none lost one. Missed copies fell 198→186 out of 12,800, false copies 117→110 and geometry-inclusive time rose 1124.004→1132.026 s (+0.71%). An independent audit checked all 31 eligible frames. Folded selection gained one further copy and missed its two-frame gate. Use `framework.polar_terminal_query.run(scenario, selector="magnitude")` for the option. Job 039 also evaluates it across both flat energy curves. [Terminal design and accounting](../jobs/039_polar_paper/terminal_design.md) · [Reproduction and audit](../jobs/039_polar_paper/README.md#local-verification)
+
+A direction-aware retry score recovered two extra true words in eight-query batches on archived states. In a prospective complete comparison it only changed query order: across seven reordered blocks every pattern saw the same fitted residual, giving identical final banks on all 32 frames (48/3,200 misses and 37 false copies per arm). Two sufficient bounds for reusing a previously empty SCL list certified zero of 414 changed inputs. Stop these implementations. The confirmed final search changes the set of queried candidates and has a separate complete-receiver result. [Directional retry trial](../jobs/039_polar_paper/retry_results.md) · [Empty-list bounds](../jobs/039_polar_paper/retry_stability.md)
 
 ## Problem and fixed contract
 

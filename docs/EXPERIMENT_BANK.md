@@ -1,12 +1,24 @@
 # Experiment bank
 
-Updated **30 October 2026**. This document maps research questions and algebra to executable scripts,
+Updated **23 November 2026**. This document maps research questions and algebra to executable scripts,
 fixture contracts and retained results. [CURRENT_STATE.md](CURRENT_STATE.md) owns priorities;
 Reports 7, 9, 10 and 11 own the mathematical derivations and their limitations.
 Job manifests and the commands below own HPC row definitions. Historical exact audits and matched performance evidence below retain their original scope. Approximation
 preparation is complete for the retained paths. All thirteen families now have shared-harness implementations;
 pre-reset prototype scripts remain parked. Jobs035–037 have returned substantial results; the latest local audit below distinguishes complete,
 partial, absent and source-guard-failed runs. Local availability does not establish live scheduler status.
+
+## DEC-35 paper experiment — 23 November 2026
+
+[Job 039](../jobs/039_polar_paper/README.md) owns the runnable source, single-command PBS submission and analysis. The fixed-energy panel measured the receiver on both mappings. The new primary question is the required energy at 5% list PUPE on constant-amplitude packets. The two loads use 88/87 payload bits after the 12/13-bit pattern at K50/K100. Each seed is reused across energies within one load. The 6,656 energy/frame observations cover 512 independent geometries. The reducer reports count/list loss, false copies, operating-point uncertainty, threshold censoring and work. Separate detector sensitivity uses complex magnitudes in native ranking on the first 64 geometries at each load. [Curve design](../jobs/039_polar_paper/curve_design.md) · [Observation convention](../jobs/039_polar_paper/quadrature_design.md)
+
+The separate matched-computation panel uses 128 additional independent flat K100 frames at .5 dB. Conventional SIC receives the registered continuation call budget and the measured wall-time budget. A second comparison holds the number of paid SCL128 calls at 210 for three complete actions. Conditional replay fixes the actual DEC-35 query schedule, queried pattern, list width and variance and changes the preceding fitted-interference numerator. It checks discovery, final count readout and retention of full words. This conditional readout and the autonomous complete receivers answer different questions. [Controls and advancement criteria](../jobs/039_polar_paper/control_design.md)
+
+**Terminal confirmation.** Job 037 seeds 7501–7628 completed locally under the previously released design. Native CRC-SCL4096 searches one residual pattern when the fitted count leaves one slot. Reference, magnitude and folded selectors missed 198/186/185 of 12,800 copies and returned 117/110/109 false copies. Magnitude won 12 frames, tied 116 and lost zero. Folded beat magnitude on one. Shared-prefix total times were 1124.004/1132.026/1134.980 s. The independent audit reconstructed every eligible observation, checked ranks and refits, and matched eight cold receiver replays. The operator's previously queued run reuses the same seeds. The secondary Job 039 test charges this optional magnitude search on every flat-curve observation and reports paired 5% crossings. [Audit and commands](../jobs/039_polar_paper/README.md#local-verification) · [Flat secondary design](../jobs/039_polar_paper/terminal_design.md)
+
+**Encoder control already complete.** On 64 separate paired B100/K100 frames at .5 dB, flat→balanced occupied-chip energies changed missed copies 292→226 for native SIC, 163→120 after rollback and 86→91 for registered DEC-35, each out of 6,400 users. The paired flat-minus-balanced 95% interval for DEC-35 was −0.313 to +0.141 percentage points. Keep energy balancing as a mapping control in this comparison.
+
+**Retry allocation.** Two historical 128-frame panels tested unsigned physical displacement. A third 96-frame panel tested signed likelihood transport on old re-encoded CRC/polar hypotheses. Legal transport gained two IDs over folded activity across 19 eligible states, both later covered by the incumbent. In the subsequent complete trial, seeds 88001–88032, both receivers made 3,803 paid continuation calls, missed 48 copies and returned 37 false copies. A pattern-level audit checked all 735 calls in reordered blocks. The separate exact empty-list certificate reused zero of the 2,280 paid calls examined. [Panels, costs and gates](../jobs/039_polar_paper/retry_results.md) · [Certificate and finite checks](../jobs/039_polar_paper/retry_stability.md)
 
 ## Reading the evidence
 
