@@ -1,0 +1,20 @@
+{
+  "decoder": "DEC-38",
+  "039_release": "18f8e3b9230fb079717ab53328aacd2a8926a3b0d7d282c7605275e2810f7267",
+  "sources": {
+    "framework/polar_catalogue.py": "0932935c6ea827c9f349ee6aa25fb4867b9389d8051eb0bcf600cada255db568",
+    "framework/polar_conditional_serial.py": "753aa9e262c867f2513082343b743a229d2e73dea0300da399b935be8c8445c8",
+    "framework/polar_constituent_challenge.py": "f4721cbd99b22defb9d379902682204758d3b2999e4dcbdd6a8852684ec3223a",
+    "framework/polar_held_interference.py": "3b146d1cff1de055376a77632ff0358e8acf7b8611af340631b011ee55a9a77f",
+    "framework/polar_rate_challenge.py": "51565fe3ac99f6d88845243b6984d6e6c1f3c500c57b1ed3b8206960ecfe2c48",
+    "framework/polar_serial_repair.py": "b1867275880f18135515d6b535c8c0f3841bb4018a99388741907eb024c5c146",
+    "framework/polar_signed_restoration.py": "e7fc26e2b4c1b5b2462661221b0f3bea264a857d010c796e4cfacab4876398ed",
+    "framework/polar_terminal_scan.py": "8bbfab1a173e73394a4240b080cec8d0a9587788c97d60611e54abaf6a4b30c4",
+    "framework/polar_two_raw.py": "ec35492637377d21007b3a2a6e393cf0f98228852eb6832d14a5380b3cb1c3a6",
+    "jobs/042_polar_combinations/042_curve.sh": "fc9b939137ec2153ae491eed6edf5499e48ed19f07065544c5a6dd20c1132d67",
+    "jobs/042_polar_combinations/042_merge.sh": "4fee63ba75b51dad11134dde7651833756072498cc8108359a729e75291ddd25",
+    "jobs/042_polar_combinations/curve_design.md": "9c3cee76ff9d349e7dd4f21c46685556a3850ccfa128e303619d7d631fa79316",
+    "jobs/042_polar_combinations/paper_curve_extension.py": "c56ba6084e55046221af71a0ca333b55d1c9be8337657d8ac975e51b77a2cdca"
+  },
+  "k100_joined": "DEC-39"
+}
