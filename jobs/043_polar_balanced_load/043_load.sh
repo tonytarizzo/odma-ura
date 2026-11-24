@@ -13,6 +13,9 @@ exec > "results/dec43_balanced_load/logs/${PBS_JOBID:?}.${PBS_ARRAY_INDEX:-merge
 case "${LOAD_PHASE:?Submit through submit.sh}" in
   pilot)   uv run --no-sync python "$job" --pilot "${LOAD_ROUND:?}" --shard "${PBS_ARRAY_INDEX:?}" ;;
   confirm) uv run --no-sync python "$job" --confirm --shard "${PBS_ARRAY_INDEX:?}" ;;
-  merge)   uv run --no-sync python "$job" --merge ;;
+  merge)
+    uv run --no-sync python "$job" --merge
+    uv run --no-sync python jobs/043_polar_balanced_load/grid_precision.py
+    ;;
   *)       exit 2 ;;
 esac

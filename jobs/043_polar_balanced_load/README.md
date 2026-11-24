@@ -26,6 +26,20 @@ The wrapper issues six dependent PBS submissions, prints their IDs, and leaves a
 
 Outputs live in `results/dec43_balanced_load/`. The merge writes `required_ebn0_vs_load.pdf`, its PNG, the six-load `summary.json` and the numerical references. `plans/` records the pilot grids and integer miss totals. `confirm/` retains per-frame count actions and cost receipts. A partial grid cannot produce the completed six-load plot.
 
+The merge also writes `grid_precision.json`. For each bootstrap draw the extra calculation retains both tested sides of the crossing. Its percentile interval therefore reflects the spacing of the energy grid as well as variation across frames. Open limits and recrossings remain visible. The paired difference uses the same resampled geometries for both receivers. If a previously submitted merge runs the earlier shell wrapper, the identical calculation can be run after the results arrive with `uv run python jobs/043_polar_balanced_load/grid_precision.py`. It reads the saved confirmation frames and makes zero additional decoder calls.
+
+The three related HPC studies have independent output directories and submission chains.
+
+| Study | Scientific output | Merged return |
+|---|---|---|
+| 039 | Flat DEC-35 paper curves, computation and feedback controls | `jobs/039_polar_paper/results/summary.json` |
+| 042 | Flat DEC-38/39 comparisons and the three-energy K100 balancing control | `results/dec42_paper_curve/summary.json` |
+| 043 | Balanced DEC-38/39 required energy versus six active-user loads | `results/dec43_balanced_load/summary.json` |
+
+The DEC-35 terminal confirmation from Job 037 already has 128 checked local outcomes in `results/polar_dec35_exploration_2026-11-11/paper_position/terminal_local/`. Studies 040 and 041 ran locally. Before submitting a 039, 042 or 043 chain, check the live queue (`qstat -u "$USER"`) and the merged return on the cluster. An array whose raw frames are already complete can proceed directly to its reducer. The submission commands for 039 and 042 are in their [paper study](../039_polar_paper/README.md) and [curve protocol](../042_polar_combinations/curve_design.md).
+
+The complete six-load calculation also runs on a local machine with `bash jobs/043_polar_balanced_load/run_local.sh 4` after `uv sync --frozen`. The argument sets the number of local worker processes. Local and PBS execution use the same search, release, independent confirmation seeds, and resumable observation files. For illustration, seven confirmation energies per load mean 10,752 paired observations. Scaling the separate one-frame-per-load local preflights gives roughly 57–61 serial worker-hours for that confirmation grid, before scouting. Actual cost depends on the final grids, load-specific decoding trajectories, and the machine.
+
 ## Local preview
 
 Eight independent geometries at each load, tested at four fixed energies, give a separately labelled exploratory figure. Its seed ranges are disjoint from both HPC stages.
@@ -45,3 +59,24 @@ uv run python jobs/043_polar_balanced_load/load_curve.py --merge-preview
 ```
 
 The outputs are `load_preview.pdf`, `load_preview.png` and `preview_summary.json`. Use `uv run python jobs/043_polar_balanced_load/load_curve.py --inventory` to verify the release. The targeted checks run with `uv run python -m unittest discover -s jobs/043_polar_balanced_load -p 'test_*.py'`.
+
+## Twelve-frame refined preview
+
+Retain the eight earlier geometries and add the next four consecutive preview seeds at each of K50 and K100. Run both complete receivers on each observation. On the original four energies per load, re-estimate the 5% crossing with all twelve. If its tested bracket exceeds 0.05 dB, run the midpoint on the same twelve geometries. Both arms see the union of the two requested midpoints. Allow four refinement rounds. For an exact grid hit, check unmeasured neighbors 0.05 dB to each side within the initial range. Record censored or ambiguous curves without an extrapolated point. These frames determine the exploratory grid as well as its estimates. Job 043's independent 256-frame confirmation has a separate seed bank.
+
+| Load and receiver | Original 8, coarse grid | Same coarse grid, 12 | Refined grid, 12 | Final tested crossing bracket |
+|---|---:|---:|---:|---|
+| 50, DEC-38 | 0.048 | 0.078 | 0.038 | [0.03, 0.06] dB |
+| 50, DEC-39 | 0.000 | 0.050 | 0.023 | [0.00, 0.03] dB |
+| 100, DEC-38 | 0.224 | 0.217 | 0.126 | [0.12, 0.15] dB |
+| 100, DEC-39 | 0.230 | 0.231 | 0.146 | [0.12, 0.15] dB |
+
+All estimates are in dB. On the K100 panel, at 0.12 dB the two receivers missed 64 and 103 of 1,200 transmissions, and at 0.15 dB they missed 44 and 53. The 5% cutoff is 60 copies. The spacing of the earlier measurements therefore had a larger effect on the K100 estimate than adding four frames. Both K100 grid-aware bootstrap intervals are [0, 0.18] dB. A 0.03 dB search bracket on the observed panel still leaves appreciable population uncertainty. The 12-frame comparison does not resolve a ranking.
+
+The original eight-geometry two-load simulation took 4 min 5 s of wall time with four local workers (15 min 44 s of summed receiver and unique geometry time). The extension cost another 8 min 11 s with four workers to evaluate 116 new paired observations and check the existing 64. The resulting figure uses 180 paired observations: eight energies at K50, seven at K100 and twelve geometries per energy. Plotting and the interval summary are additional short postprocessing steps.
+
+From the repository root, the following command runs or resumes the preview and produces both plots and the grid-spacing audit. The four local workers share the laptop. The output files are `results/dec43_balanced_load/preview12/required_ebn0_vs_load.pdf`, its PNG, `summary.json` and `grid_precision.json`. Existing eight-frame files remain usable.
+
+```sh
+OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 OMP_NUM_THREADS=1 uv run python jobs/043_polar_balanced_load/preview12.py --workers 4
+```
